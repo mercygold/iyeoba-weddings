@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
+import { CommunicationRealtimeSync } from "@/components/communication-realtime-sync";
 import { MainNav } from "@/components/main-nav";
 import { VendorDashboardForm } from "@/components/vendor-dashboard-form";
 import {
@@ -51,6 +52,7 @@ export default async function VendorDashboardPage(props: {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fdfbfd_0%,#ffffff_42%,#ffffff_100%)]">
+      <CommunicationRealtimeSync role="vendor" vendorId={vendor?.id ?? null} />
       <FlashQueryCleaner />
       <MainNav />
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
