@@ -5,6 +5,7 @@ import {
   saveVendorForPlannerAction,
   updatePlannerInquiryStatusAction,
 } from "@/app/planner/actions";
+import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
 import { PlannerAssistantModules } from "@/components/planner-assistant-modules";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
@@ -19,6 +20,9 @@ import { buildPlannerDashboard, getPlannerInputFromSearchParams } from "@/lib/pl
 import { getVendorDirectory, getVendorsBySlugs } from "@/lib/vendors";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function PlannerDashboardPage(props: {
   searchParams: SearchParams;
@@ -66,6 +70,7 @@ export default async function PlannerDashboardPage(props: {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f6effa_0%,#fcf8ff_18%,#ffffff_48%,#ffffff_100%)]">
+      <FlashQueryCleaner />
       <MainNav />
       <main className="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

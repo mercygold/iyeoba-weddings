@@ -314,8 +314,11 @@ async function persistVendorProfile(
 ) {
   const config = getSupabaseConfigStatus();
   if (config.adminMessage) {
+    console.error("Vendor profile save blocked by Supabase configuration", {
+      adminMessage: config.adminMessage,
+    });
     redirect(
-      `/vendor/dashboard?error=${encodeURIComponent(config.adminMessage)}`,
+      "/vendor/dashboard?error=We%20could%20not%20save%20your%20profile%20right%20now.%20Please%20try%20again%20shortly.",
     );
   }
 
@@ -331,8 +334,11 @@ async function persistVendorProfile(
 
   const storageSetup = await ensureVendorStorageBuckets();
   if (!storageSetup.ok) {
+    console.error("Vendor profile save blocked by storage setup", {
+      storageError: storageSetup.error,
+    });
     redirect(
-      `/vendor/dashboard?error=${encodeURIComponent(storageSetup.error)}`,
+      "/vendor/dashboard?error=We%20could%20not%20save%20your%20profile%20right%20now.%20Please%20try%20again%20shortly.",
     );
   }
 

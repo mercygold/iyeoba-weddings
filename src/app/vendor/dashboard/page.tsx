@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
 import { VendorDashboardForm } from "@/components/vendor-dashboard-form";
 import {
@@ -12,17 +13,18 @@ import {
   buildWhatsAppMessageLink,
   getVendorInquiries,
 } from "@/lib/inquiries";
-import { ensureVendorStorageBuckets } from "@/lib/supabase/storage";
 import { getVendorByUserId } from "@/lib/vendors";
 
 type SearchParams = Promise<{ message?: string; error?: string; edit?: string }>;
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function VendorDashboardPage(props: {
   searchParams: SearchParams;
 }) {
   const profile = await requireVendorProfile("/vendor/dashboard");
   const searchParams = await props.searchParams;
-  const storageSetup = await ensureVendorStorageBuckets();
   const vendor = await getVendorByUserId(profile.id);
   const inquiries = await getVendorInquiries(profile.id);
   const openInquiries = inquiries.filter((inquiry) => inquiry.threadStatus !== "archived");
@@ -42,9 +44,14 @@ export default async function VendorDashboardPage(props: {
     searchParams.edit === "1" ||
     status === "draft" ||
     status === "needs_changes";
+  const feedbackMessage = searchParams.message;
+  const feedbackError = feedbackMessage
+    ? undefined
+    : sanitizeVendorFacingError(searchParams.error);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fdfbfd_0%,#ffffff_42%,#ffffff_100%)]">
+      <FlashQueryCleaner />
       <MainNav />
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -62,14 +69,14 @@ export default async function VendorDashboardPage(props: {
                 ? "Use this dashboard to complete your business registration, upload your work, and prepare your listing for review."
                 : "Your business profile is saved. Review your current status, monitor publication progress, and manage your listing details from here."}
             </p>
-            {searchParams.message ? (
+            {feedbackMessage ? (
               <p className="surface-soft mt-5 rounded-[1.25rem] px-4 py-3 text-sm text-[color:var(--color-brand-primary)]">
-                {searchParams.message}
+                {feedbackMessage}
               </p>
             ) : null}
-            {searchParams.error ? (
+            {feedbackError ? (
               <p className="mt-5 rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {searchParams.error}
+                {feedbackError}
               </p>
             ) : null}
             {vendor && status === "needs_changes" ? (
@@ -95,11 +102,6 @@ export default async function VendorDashboardPage(props: {
             {vendor && status === "archived" ? (
               <p className="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 Your vendor record is archived and is not currently visible in the marketplace.
-              </p>
-            ) : null}
-            {!storageSetup.ok ? (
-              <p className="mt-5 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {storageSetup.error}
               </p>
             ) : null}
           </div>
@@ -238,6 +240,23 @@ export default async function VendorDashboardPage(props: {
       </main>
     </div>
   );
+}
+
+function sanitizeVendorFacingError(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.toLowerCase();
+  if (
+    normalized.includes("supabase") ||
+    normalized.includes("service-role") ||
+    normalized.includes("storage bucket")
+  ) {
+    return "We could not complete this action right now. Please try again shortly.";
+  }
+
+  return value;
 }
 
 function formatStatus(value: string) {
