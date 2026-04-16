@@ -19,13 +19,7 @@ export async function submitVendorForReviewAction(formData: FormData) {
 
 export async function updateInquiryStatusAction(formData: FormData) {
   const profile = await requireVendorProfile("/vendor/dashboard");
-  const admin = createSupabaseAdminClient();
-
-  if (!admin) {
-    redirect(
-      "/vendor/dashboard?error=We%20could%20not%20update%20this%20inquiry%20right%20now.",
-    );
-  }
+  const supabase = await createSupabaseServerClient();
 
   const inquiryId = String(formData.get("inquiryId") ?? "").trim();
   const threadStatus = String(formData.get("status") ?? "").trim();
@@ -35,7 +29,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
     redirect("/vendor/dashboard?error=We%20could%20not%20update%20this%20inquiry%20right%20now.");
   }
 
-  const { data: vendor, error: vendorError } = await admin
+  const { data: vendor, error: vendorError } = await supabase
     .from("vendors")
     .select("id")
     .eq("user_id", profile.id)
@@ -54,7 +48,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
 
   console.log("Vendor inquiry status update attempt", {
     table: "leads",
-    client: "service_role",
+    client: "authenticated_server",
     authUserId: profile.id,
     vendorId: vendor.id,
     inquiryId,
@@ -69,7 +63,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
     archived_at: threadStatus === "archived" ? now : null,
   };
 
-  let { error } = await admin
+  let { error } = await supabase
     .from("leads")
     .update(payload)
     .eq("id", inquiryId)
@@ -85,7 +79,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
 
     console.warn("Vendor inquiry status update retrying with compatible payload", {
       table: "leads",
-      client: "service_role",
+      client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
@@ -94,7 +88,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
       error: serializeSupabaseError(error),
     });
 
-    const fallbackResult = await admin
+    const fallbackResult = await supabase
       .from("leads")
       .update(fallbackPayload)
       .eq("id", inquiryId)
@@ -102,10 +96,23 @@ export async function updateInquiryStatusAction(formData: FormData) {
     error = fallbackResult.error;
   }
 
+  if (error && isRlsDeniedError(error)) {
+    console.error("Vendor inquiry status update blocked by RLS", {
+      table: "leads",
+      client: "authenticated_server",
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+      threadStatus,
+      payload,
+      error: serializeSupabaseError(error),
+    });
+  }
+
   if (error) {
     console.error("Vendor inquiry status update failed", {
       table: "leads",
-      client: "service_role",
+      client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
@@ -123,13 +130,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
 
 export async function replyToInquiryAction(formData: FormData) {
   const profile = await requireVendorProfile("/vendor/dashboard");
-  const admin = createSupabaseAdminClient();
-
-  if (!admin) {
-    redirect(
-      "/vendor/dashboard?error=We%20could%20not%20send%20this%20reply%20right%20now.",
-    );
-  }
+  const supabase = await createSupabaseServerClient();
 
   const inquiryId = String(formData.get("inquiryId") ?? "").trim();
   const body = String(formData.get("message") ?? "").trim();
@@ -138,7 +139,7 @@ export async function replyToInquiryAction(formData: FormData) {
     redirect("/vendor/dashboard?error=Add%20a%20reply%20before%20sending.");
   }
 
-  const { data: vendor, error: vendorError } = await admin
+  const { data: vendor, error: vendorError } = await supabase
     .from("vendors")
     .select("id")
     .eq("user_id", profile.id)
@@ -154,7 +155,7 @@ export async function replyToInquiryAction(formData: FormData) {
     redirect("/vendor/dashboard?error=We%20could%20not%20send%20this%20reply%20right%20now.");
   }
 
-  const { data: lead, error: leadError } = await admin
+  const { data: lead, error: leadError } = await supabase
     .from("leads")
     .select("id, vendor_id")
     .eq("id", inquiryId)
@@ -182,14 +183,14 @@ export async function replyToInquiryAction(formData: FormData) {
 
   console.log("Vendor inquiry reply write attempt", {
     table: "lead_messages",
-    client: "service_role",
+    client: "authenticated_server",
     authUserId: profile.id,
     vendorId: vendor.id,
     inquiryId,
     payload: messagePayload,
   });
 
-  let { error: messageError } = await admin
+  let { error: messageError } = await supabase
     .from("lead_messages")
     .insert(messagePayload);
 
@@ -203,7 +204,7 @@ export async function replyToInquiryAction(formData: FormData) {
 
     console.warn("Vendor inquiry reply retrying with compatible payload", {
       table: "lead_messages",
-      client: "service_role",
+      client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
@@ -211,7 +212,7 @@ export async function replyToInquiryAction(formData: FormData) {
       error: serializeSupabaseError(messageError),
     });
 
-    const fallbackResult = await admin
+    const fallbackResult = await supabase
       .from("lead_messages")
       .insert(fallbackPayload);
     messageError = fallbackResult.error;
@@ -226,7 +227,7 @@ export async function replyToInquiryAction(formData: FormData) {
 
       console.warn("Vendor inquiry reply retrying with minimal payload", {
         table: "lead_messages",
-        client: "service_role",
+        client: "authenticated_server",
         authUserId: profile.id,
         vendorId: vendor.id,
         inquiryId,
@@ -234,17 +235,29 @@ export async function replyToInquiryAction(formData: FormData) {
         error: serializeSupabaseError(messageError),
       });
 
-      const minimalFallbackResult = await admin
+      const minimalFallbackResult = await supabase
         .from("lead_messages")
         .insert(minimalFallbackPayload);
       messageError = minimalFallbackResult.error;
     }
   }
 
+  if (messageError && isRlsDeniedError(messageError)) {
+    console.error("Vendor inquiry reply blocked by RLS", {
+      table: "lead_messages",
+      client: "authenticated_server",
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+      payload: messagePayload,
+      error: serializeSupabaseError(messageError),
+    });
+  }
+
   if (messageError) {
     console.error("Vendor inquiry reply create failed", {
       table: "lead_messages",
-      client: "service_role",
+      client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
@@ -260,7 +273,7 @@ export async function replyToInquiryAction(formData: FormData) {
     contacted_at: now,
   };
 
-  let { error: statusError } = await admin
+  let { error: statusError } = await supabase
     .from("leads")
     .update(statusPayload)
     .eq("id", inquiryId)
@@ -275,7 +288,7 @@ export async function replyToInquiryAction(formData: FormData) {
 
     console.warn("Vendor inquiry reply status update retrying with compatible payload", {
       table: "leads",
-      client: "service_role",
+      client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
@@ -283,7 +296,7 @@ export async function replyToInquiryAction(formData: FormData) {
       error: serializeSupabaseError(statusError),
     });
 
-    const fallbackStatusResult = await admin
+    const fallbackStatusResult = await supabase
       .from("leads")
       .update(fallbackStatusPayload)
       .eq("id", inquiryId)
@@ -294,7 +307,7 @@ export async function replyToInquiryAction(formData: FormData) {
   if (statusError) {
     console.error("Vendor inquiry reply status update failed", {
       table: "leads",
-      client: "service_role",
+      client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
@@ -768,6 +781,13 @@ function supportsLeadStatusFallback(error: {
     message.includes("invalid input value for enum") ||
     message.includes("not-null constraint")
   );
+}
+
+function isRlsDeniedError(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  return error.code === "42501";
 }
 
 function parseJsonArray(value: FormDataEntryValue | null) {

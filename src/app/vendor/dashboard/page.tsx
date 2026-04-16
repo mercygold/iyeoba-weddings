@@ -89,21 +89,6 @@ export default async function VendorDashboardPage(props: {
                 Your listing is currently suspended and is not visible to the public.
               </p>
             ) : null}
-            {vendor && status === "approved" ? (
-              <p className="mt-5 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                Your listing is live and visible in the marketplace.
-              </p>
-            ) : null}
-            {vendor && status === "pending_review" ? (
-              <p className="mt-5 rounded-[1.25rem] border border-[rgba(201,161,91,0.3)] bg-[rgba(201,161,91,0.12)] px-4 py-3 text-sm text-[color:var(--color-ink)]">
-                Your profile is under review. You can keep checking this dashboard for the latest moderation note and status update.
-              </p>
-            ) : null}
-            {vendor && status === "archived" ? (
-              <p className="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                Your vendor record is archived and is not currently visible in the marketplace.
-              </p>
-            ) : null}
           </div>
 
           <aside className="rounded-[2rem] bg-[color:var(--color-brand-primary)] p-8 text-white">
