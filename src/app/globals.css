@@ -2,25 +2,178 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1d1822;
+  --color-brand-primary: #6a3e7c;
+  --color-brand-light: #e9ddf0;
+  --color-brand-soft: #faf7fc;
+  --color-brand-gold: #c9a15b;
+  --color-surface: #fdfbfe;
+  --color-ink: #23182a;
+  --color-muted: #655b6d;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Avenir Next", "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", "Menlo", monospace;
+  --font-display: "Iowan Old Style", "Baskerville", "Times New Roman", serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+button,
+input,
+select,
+textarea {
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+button {
+  cursor: pointer;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(233, 221, 240, 0.75);
+}
+
+a:focus-visible,
+button:focus-visible {
+  border-radius: 9999px;
+}
+
+.font-display {
+  font-family: "Iowan Old Style", "Baskerville", "Times New Roman", serif;
+  font-weight: 600;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: var(--color-brand-primary);
+  color: #ffffff;
+  padding: 0.8rem 1.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 16px 30px -20px rgba(106, 62, 124, 0.5);
+  transition:
+    color 240ms ease,
+    border-color 240ms ease,
+    background-color 240ms ease,
+    box-shadow 240ms ease,
+    transform 240ms ease;
+}
+
+.btn-primary:hover {
+  border-color: rgba(106, 62, 124, 0.36);
+  background: #ffffff;
+  color: var(--color-brand-primary);
+  box-shadow: 0 18px 34px -22px rgba(106, 62, 124, 0.42);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(106, 62, 124, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--color-brand-primary);
+  padding: 0.8rem 1.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 0 0 rgba(106, 62, 124, 0);
+  transition:
+    color 240ms ease,
+    border-color 240ms ease,
+    background-color 240ms ease,
+    box-shadow 240ms ease,
+    transform 240ms ease;
+}
+
+.btn-secondary:hover {
+  border-color: rgba(106, 62, 124, 0.28);
+  background: rgba(247, 242, 251, 0.92);
+  box-shadow: 0 10px 24px -18px rgba(106, 62, 124, 0.36);
+  transform: translateY(-1px);
+}
+
+.btn-ghost-light {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: #ffffff;
+  padding: 0.8rem 1.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.btn-ghost-light:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.field-input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid var(--color-brand-light);
+  background: #ffffff;
+  padding: 0.8rem 1rem;
+  color: var(--color-ink);
+}
+
+.surface-card {
+  border: 1px solid rgba(106, 62, 124, 0.08);
+  background: #ffffff;
+  box-shadow: 0 20px 50px -40px rgba(106, 62, 124, 0.2);
+}
+
+.surface-soft {
+  border: 1px solid rgba(106, 62, 124, 0.06);
+  background: rgba(250, 247, 252, 0.72);
 }

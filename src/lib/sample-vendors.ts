@@ -1,0 +1,118 @@
+export const sampleVendors = [
+  {
+    slug: "adunni-bridal-studio",
+    businessName: "Adunni Bridal Studio",
+    category: "Makeup Artist",
+    cultureSpecialization: "Yoruba weddings",
+    location: "Lagos, Nigeria",
+    instagram: "@adunnibridal",
+    website: "adunnibridal.example",
+    whatsapp: "+234 800 000 1001",
+    priceRange: "NGN 250k+",
+    availabilityStatus: "Available for Q3 bookings",
+    verified: true,
+    description:
+      "Soft-glam bridal artistry for traditional weddings, white weddings, and full wedding weekend beauty support.",
+    servicesOffered: [
+      "Bridal makeup",
+      "Traditional glam",
+      "Bridesmaid beauty",
+      "Touch-up support",
+    ],
+    valueStatement:
+      "Known for calm execution, polished skin finishes, and styles that work beautifully across long ceremony days.",
+    portfolio: [
+      "Traditional bridal glam",
+      "White wedding skin finish",
+      "Bridesmaid coordination set",
+      "Reception touch-up station",
+    ],
+  },
+  {
+    slug: "aroha-films",
+    businessName: "Aroha Films",
+    category: "Photographer",
+    cultureSpecialization: "Yoruba and Igbo weddings",
+    location: "Houston, Texas",
+    instagram: "@arohafilms",
+    website: "arohafilms.example",
+    whatsapp: "+1 832 000 4000",
+    priceRange: "$2,500+",
+    availabilityStatus: "Limited",
+    verified: true,
+    description:
+      "Photo and video storytelling for diaspora weddings, from introductions and traditional ceremonies to receptions.",
+    servicesOffered: [
+      "Photography",
+      "Highlight films",
+      "Family portraits",
+      "Multi-event coverage",
+    ],
+    valueStatement:
+      "Chosen for strong family storytelling, polished portrait direction, and dependable destination wedding coverage.",
+    portfolio: [
+      "Introduction ceremony coverage",
+      "Reception candid moments",
+      "Portrait lighting setup",
+      "Family documentation set",
+    ],
+  },
+  {
+    slug: "ipele-events",
+    businessName: "Ipele Events",
+    category: "Event Planner",
+    cultureSpecialization: "Luxury Nigerian weddings",
+    location: "Abuja, Nigeria",
+    instagram: "@ipeleevents",
+    website: "ipeleevents.example",
+    whatsapp: "+234 800 000 6600",
+    priceRange: "NGN 1.2M+",
+    availabilityStatus: "Open from September",
+    verified: false,
+    description:
+      "Event planning and guest coordination for multi-day celebrations that need structure, pacing, and polished execution.",
+    servicesOffered: [
+      "Planning management",
+      "Guest coordination",
+      "Vendor scheduling",
+      "Reception flow",
+    ],
+    valueStatement:
+      "A fit for couples who want a broad vision translated into an organized run-of-show and calmer wedding week.",
+    portfolio: [
+      "Guest arrival coordination",
+      "Traditional ceremony flow",
+      "Reception schedule build",
+      "Vendor run sheet",
+    ],
+  },
+  {
+    slug: "gele-house-by-ife",
+    businessName: "Gele House by Ife",
+    category: "Asoebi Designer",
+    cultureSpecialization: "Yoruba celebrations",
+    location: "London, United Kingdom",
+    instagram: "@gelehousebyife",
+    website: "gelehouse.example",
+    whatsapp: "+44 20 0000 9090",
+    priceRange: "£120+",
+    availabilityStatus: "Available",
+    verified: true,
+    description:
+      "Premium gele styling and asoebi coordination for brides, mothers, and wedding parties across diaspora events.",
+    servicesOffered: [
+      "Gele styling",
+      "Asoebi consultation",
+      "Bridal party coordination",
+      "Fabric planning support",
+    ],
+    valueStatement:
+      "Popular for clean styling, strong color coordination, and confidence-building support for large family groups.",
+    portfolio: [
+      "Bridal gele finish",
+      "Family coordination looks",
+      "Reception restyling",
+      "Fabric planning moodboard",
+    ],
+  },
+] as const;
