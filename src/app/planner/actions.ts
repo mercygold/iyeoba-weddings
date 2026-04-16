@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requirePlannerProfile } from "@/lib/auth";
-import { getPlannerPrimaryWeddingId } from "@/lib/inquiries";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function saveVendorForPlannerAction(formData: FormData) {
@@ -61,7 +60,6 @@ export async function createVendorInquiryAction(formData: FormData) {
   const nextPath = normalizePlannerNextPath(
     String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
   );
-  const contactMethod = String(formData.get("contactMethod") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
   const supabase = await createSupabaseServerClient();
 
@@ -74,155 +72,171 @@ export async function createVendorInquiryAction(formData: FormData) {
     });
     redirect(`${nextPath}?error=${encodeURIComponent("Vendor record was not found.")}`);
   }
-  const weddingId = await getPlannerPrimaryWeddingId(profile.id);
-  const payload = {
-    user_id: profile.id,
-    planner_user_id: profile.id,
-    vendor_id: vendorId,
-    wedding_id: weddingId,
-    contact_method: contactMethod || null,
-    message: message || null,
-    status: "new",
-    thread_status: "open",
-  };
+  const { data: vendorIdentity, error: vendorIdentityError } = await supabase
+    .from("vendors")
+    .select("id, user_id")
+    .eq("id", vendorId)
+    .maybeSingle();
 
-  console.log("Planner inquiry write attempt", {
-    table: "leads",
-    authUserId: profile.id,
-    vendorId,
-    vendorSlug,
-    payload,
-  });
-
-  const insertAttempts = [
-    payload,
-    { ...payload, thread_status: undefined },
-    { ...payload, contact_method: undefined },
-    { ...payload, contact_method: undefined, thread_status: undefined },
-    {
-      user_id: profile.id,
-      vendor_id: vendorId,
-      wedding_id: weddingId,
-      message: message || null,
-      status: "new",
-    },
-  ].map(stripUndefinedFields);
-
-  let insertedLeadId: string | null = null;
-  let error: {
-    code?: string | null;
-    message?: string | null;
-    details?: string | null;
-    hint?: string | null;
-  } | null = null;
-
-  for (const attemptPayload of insertAttempts) {
-    const leadInsertQuery = supabase.from("leads").insert(attemptPayload) as {
-      select?: (columns: string) => { single: () => Promise<{ data: { id: string } | null; error: { code?: string | null; message?: string | null; details?: string | null; hint?: string | null } | null }> };
-    } & Promise<{
-      data: { id: string } | null;
-      error: { code?: string | null; message?: string | null; details?: string | null; hint?: string | null } | null;
-    }>;
-
-    const result =
-      typeof leadInsertQuery.select === "function"
-        ? await leadInsertQuery.select("id").single()
-        : await leadInsertQuery;
-
-    insertedLeadId = result.data?.id ?? null;
-    error = result.error;
-
-    if (!error && insertedLeadId) {
-      break;
-    }
-
-    if (error && !isSchemaDriftError(error)) {
-      break;
-    }
-
-    if (error) {
-      console.warn("Planner inquiry insert retrying with compatible payload", {
-        table: "leads",
-        authUserId: profile.id,
-        vendorId,
-        vendorSlug,
-        payload: attemptPayload,
-        error: serializeSupabaseError(error),
-      });
-    }
-  }
-
-  if (error) {
-    console.error("Planner inquiry create failed", {
-      table: "leads",
+  if (vendorIdentityError || !vendorIdentity?.id || !vendorIdentity.user_id) {
+    console.error("Planner inquiry create failed while resolving vendor identity", {
       plannerUserId: profile.id,
       vendorId,
       vendorSlug,
-      payload,
-      error: serializeSupabaseError(error),
+      error: vendorIdentityError ? serializeSupabaseError(vendorIdentityError) : null,
     });
     redirect(
       `${nextPath}?error=${encodeURIComponent("We could not start this inquiry right now.")}`,
     );
   }
 
-  if (insertedLeadId && message) {
+  const existingThread = await findExistingPlannerVendorThread({
+    supabase,
+    plannerUserId: profile.id,
+    vendorUserId: vendorIdentity.user_id,
+    vendorId,
+  });
+
+  if (existingThread.id) {
+    if (message) {
+      const now = new Date().toISOString();
+      const appended = await appendPlannerMessageToThread({
+        supabase,
+        inquiryId: existingThread.id,
+        plannerUserId: profile.id,
+        message,
+        now,
+      });
+
+      if (!appended.ok) {
+        console.error("Planner inquiry append failed", {
+          plannerUserId: profile.id,
+          vendorId,
+          vendorSlug,
+          threadId: existingThread.id,
+          error: appended.error ? serializeSupabaseError(appended.error) : null,
+        });
+        redirect(
+          `${nextPath}?error=${encodeURIComponent("We could not send your inquiry right now.")}`,
+        );
+      }
+
+      revalidatePath("/planner/dashboard");
+      revalidatePath("/vendor/dashboard");
+      redirect(
+        `${nextPath}?message=${encodeURIComponent("Message sent in your existing conversation thread.")}`,
+      );
+    }
+
+    redirect(
+      `${nextPath}?message=${encodeURIComponent("Conversation already exists with this vendor.")}`,
+    );
+  }
+
+  const now = new Date().toISOString();
+  const payload = {
+    planner_user_id: profile.id,
+    vendor_profile_id: vendorId,
+    vendor_user_id: vendorIdentity.user_id,
+    status: "open",
+    initial_message: null,
+    updated_at: now,
+  };
+
+  console.log("Planner inquiry write attempt", {
+    table: "inquiries",
+    authUserId: profile.id,
+    vendorId,
+    vendorSlug,
+    payload,
+  });
+
+  const inquiryInsertQuery = supabase.from("inquiries").insert(payload) as {
+    select?: (columns: string) => {
+      single: () => Promise<{
+        data: { id: string } | null;
+        error: {
+          code?: string | null;
+          message?: string | null;
+          details?: string | null;
+          hint?: string | null;
+        } | null;
+      }>;
+    };
+  } & Promise<{
+    data: { id: string } | null;
+    error: {
+      code?: string | null;
+      message?: string | null;
+      details?: string | null;
+      hint?: string | null;
+    } | null;
+  }>;
+
+  const inquiryInsertResult =
+    typeof inquiryInsertQuery.select === "function"
+      ? await inquiryInsertQuery.select("id").single()
+      : await inquiryInsertQuery;
+
+  let insertedInquiryId = inquiryInsertResult.data?.id ?? null;
+  const inquiryError = inquiryInsertResult.error;
+
+  if (!inquiryError && !insertedInquiryId) {
+    const postInsertThread = await findExistingPlannerVendorThread({
+      supabase,
+      plannerUserId: profile.id,
+      vendorUserId: vendorIdentity.user_id,
+      vendorId,
+    });
+    insertedInquiryId = postInsertThread.id;
+  }
+
+  if (inquiryError || !insertedInquiryId) {
+    console.error("Planner inquiry create failed", {
+      table: "inquiries",
+      plannerUserId: profile.id,
+      vendorId,
+      vendorSlug,
+      payload,
+      error: inquiryError ? serializeSupabaseError(inquiryError) : null,
+    });
+    redirect(
+      `${nextPath}?error=${encodeURIComponent("We could not start this inquiry right now.")}`,
+    );
+  }
+
+  if (message) {
     const messagePayload = {
-      lead_id: insertedLeadId,
+      inquiry_id: insertedInquiryId,
       sender_user_id: profile.id,
-      message,
-      body: message,
-      created_at: new Date().toISOString(),
+      message_body: message,
+      created_at: now,
     };
 
     console.log("Planner inquiry message write attempt", {
-      table: "lead_messages",
+      table: "inquiry_messages",
       authUserId: profile.id,
       vendorId,
-      leadId: insertedLeadId,
+      inquiryId: insertedInquiryId,
       payload: messagePayload,
     });
 
     const { error: messageError } = await supabase
-      .from("lead_messages")
+      .from("inquiry_messages")
       .insert(messagePayload);
 
     if (messageError) {
-      const fallbackPayload = {
-        lead_id: insertedLeadId,
-        sender_user_id: profile.id,
-        message,
-      };
-
-      console.warn("Planner inquiry message retrying with fallback payload", {
-        table: "lead_messages",
+      console.error("Planner inquiry message create failed", {
+        table: "inquiry_messages",
         authUserId: profile.id,
         vendorId,
-        leadId: insertedLeadId,
-        payload: fallbackPayload,
+        inquiryId: insertedInquiryId,
+        payload: messagePayload,
         error: serializeSupabaseError(messageError),
       });
-
-      const fallbackResult = await supabase
-        .from("lead_messages")
-        .insert(fallbackPayload);
-
-      if (!fallbackResult.error) {
-        revalidatePath("/planner/dashboard");
-        revalidatePath("/vendor/dashboard");
-        redirect(
-          `${nextPath}?message=${encodeURIComponent("Inquiry created. You can now contact this vendor directly.")}`,
-        );
-      }
-
-      console.error("Planner inquiry message create failed", {
-        table: "lead_messages",
-        authUserId: profile.id,
-        vendorId,
-        leadId: insertedLeadId,
-        payload: fallbackPayload,
-        error: serializeSupabaseError(fallbackResult.error ?? messageError),
-      });
+      redirect(
+        `${nextPath}?error=${encodeURIComponent("We could not send your inquiry right now.")}`,
+      );
     }
   }
 
@@ -250,18 +264,18 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
   }
 
   const { data: lead, error: leadError } = await supabase
-    .from("leads")
-    .select("id, user_id, planner_user_id")
+    .from("inquiries")
+    .select("id, planner_user_id")
     .eq("id", inquiryId)
     .maybeSingle();
 
   if (
     leadError ||
     !lead?.id ||
-    (lead.user_id !== profile.id && lead.planner_user_id !== profile.id)
+    lead.planner_user_id !== profile.id
   ) {
     console.error("Planner inquiry status update failed while loading lead", {
-      table: "leads",
+      table: "inquiries",
       authUserId: profile.id,
       inquiryId,
       requestedStatus,
@@ -276,50 +290,25 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
   const payload = {
     status: requestedStatus,
     updated_at: now,
-    contacted_at: requestedStatus === "contacted" ? now : null,
-    archived_at: requestedStatus === "archived" ? now : null,
   };
 
   console.log("Planner inquiry status update attempt", {
-    table: "leads",
+    table: "inquiries",
     authUserId: profile.id,
     inquiryId,
     requestedStatus,
     payload,
   });
 
-  let { error } = await supabase
-    .from("leads")
+  const { error } = await supabase
+    .from("inquiries")
     .update(payload)
-    .eq("id", inquiryId);
-
-  if (error && isSchemaDriftError(error)) {
-    const fallbackPayload = {
-      status: mapThreadStatusToLegacyStatus(requestedStatus),
-      updated_at: now,
-      contacted_at: requestedStatus === "contacted" ? now : null,
-      archived_at: requestedStatus === "archived" ? now : null,
-    };
-
-    console.warn("Planner inquiry status retrying with compatibility payload", {
-      table: "leads",
-      authUserId: profile.id,
-      inquiryId,
-      requestedStatus,
-      payload: fallbackPayload,
-      error: serializeSupabaseError(error),
-    });
-
-    const fallbackResult = await supabase
-      .from("leads")
-      .update(fallbackPayload)
-      .eq("id", inquiryId);
-    error = fallbackResult.error;
-  }
+    .eq("id", inquiryId)
+    .eq("planner_user_id", profile.id);
 
   if (error) {
     console.error("Planner inquiry status update failed", {
-      table: "leads",
+      table: "inquiries",
       authUserId: profile.id,
       inquiryId,
       requestedStatus,
@@ -338,18 +327,6 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
   );
 }
 
-function isSchemaDriftError(error: {
-  code?: string | null;
-  message?: string | null;
-}) {
-  const message = error.message?.toLowerCase() ?? "";
-  return (
-    error.code === "PGRST204" ||
-    (message.includes("column") &&
-      (message.includes("does not exist") || message.includes("could not find")))
-  );
-}
-
 function serializeSupabaseError(error: {
   code?: string | null;
   message?: string | null;
@@ -364,22 +341,68 @@ function serializeSupabaseError(error: {
   };
 }
 
-function mapThreadStatusToLegacyStatus(
-  value: string,
-): "new" | "contacted" | "booked" {
-  if (value === "contacted") {
-    return "contacted";
+
+async function findExistingPlannerVendorThread({
+  supabase,
+  plannerUserId,
+  vendorUserId,
+  vendorId,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  plannerUserId: string;
+  vendorUserId: string;
+  vendorId: string;
+}) {
+  const inquiryResult = await supabase
+    .from("inquiries")
+    .select("id")
+    .eq("planner_user_id", plannerUserId)
+    .eq("vendor_user_id", vendorUserId)
+    .eq("vendor_profile_id", vendorId)
+    .order("updated_at", { ascending: false });
+
+  if (inquiryResult.error) {
+    return { id: null };
   }
-  if (value === "closed" || value === "archived") {
-    return "booked";
-  }
-  return "new";
+
+  return { id: inquiryResult.data?.[0]?.id ?? null };
 }
 
-function stripUndefinedFields<T extends Record<string, unknown>>(payload: T): T {
-  return Object.fromEntries(
-    Object.entries(payload).filter(([, value]) => value !== undefined),
-  ) as T;
+async function appendPlannerMessageToThread({
+  supabase,
+  inquiryId,
+  plannerUserId,
+  message,
+  now,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  inquiryId: string;
+  plannerUserId: string;
+  message: string;
+  now: string;
+}) {
+  const messageInsert = await supabase.from("inquiry_messages").insert({
+    inquiry_id: inquiryId,
+    sender_user_id: plannerUserId,
+    message_body: message,
+    created_at: now,
+  });
+
+  if (messageInsert.error) {
+    return { ok: false as const, error: messageInsert.error };
+  }
+
+  const statusUpdate = await supabase
+    .from("inquiries")
+    .update({ status: "open", updated_at: now })
+    .eq("id", inquiryId)
+    .eq("planner_user_id", plannerUserId);
+
+  if (statusUpdate.error) {
+    return { ok: false as const, error: statusUpdate.error };
+  }
+
+  return { ok: true as const, error: null };
 }
 
 function normalizePlannerNextPath(path: string) {
