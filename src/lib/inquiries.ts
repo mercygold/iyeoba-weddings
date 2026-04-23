@@ -180,37 +180,72 @@ export async function getPlannerSavedVendors(userId: string) {
     }
   }
 
+  const publicDirectory = await getVendorDirectory();
+  const publicDirectoryMap = new Map(
+    publicDirectory
+      .filter((vendor) => vendor.id)
+      .map((vendor) => [vendor.id as string, vendor]),
+  );
+
   const results = data
     .map((row) => {
       const vendor = vendorMap.get(row.vendor_id);
-      if (!vendor) {
-        return null;
+      const directoryVendor = publicDirectoryMap.get(row.vendor_id);
+
+      let normalizedCategory = normalizeVendorCategory("Others", null);
+      let imageUrl = getVendorPlaceholderImage("Beauty");
+      let slug = `saved-${row.vendor_id}`;
+      let businessName = "Saved vendor";
+      let category = "Others";
+      let location = "Location unavailable";
+      let priceRange: string | null = null;
+      let whatsapp: string | null = null;
+
+      if (vendor) {
+        normalizedCategory = normalizeVendorCategory(
+          vendor.category,
+          vendor.custom_category ?? null,
+        );
+        const portfolioImages =
+          vendor.vendor_portfolio
+            ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map((entry) => entry.image_url)
+            .filter(Boolean) ?? [];
+        imageUrl =
+          portfolioImages[0] ??
+          vendor.portfolio_image_urls?.[0] ??
+          getVendorPlaceholderImage(normalizedCategory.category ?? "Beauty");
+        slug = vendor.slug;
+        businessName = vendor.business_name;
+        category = normalizedCategory.category;
+        location = vendor.location;
+        priceRange = vendor.price_range ?? null;
+        whatsapp = vendor.whatsapp ?? null;
+      } else if (directoryVendor) {
+        normalizedCategory = normalizeVendorCategory(
+          directoryVendor.category,
+          directoryVendor.customCategory ?? null,
+        );
+        imageUrl = directoryVendor.imageUrl;
+        slug = directoryVendor.slug;
+        businessName = directoryVendor.businessName;
+        category = normalizedCategory.category;
+        location = directoryVendor.location;
+        priceRange = directoryVendor.priceRange ?? null;
+        whatsapp = directoryVendor.whatsapp ?? null;
       }
-      const normalizedCategory = normalizeVendorCategory(
-        vendor.category,
-        vendor.custom_category ?? null,
-      );
-      const portfolioImages =
-        vendor.vendor_portfolio
-          ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-          .map((entry) => entry.image_url)
-          .filter(Boolean) ?? [];
-      const imageUrl =
-        portfolioImages[0] ??
-        vendor.portfolio_image_urls?.[0] ??
-        getVendorPlaceholderImage(normalizedCategory.category ?? "Beauty");
 
       return {
         id: row.id,
         createdAt: row.created_at,
         vendor: {
-          id: vendor.id,
-          slug: vendor.slug,
-          businessName: vendor.business_name,
-          category: normalizedCategory.category,
-          location: vendor.location,
-          priceRange: vendor.price_range ?? null,
-          whatsapp: vendor.whatsapp || null,
+          id: row.vendor_id,
+          slug,
+          businessName,
+          category,
+          location,
+          priceRange,
+          whatsapp,
           contactEmail: null,
           imageUrl,
         },
@@ -221,6 +256,7 @@ export async function getPlannerSavedVendors(userId: string) {
   console.log("Planner saved vendors query", {
     userId,
     savedVendorIds,
+    savedVendorRows: data.map((row) => ({ id: row.id, vendor_id: row.vendor_id })),
     returnedVendorIds: results.map((row) => row.vendor.id),
   });
 
@@ -265,6 +301,13 @@ export async function getPlannerInquiries(userId: string) {
     filter: "planner_user_id",
     select: leadSelect,
     count: plannerResult.data?.length ?? 0,
+    leadRows:
+      (plannerResult.data ?? []).map((row) => ({
+        id: row.id,
+        vendor_id: row.vendor_id,
+        planner_user_id: row.planner_user_id,
+        user_id: row.user_id,
+      })) ?? [],
     error: plannerResult.error ? serializeSupabaseError(plannerResult.error) : null,
   });
 
@@ -281,6 +324,13 @@ export async function getPlannerInquiries(userId: string) {
       filter: "user_id",
       select: leadSelect,
       count: legacyResult.data?.length ?? 0,
+      leadRows:
+        (legacyResult.data ?? []).map((row) => ({
+          id: row.id,
+          vendor_id: row.vendor_id,
+          planner_user_id: row.planner_user_id,
+          user_id: row.user_id,
+        })) ?? [],
       error: legacyResult.error ? serializeSupabaseError(legacyResult.error) : null,
     });
   }

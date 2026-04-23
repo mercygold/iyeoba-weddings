@@ -99,11 +99,15 @@ export default async function PlannerDashboardPage(props: {
 
   const inquiries = await getPlannerInquiries(profile.id);
   const conversationsByVendor = buildConversationsByVendor(inquiries);
+  const inquiryVendorMap = new Map(
+    inquiries.map((inquiry) => [inquiry.vendor.id, inquiry.vendor]),
+  );
 
   const threadVendorId =
     typeof searchParams.thread === "string" ? searchParams.thread : null;
   const selectedVendor =
-    savedVendors.find((item) => item.vendor.id === threadVendorId)?.vendor ?? null;
+    savedVendors.find((item) => item.vendor.id === threadVendorId)?.vendor ??
+    (threadVendorId ? inquiryVendorMap.get(threadVendorId) ?? null : null);
   const selectedConversation = threadVendorId
     ? conversationsByVendor.get(threadVendorId) ?? null
     : null;
@@ -132,6 +136,13 @@ export default async function PlannerDashboardPage(props: {
       legacySavedVendors: legacySavedVendors.length,
       inquiries: inquiries.length,
       conversationsByVendor: conversationsByVendor.size,
+    },
+    ids: {
+      savedVendorIds: savedVendors.map((item) => item.vendor.id),
+      inquiryVendorIds: inquiries.map((item) => item.vendor.id),
+      conversationVendorIds: [...conversationsByVendor.keys()],
+      selectedThreadVendorId: threadVendorId,
+      selectedConversationId: selectedConversation?.id ?? null,
     },
   });
 
