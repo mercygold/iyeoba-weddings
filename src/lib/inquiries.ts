@@ -73,6 +73,8 @@ type LeadRow = {
   contacted_at?: string | null;
   archived_at?: string | null;
   updated_at?: string | null;
+  planner_display_name?: string | null;
+  vendor_business_name?: string | null;
   users?: {
     full_name?: string | null;
     email?: string | null;
@@ -358,6 +360,7 @@ export async function getPlannerInquiries(userId: string) {
 
   const vendorIds = rows.map((row) => row.vendor_id).filter(Boolean) as string[];
   const vendorLookup = await getPlannerInquiryVendorMap(vendorIds);
+  const plannerLabel = await getPlannerDisplayLabel(userId);
   const directoryVendors = await getVendorDirectory();
   const directoryVendorMap = new Map(
     directoryVendors
@@ -368,6 +371,11 @@ export async function getPlannerInquiries(userId: string) {
     ...row,
     vendor_user_id:
       row.vendor_user_id ?? vendorLookup.get(row.vendor_id ?? "")?.user_id ?? null,
+    planner_display_name: plannerLabel,
+    vendor_business_name:
+      vendorLookup.get(row.vendor_id ?? "")?.business_name ??
+      directoryVendorMap.get(row.vendor_id ?? "")?.businessName ??
+      "Vendor",
   }));
   const messagesByLead = await getLeadMessagesMap(
     rowsWithParticipants.map((row) => row.id),
@@ -406,7 +414,7 @@ export async function getPlannerInquiries(userId: string) {
 
       const threadMessages = buildMergedThreadMessages(
         leadGroup,
-        "planner",
+        plannerLabel,
         messagesByLead,
       );
 
@@ -694,6 +702,13 @@ export async function getVendorInquiries(userId: string) {
     ...row,
     vendor_user_id:
       row.vendor_user_id ?? vendorOwnerById.get(row.vendor_id ?? "") ?? null,
+    planner_display_name:
+      plannerLookup.get(row.planner_user_id ?? row.user_id ?? "")?.full_name ??
+      plannerLookup.get(row.planner_user_id ?? row.user_id ?? "")?.email ??
+      "Planner",
+    vendor_business_name:
+      vendorResult.data.find((vendor) => vendor.id === row.vendor_id)?.business_name ??
+      "Vendor",
   }));
   const messagesByLead = await getLeadMessagesMap(
     rowsWithParticipants.map((row) => row.id),
@@ -914,6 +929,10 @@ function buildThreadMessages(
       ...message,
       body: message.body ?? "",
       createdAt: message.createdAt ?? leadCreatedAt ?? null,
+      senderLabel:
+        message.senderRole === "planner"
+          ? plannerLabel
+          : (message.senderLabel?.trim() || "Vendor"),
     }))
     .filter((message) => Boolean(message.body.trim()));
 
@@ -954,14 +973,25 @@ function buildMergedThreadMessages(
   plannerLabel: string,
   messagesByLead: Map<string, InquiryMessage[]>,
 ) {
+  const vendorLabel =
+    leadGroup.find((lead) => lead.vendor_business_name)?.vendor_business_name?.trim() ||
+    "Vendor";
+  const plannerDisplayLabel =
+    leadGroup.find((lead) => lead.planner_display_name)?.planner_display_name?.trim() ||
+    plannerLabel;
+
   const merged = leadGroup.flatMap((lead) =>
     buildThreadMessages(
       lead.id,
       lead.message ?? null,
-      plannerLabel,
+      plannerDisplayLabel,
       messagesByLead,
       toValidTimestamp(lead.created_at),
-    ),
+    ).map((message) => ({
+      ...message,
+      senderLabel:
+        message.senderRole === "planner" ? plannerDisplayLabel : vendorLabel,
+    })),
   );
 
   const dedupedById = merged.filter(
@@ -974,6 +1004,26 @@ function buildMergedThreadMessages(
     const bTime = toTime(b.createdAt);
     return aTime - bTime;
   });
+}
+
+async function getPlannerDisplayLabel(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Planner label lookup failed", {
+      table: "users",
+      userId,
+      error: serializeSupabaseError(error),
+    });
+    return "Planner";
+  }
+
+  return data?.full_name?.trim() || data?.email?.trim() || "Planner";
 }
 
 function pickPrimaryLeadForThread(leadGroup: LeadRow[]) {

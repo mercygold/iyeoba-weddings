@@ -378,7 +378,7 @@ export default async function PlannerDashboardPage(props: {
             )}
           </article>
 
-          <article className="surface-card rounded-[2rem] p-7" id="conversation-thread">
+          <article className="surface-card flex min-h-[560px] flex-col rounded-[2rem] p-7" id="conversation-thread">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
               Conversation Thread
             </p>
@@ -390,85 +390,87 @@ export default async function PlannerDashboardPage(props: {
                 <p className="mt-2 text-sm text-[color:var(--color-muted)]">
                   {selectedVendor.category} · {selectedVendor.location}
                 </p>
-                <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto pr-1">
-                  {selectedConversation?.messages.length ? (
-                    selectedConversation.messages.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`flex ${item.senderRole === "planner" ? "justify-end" : "justify-start"}`}
-                      >
+                <div className="mt-4 flex min-h-0 flex-1 flex-col">
+                  <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+                    {selectedConversation?.messages.length ? (
+                      selectedConversation.messages.map((item) => (
                         <div
-                          className={`max-w-[90%] rounded-[1.25rem] px-4 py-3 ${
-                            item.senderRole === "planner"
-                              ? "bg-[color:var(--color-brand-primary)] text-white"
-                              : "bg-[rgba(106,62,124,0.08)] text-[color:var(--color-ink)]"
-                          }`}
+                          key={item.id}
+                          className={`flex ${item.senderRole === "planner" ? "justify-end" : "justify-start"}`}
                         >
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-80">
-                            {item.senderLabel}
-                          </p>
-                          <p className="mt-1 text-sm leading-6">{item.body}</p>
-                          {formatDateTime(item.createdAt) ? (
-                            <p className="mt-1 text-[11px] opacity-75">
-                              {formatDateTime(item.createdAt)}
+                          <div
+                            className={`max-w-[90%] rounded-[1.25rem] px-4 py-3 ${
+                              item.senderRole === "planner"
+                                ? "bg-[color:var(--color-brand-primary)] text-white"
+                                : "bg-[rgba(106,62,124,0.08)] text-[color:var(--color-ink)]"
+                            }`}
+                          >
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-80">
+                              {item.senderLabel}
                             </p>
-                          ) : null}
+                            <p className="mt-1 text-sm leading-6">{item.body}</p>
+                            {formatDateTime(item.createdAt) ? (
+                              <p className="mt-1 text-[11px] opacity-75">
+                                {formatDateTime(item.createdAt)}
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-[color:var(--color-muted)]">
-                      No messages yet. Send your first note to this vendor.
-                    </p>
-                  )}
-                </div>
-
-                <form action={createVendorInquiryAction} className="mt-4 grid gap-3">
-                  <input type="hidden" name="vendorId" value={selectedVendor.id} />
-                  <input type="hidden" name="vendorSlug" value={selectedVendor.slug} />
-                  <input type="hidden" name="contactMethod" value="planner_thread" />
-                  <input type="hidden" name="nextPath" value={`/planner/dashboard?thread=${encodeURIComponent(selectedVendor.id)}&compare=${encodeURIComponent(compareIds.join(","))}`} />
-                  <textarea
-                    name="message"
-                    rows={3}
-                    placeholder="Write your message to this vendor."
-                    className="field-input min-h-[92px] rounded-[1.1rem] text-sm"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <button type="submit" className="btn-primary px-4 py-2">
-                      Send Message
-                    </button>
-                    {buildWhatsAppLink(selectedVendor.whatsapp, selectedVendor.businessName) ? (
-                      <a
-                        href={buildWhatsAppLink(selectedVendor.whatsapp, selectedVendor.businessName)!}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-secondary px-4 py-2"
-                      >
-                        WhatsApp
-                      </a>
-                    ) : null}
+                      ))
+                    ) : (
+                      <p className="text-sm text-[color:var(--color-muted)]">
+                        No messages yet. Send your first note to this vendor.
+                      </p>
+                    )}
                   </div>
-                </form>
-                {selectedConversation ? (
-                  <form action={updatePlannerInquiryStatusAction} className="mt-3 flex flex-wrap gap-2">
-                    <input type="hidden" name="inquiryId" value={selectedConversation.id} />
+
+                  <form action={createVendorInquiryAction} className="mt-4 grid gap-3 border-t border-[rgba(106,62,124,0.12)] pt-4">
+                    <input type="hidden" name="vendorId" value={selectedVendor.id} />
+                    <input type="hidden" name="vendorSlug" value={selectedVendor.slug} />
+                    <input type="hidden" name="contactMethod" value="planner_thread" />
                     <input type="hidden" name="nextPath" value={`/planner/dashboard?thread=${encodeURIComponent(selectedVendor.id)}&compare=${encodeURIComponent(compareIds.join(","))}`} />
-                    <select
-                      name="status"
-                      defaultValue={selectedConversation.threadStatus}
-                      className="field-input rounded-[999px] px-3 py-1.5 text-sm"
-                    >
-                      <option value="open">Open</option>
-                      <option value="contacted">Contacted</option>
-                      <option value="closed">Closed</option>
-                      <option value="archived">Archived</option>
-                    </select>
-                    <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">
-                      Update Status
-                    </button>
+                    <textarea
+                      name="message"
+                      rows={3}
+                      placeholder="Write your message to this vendor."
+                      className="field-input min-h-[92px] rounded-[1.1rem] text-sm"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="submit" className="btn-primary px-4 py-2">
+                        Send Message
+                      </button>
+                      {buildWhatsAppLink(selectedVendor.whatsapp, selectedVendor.businessName) ? (
+                        <a
+                          href={buildWhatsAppLink(selectedVendor.whatsapp, selectedVendor.businessName)!}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-secondary px-4 py-2"
+                        >
+                          WhatsApp
+                        </a>
+                      ) : null}
+                    </div>
                   </form>
-                ) : null}
+                  {selectedConversation ? (
+                    <form action={updatePlannerInquiryStatusAction} className="mt-3 flex flex-wrap gap-2">
+                      <input type="hidden" name="inquiryId" value={selectedConversation.id} />
+                      <input type="hidden" name="nextPath" value={`/planner/dashboard?thread=${encodeURIComponent(selectedVendor.id)}&compare=${encodeURIComponent(compareIds.join(","))}`} />
+                      <select
+                        name="status"
+                        defaultValue={selectedConversation.threadStatus}
+                        className="field-input rounded-[999px] px-3 py-1.5 text-sm"
+                      >
+                        <option value="open">Open</option>
+                        <option value="contacted">Contacted</option>
+                        <option value="closed">Closed</option>
+                        <option value="archived">Archived</option>
+                      </select>
+                      <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">
+                        Update Status
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
               </>
             ) : (
               <p className="mt-4 text-sm leading-7 text-[color:var(--color-muted)]">

@@ -110,16 +110,6 @@ export function VendorCard({
           >
             Start Inquiry
           </Link>
-          {vendor.whatsapp ? (
-            <a
-              href={`https://wa.me/${vendor.whatsapp.replace(/[^\d+]/g, "").replace(/^\+/, "")}`}
-              target="_blank"
-              rel="noreferrer"
-              className={isHomepage ? "btn-secondary px-3 py-1.5 text-sm leading-none" : "btn-secondary"}
-            >
-              Contact on WhatsApp
-            </a>
-          ) : null}
         </div>
       </div>
     </article>
