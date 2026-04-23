@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import {
   createVendorInquiryAction,
+  removePlannerProgressItemAction,
   savePlannerProgressItemAction,
   updatePlannerInquiryStatusAction,
 } from "@/app/planner/actions";
@@ -24,7 +25,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type ProgressStatus = "not_started" | "in_progress" | "completed";
+type ProgressStatus = "not_done" | "ongoing" | "done";
 type ProgressItem = {
   key: string;
   label: string;
@@ -116,6 +117,24 @@ export default async function PlannerDashboardPage(props: {
     (label) => !progressItems.some((item) => item.label.toLowerCase() === label.toLowerCase()),
   );
 
+  console.log("Planner dashboard data source summary", {
+    plannerUserId: profile.id,
+    readSources: {
+      weddingOverview: "weddings",
+      progressItems: "blueprints.checklist_json + catalog defaults",
+      savedVendors: "saved_vendors + vendors directory",
+      inquiries: "leads + lead_messages",
+    },
+    counts: {
+      progressItems: progressItems.length,
+      savedVendors: savedVendors.length,
+      dbSavedVendors: dbSavedVendors.length,
+      legacySavedVendors: legacySavedVendors.length,
+      inquiries: inquiries.length,
+      conversationsByVendor: conversationsByVendor.size,
+    },
+  });
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f6effa_0%,#fcf8ff_18%,#ffffff_48%,#ffffff_100%)]">
       <FlashQueryCleaner />
@@ -160,13 +179,13 @@ export default async function PlannerDashboardPage(props: {
             </div>
             <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.12em]">
               <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-700">
-                {progressItems.filter((item) => item.status === "not_started").length} not started
+                {progressItems.filter((item) => item.status === "not_done").length} not done
               </span>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">
-                {progressItems.filter((item) => item.status === "in_progress").length} in progress
+                {progressItems.filter((item) => item.status === "ongoing").length} ongoing
               </span>
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
-                {progressItems.filter((item) => item.status === "completed").length} completed
+                {progressItems.filter((item) => item.status === "done").length} done
               </span>
             </div>
           </div>
@@ -175,7 +194,7 @@ export default async function PlannerDashboardPage(props: {
             <div
               className="h-full rounded-full bg-[color:var(--color-brand-primary)]"
               style={{
-                width: `${Math.round((progressItems.filter((item) => item.status === "completed").length / Math.max(progressItems.length, 1)) * 100)}%`,
+                width: `${Math.round((progressItems.filter((item) => item.status === "done").length / Math.max(progressItems.length, 1)) * 100)}%`,
               }}
             />
           </div>
@@ -193,14 +212,21 @@ export default async function PlannerDashboardPage(props: {
                     defaultValue={item.status}
                     className="field-input rounded-[999px] px-3 py-1.5 text-xs font-semibold"
                   >
-                    <option value="not_started">Not started</option>
-                    <option value="in_progress">In progress</option>
-                    <option value="completed">Completed</option>
+                    <option value="not_done">Not done</option>
+                    <option value="ongoing">Ongoing</option>
+                    <option value="done">Done</option>
                   </select>
                   <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">
                     Save
                   </button>
                 </div>
+                <button
+                  formAction={removePlannerProgressItemAction}
+                  type="submit"
+                  className="btn-secondary px-3 py-1.5 text-sm"
+                >
+                  Remove
+                </button>
               </form>
             ))}
           </div>
@@ -239,11 +265,10 @@ export default async function PlannerDashboardPage(props: {
               />
             </div>
             <input type="hidden" name="itemKey" value="" />
-            <input type="hidden" name="status" value="not_started" />
+            <input type="hidden" name="status" value="not_done" />
             <button
               type="submit"
-              disabled={!availableProgressItems.length}
-              className="btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-primary px-4 py-2"
             >
               Add Item
             </button>
@@ -464,7 +489,7 @@ export default async function PlannerDashboardPage(props: {
                 </thead>
                 <tbody className="divide-y divide-[rgba(106,62,124,0.1)]">
                   {compareVendors.map((vendor) => {
-                    const responseStatus = conversationsByVendor.get(vendor.id)?.threadStatus ?? "not_started";
+                    const responseStatus = conversationsByVendor.get(vendor.id)?.threadStatus ?? "open";
                     return (
                       <tr key={vendor.id}>
                         <td className="px-3 py-3 font-semibold text-[color:var(--color-ink)]">{vendor.businessName}</td>
@@ -651,20 +676,43 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
   const defaults: ProgressItem[] = progressCatalog.map((label) => ({
     key: slugify(label),
     label,
-    status: "not_started",
+    status: "not_done",
   }));
 
   const supabase = await createSupabaseServerClient();
   const { data: blueprints, error } = await supabase
     .from("blueprints")
-    .select("checklist_json")
+    .select("id, checklist_json")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   const data = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
 
-  if (error || !Array.isArray(data?.checklist_json)) {
+  console.log("Planner progress read source", {
+    table: "blueprints",
+    plannerUserId: userId,
+    hasBlueprintRow: Boolean(data?.id),
+    dataCount: blueprints?.length ?? 0,
+    error: error
+      ? {
+          code: error.code ?? null,
+          message: error.message ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        }
+      : null,
+  });
+
+  if (error) {
+    return [];
+  }
+
+  if (!data?.id) {
     return defaults;
+  }
+
+  if (!Array.isArray(data?.checklist_json)) {
+    return [];
   }
 
   const loaded = data.checklist_json
@@ -675,10 +723,7 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
     .map((item) => ({
       key: String(item.key ?? ""),
       label: String(item.label ?? ""),
-      status:
-        item.status === "completed" || item.status === "in_progress"
-          ? item.status
-          : "not_started",
+      status: normalizePlannerProgressStatus(item.status),
     }))
     .filter((item) => item.key && item.label) as ProgressItem[];
 
@@ -687,4 +732,15 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
   }
 
   return loaded;
+}
+
+function normalizePlannerProgressStatus(value: unknown): ProgressStatus {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "done" || normalized === "completed") {
+    return "done";
+  }
+  if (normalized === "ongoing" || normalized === "in_progress") {
+    return "ongoing";
+  }
+  return "not_done";
 }

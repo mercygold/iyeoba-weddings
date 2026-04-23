@@ -105,6 +105,7 @@ type LeadMessageRow = {
 export async function getPlannerSavedVendors(userId: string) {
   noStore();
   const supabase = await createSupabaseServerClient();
+  const admin = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("saved_vendors")
     .select(
@@ -127,19 +128,77 @@ export async function getPlannerSavedVendors(userId: string) {
   }
 
   const savedVendorIds = data.map((row) => row.vendor_id).filter(Boolean);
-  const publicVendors = await getVendorDirectory();
-  const vendorMap = new Map(publicVendors.map((vendor) => [vendor.id, vendor]));
+  const vendorMap = new Map<
+    string,
+    {
+      id: string;
+      slug: string;
+      business_name: string;
+      category: string;
+      custom_category?: string | null;
+      location: string;
+      whatsapp?: string | null;
+      price_range?: string | null;
+      portfolio_image_urls?: string[] | null;
+      vendor_portfolio?: { image_url: string; sort_order: number | null }[] | null;
+    }
+  >();
+
+  if (savedVendorIds.length) {
+    const vendorSelect = `
+      id,
+      slug,
+      business_name,
+      category,
+      custom_category,
+      location,
+      whatsapp,
+      price_range,
+      portfolio_image_urls,
+      vendor_portfolio(image_url, sort_order)
+    `;
+
+    const vendorClient = admin ?? supabase;
+    const vendorResult = await vendorClient
+      .from("vendors")
+      .select(vendorSelect)
+      .in("id", savedVendorIds);
+
+    console.log("Planner saved vendors vendor lookup", {
+      table: "vendors",
+      plannerUserId: userId,
+      savedVendorIds,
+      count: vendorResult.data?.length ?? 0,
+      error: vendorResult.error ? serializeSupabaseError(vendorResult.error) : null,
+      client: admin ? "service_role" : "authenticated_server",
+    });
+
+    if (!vendorResult.error && vendorResult.data) {
+      for (const vendor of vendorResult.data) {
+        vendorMap.set(vendor.id, vendor);
+      }
+    }
+  }
 
   const results = data
     .map((row) => {
       const vendor = vendorMap.get(row.vendor_id);
-      if (!vendor?.id) {
+      if (!vendor) {
         return null;
       }
       const normalizedCategory = normalizeVendorCategory(
         vendor.category,
-        vendor.customCategory ?? null,
+        vendor.custom_category ?? null,
       );
+      const portfolioImages =
+        vendor.vendor_portfolio
+          ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((entry) => entry.image_url)
+          .filter(Boolean) ?? [];
+      const imageUrl =
+        portfolioImages[0] ??
+        vendor.portfolio_image_urls?.[0] ??
+        getVendorPlaceholderImage(normalizedCategory.category ?? "Beauty");
 
       return {
         id: row.id,
@@ -147,13 +206,13 @@ export async function getPlannerSavedVendors(userId: string) {
         vendor: {
           id: vendor.id,
           slug: vendor.slug,
-          businessName: vendor.businessName,
+          businessName: vendor.business_name,
           category: normalizedCategory.category,
           location: vendor.location,
-          priceRange: vendor.priceRange ?? null,
+          priceRange: vendor.price_range ?? null,
           whatsapp: vendor.whatsapp || null,
           contactEmail: null,
-          imageUrl: vendor.imageUrl,
+          imageUrl,
         },
       } satisfies PlannerSavedVendor;
     })
@@ -265,10 +324,22 @@ export async function getPlannerInquiries(userId: string) {
     rowsWithParticipants,
   );
 
-  const inquiries = rowsWithParticipants
-    .map((row) => {
-      const vendor = vendorLookup.get(row.vendor_id ?? "");
-      const directoryVendor = directoryVendorMap.get(row.vendor_id ?? "");
+  const groupedByVendor = new Map<string, LeadRow[]>();
+  for (const row of rowsWithParticipants) {
+    const vendorId =
+      row.vendor_id ??
+      vendorLookup.get(row.vendor_id ?? "")?.id ??
+      "unknown-vendor";
+    const current = groupedByVendor.get(vendorId) ?? [];
+    current.push(row);
+    groupedByVendor.set(vendorId, current);
+  }
+
+  const inquiries = [...groupedByVendor.entries()]
+    .map(([vendorId, leadGroup]) => {
+      const primaryLead = pickPrimaryLeadForThread(leadGroup);
+      const vendor = vendorLookup.get(vendorId ?? "");
+      const directoryVendor = directoryVendorMap.get(vendorId ?? "");
       const normalizedCategory = normalizeVendorCategory(
         vendor?.category ?? directoryVendor?.category ?? "Others",
         vendor?.custom_category ?? directoryVendor?.customCategory ?? null,
@@ -282,33 +353,37 @@ export async function getPlannerInquiries(userId: string) {
         vendor?.portfolio_image_urls?.[0] ??
         directoryVendor?.imageUrl ??
         getVendorPlaceholderImage(normalizedCategory.category ?? "Beauty");
-      const threadMessages = buildThreadMessages(
-        row.id,
-        row.message ?? null,
+
+      const threadMessages = buildMergedThreadMessages(
+        leadGroup,
         "planner",
         messagesByLead,
-        toValidTimestamp(row.created_at),
       );
 
       console.log("Planner thread assembly", {
-        leadId: row.id,
-        hasInitialMessage: Boolean(row.message?.trim()),
-        leadMessagesCount: messagesByLead.get(row.id)?.length ?? 0,
+        vendorId,
+        chosenLeadId: primaryLead.id,
+        mergedLeadIds: leadGroup.map((lead) => lead.id),
+        hasInitialMessage: leadGroup.some((lead) => Boolean(lead.message?.trim())),
+        leadMessagesCount: leadGroup.reduce(
+          (count, lead) => count + (messagesByLead.get(lead.id)?.length ?? 0),
+          0,
+        ),
         finalThreadCount: threadMessages.length,
       });
 
       return {
-        id: row.id,
-        createdAt: toValidTimestamp(row.created_at) ?? new Date().toISOString(),
-        threadStatus: row.archived_at
+        id: primaryLead.id,
+        createdAt: toValidTimestamp(primaryLead.created_at) ?? new Date().toISOString(),
+        threadStatus: primaryLead.archived_at
           ? "archived"
-          : normalizeThreadStatus(null, row.status),
+          : normalizeThreadStatus(null, primaryLead.status),
         contactMethod: null,
         vendor: {
           id:
             vendor?.id ??
             directoryVendor?.id ??
-            row.vendor_id ??
+            primaryLead.vendor_id ??
             "unknown-vendor",
           slug: vendor?.slug ?? directoryVendor?.slug ?? "vendors",
           businessName:
@@ -329,6 +404,7 @@ export async function getPlannerInquiries(userId: string) {
   console.log("Planner inquiry thread merge result", {
     userId,
     leadIds: rows.map((row) => row.id),
+    visibleThreadCount: inquiries.length,
     threadMessageCounts: inquiries.map((inquiry) => ({
       leadId: inquiry.id,
       count: inquiry.messages.length,
@@ -573,37 +649,64 @@ export async function getVendorInquiries(userId: string) {
     rowsWithParticipants.map((row) => row.id),
     rowsWithParticipants,
   );
+  const groupedByPlannerVendor = new Map<string, LeadRow[]>();
+  for (const row of rowsWithParticipants) {
+    const plannerId = row.planner_user_id ?? row.user_id ?? "unknown-planner";
+    const key = `${plannerId}::${row.vendor_id ?? "unknown-vendor"}`;
+    const current = groupedByPlannerVendor.get(key) ?? [];
+    current.push(row);
+    groupedByPlannerVendor.set(key, current);
+  }
 
-  return rowsWithParticipants.map((row) => {
-    const plannerId = row.planner_user_id ?? row.user_id ?? "";
-    const planner = plannerLookup.get(plannerId);
-    const wedding = row.wedding_id ? weddingLookup.get(row.wedding_id) : null;
-    const createdAt = toValidTimestamp(row.created_at);
-
-    return {
-      id: row.id,
-      createdAt: createdAt ?? new Date().toISOString(),
-      threadStatus: row.archived_at
-        ? "archived"
-        : normalizeThreadStatus(null, row.status),
-      contactMethod: null,
-      plannerName: planner?.full_name ?? null,
-      plannerEmail: planner?.email ?? null,
-      plannerPhone: planner?.phone ?? null,
-      weddingSummary: wedding
-        ? [wedding.culture, wedding.wedding_type, wedding.location]
-            .filter(Boolean)
-            .join(" · ")
-        : null,
-      messages: buildThreadMessages(
-        row.id,
-        row.message ?? null,
+  const inquiries = [...groupedByPlannerVendor.entries()].map(
+    ([threadKey, leadGroup]) => {
+      const primaryLead = pickPrimaryLeadForThread(leadGroup);
+      const plannerId = primaryLead.planner_user_id ?? primaryLead.user_id ?? "";
+      const planner = plannerLookup.get(plannerId);
+      const wedding = primaryLead.wedding_id
+        ? weddingLookup.get(primaryLead.wedding_id)
+        : null;
+      const createdAt = toValidTimestamp(primaryLead.created_at);
+      const threadMessages = buildMergedThreadMessages(
+        leadGroup,
         planner?.full_name || planner?.email || "Planner",
         messagesByLead,
-        createdAt,
-      ),
-    } satisfies VendorInquiry;
+      );
+
+      console.log("Vendor thread assembly", {
+        threadKey,
+        chosenLeadId: primaryLead.id,
+        mergedLeadIds: leadGroup.map((lead) => lead.id),
+        messageCount: threadMessages.length,
+      });
+
+      return {
+        id: primaryLead.id,
+        createdAt: createdAt ?? new Date().toISOString(),
+        threadStatus: primaryLead.archived_at
+          ? "archived"
+          : normalizeThreadStatus(null, primaryLead.status),
+        contactMethod: null,
+        plannerName: planner?.full_name ?? null,
+        plannerEmail: planner?.email ?? null,
+        plannerPhone: planner?.phone ?? null,
+        weddingSummary: wedding
+          ? [wedding.culture, wedding.wedding_type, wedding.location]
+              .filter(Boolean)
+              .join(" · ")
+          : null,
+        messages: threadMessages,
+      } satisfies VendorInquiry;
+    },
+  );
+
+  console.log("Vendor inquiries visible threads", {
+    userId,
+    leadCount: rowsWithParticipants.length,
+    visibleThreadCount: inquiries.length,
   });
+
+  return inquiries;
 }
 
 async function getLeadMessagesMap(
@@ -796,6 +899,45 @@ function buildThreadMessages(
   return [initialPlannerMessage, ...sortedMessages];
 }
 
+function buildMergedThreadMessages(
+  leadGroup: LeadRow[],
+  plannerLabel: string,
+  messagesByLead: Map<string, InquiryMessage[]>,
+) {
+  const merged = leadGroup.flatMap((lead) =>
+    buildThreadMessages(
+      lead.id,
+      lead.message ?? null,
+      plannerLabel,
+      messagesByLead,
+      toValidTimestamp(lead.created_at),
+    ),
+  );
+
+  const dedupedById = merged.filter(
+    (message, index, array) =>
+      array.findIndex((entry) => entry.id === message.id) === index,
+  );
+
+  return dedupedById.sort((a, b) => {
+    const aTime = toTime(a.createdAt);
+    const bTime = toTime(b.createdAt);
+    return aTime - bTime;
+  });
+}
+
+function pickPrimaryLeadForThread(leadGroup: LeadRow[]) {
+  const active = leadGroup.filter((lead) => !lead.archived_at);
+  if (active.length) {
+    return [...active].sort((a, b) => toTime(a.created_at) - toTime(b.created_at))[0];
+  }
+
+  return [...leadGroup].sort(
+    (a, b) =>
+      toTime(b.updated_at ?? b.created_at) - toTime(a.updated_at ?? a.created_at),
+  )[0];
+}
+
 export async function getPlannerPrimaryWeddingId(userId: string) {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
@@ -915,6 +1057,14 @@ function toValidTimestamp(value: string | null | undefined) {
   }
 
   return date.toISOString();
+}
+
+function toTime(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 function isSchemaDriftError(error: {
