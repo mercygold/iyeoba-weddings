@@ -31,7 +31,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
 
   const { data: vendor, error: vendorError } = await supabase
     .from("vendors")
-    .select("id, user_id")
+    .select("id")
     .eq("user_id", profile.id)
     .maybeSingle();
 
@@ -47,7 +47,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
   }
 
   console.log("Vendor inquiry status update attempt", {
-    table: "inquiries",
+    table: "leads",
     client: "authenticated_server",
     authUserId: profile.id,
     vendorId: vendor.id,
@@ -63,16 +63,42 @@ export async function updateInquiryStatusAction(formData: FormData) {
     archived_at: threadStatus === "archived" ? now : null,
   };
 
-  const { error } = await supabase
-    .from("inquiries")
+  let { error } = await supabase
+    .from("leads")
     .update(payload)
     .eq("id", inquiryId)
-    .eq("vendor_profile_id", vendor.id)
-    .eq("vendor_user_id", profile.id);
+    .eq("vendor_id", vendor.id);
+
+  if (error && supportsLeadStatusFallback(error)) {
+    const fallbackPayload = {
+      status: mapThreadStatusToLegacyStatus(threadStatus),
+      updated_at: now,
+      contacted_at: threadStatus === "contacted" ? now : null,
+      archived_at: threadStatus === "archived" ? now : null,
+    };
+
+    console.warn("Vendor inquiry status update retrying with compatible payload", {
+      table: "leads",
+      client: "authenticated_server",
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+      threadStatus,
+      payload: fallbackPayload,
+      error: serializeSupabaseError(error),
+    });
+
+    const fallbackResult = await supabase
+      .from("leads")
+      .update(fallbackPayload)
+      .eq("id", inquiryId)
+      .eq("vendor_id", vendor.id);
+    error = fallbackResult.error;
+  }
 
   if (error && isRlsDeniedError(error)) {
     console.error("Vendor inquiry status update blocked by RLS", {
-      table: "inquiries",
+      table: "leads",
       client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
@@ -85,7 +111,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
 
   if (error) {
     console.error("Vendor inquiry status update failed", {
-      table: "inquiries",
+      table: "leads",
       client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
@@ -115,7 +141,7 @@ export async function replyToInquiryAction(formData: FormData) {
 
   const { data: vendor, error: vendorError } = await supabase
     .from("vendors")
-    .select("id, user_id")
+    .select("id")
     .eq("user_id", profile.id)
     .maybeSingle();
 
@@ -130,16 +156,15 @@ export async function replyToInquiryAction(formData: FormData) {
   }
 
   const { data: lead, error: leadError } = await supabase
-    .from("inquiries")
-    .select("id, vendor_profile_id, vendor_user_id")
+    .from("leads")
+    .select("id, vendor_id")
     .eq("id", inquiryId)
-    .eq("vendor_profile_id", vendor.id)
-    .eq("vendor_user_id", profile.id)
+    .eq("vendor_id", vendor.id)
     .maybeSingle();
 
   if (leadError || !lead?.id) {
     console.error("Vendor inquiry reply failed while loading lead", {
-      table: "inquiries",
+      table: "leads",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
@@ -150,14 +175,14 @@ export async function replyToInquiryAction(formData: FormData) {
 
   const now = new Date().toISOString();
   const messagePayload = {
-    inquiry_id: inquiryId,
+    lead_id: inquiryId,
     sender_user_id: profile.id,
-    message_body: body,
+    message: body,
     created_at: now,
   };
 
   console.log("Vendor inquiry reply write attempt", {
-    table: "inquiry_messages",
+    table: "lead_messages",
     client: "authenticated_server",
     authUserId: profile.id,
     vendorId: vendor.id,
@@ -165,13 +190,61 @@ export async function replyToInquiryAction(formData: FormData) {
     payload: messagePayload,
   });
 
-  const { error: messageError } = await supabase
-    .from("inquiry_messages")
+  let { error: messageError } = await supabase
+    .from("lead_messages")
     .insert(messagePayload);
+
+  if (messageError && supportsLeadMessageFallback(messageError)) {
+    const fallbackPayload = {
+      lead_id: inquiryId,
+      sender_user_id: profile.id,
+      body,
+      created_at: now,
+    };
+
+    console.warn("Vendor inquiry reply retrying with compatible payload", {
+      table: "lead_messages",
+      client: "authenticated_server",
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+      payload: fallbackPayload,
+      error: serializeSupabaseError(messageError),
+    });
+
+    const fallbackResult = await supabase
+      .from("lead_messages")
+      .insert(fallbackPayload);
+    messageError = fallbackResult.error;
+
+    if (messageError && supportsLeadMessageFallback(messageError)) {
+      const minimalFallbackPayload = {
+        lead_id: inquiryId,
+        sender_user_id: profile.id,
+        message: body,
+        created_at: now,
+      };
+
+      console.warn("Vendor inquiry reply retrying with minimal payload", {
+        table: "lead_messages",
+        client: "authenticated_server",
+        authUserId: profile.id,
+        vendorId: vendor.id,
+        inquiryId,
+        payload: minimalFallbackPayload,
+        error: serializeSupabaseError(messageError),
+      });
+
+      const minimalFallbackResult = await supabase
+        .from("lead_messages")
+        .insert(minimalFallbackPayload);
+      messageError = minimalFallbackResult.error;
+    }
+  }
 
   if (messageError && isRlsDeniedError(messageError)) {
     console.error("Vendor inquiry reply blocked by RLS", {
-      table: "inquiry_messages",
+      table: "lead_messages",
       client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
@@ -183,7 +256,7 @@ export async function replyToInquiryAction(formData: FormData) {
 
   if (messageError) {
     console.error("Vendor inquiry reply create failed", {
-      table: "inquiry_messages",
+      table: "lead_messages",
       client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
@@ -200,16 +273,40 @@ export async function replyToInquiryAction(formData: FormData) {
     contacted_at: now,
   };
 
-  const { error: statusError } = await supabase
-    .from("inquiries")
+  let { error: statusError } = await supabase
+    .from("leads")
     .update(statusPayload)
     .eq("id", inquiryId)
-    .eq("vendor_profile_id", vendor.id)
-    .eq("vendor_user_id", profile.id);
+    .eq("vendor_id", vendor.id);
+
+  if (statusError && supportsLeadStatusFallback(statusError)) {
+    const fallbackStatusPayload = {
+      status: mapThreadStatusToLegacyStatus("contacted"),
+      updated_at: now,
+      contacted_at: now,
+    };
+
+    console.warn("Vendor inquiry reply status update retrying with compatible payload", {
+      table: "leads",
+      client: "authenticated_server",
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+      payload: fallbackStatusPayload,
+      error: serializeSupabaseError(statusError),
+    });
+
+    const fallbackStatusResult = await supabase
+      .from("leads")
+      .update(fallbackStatusPayload)
+      .eq("id", inquiryId)
+      .eq("vendor_id", vendor.id);
+    statusError = fallbackStatusResult.error;
+  }
 
   if (statusError) {
     console.error("Vendor inquiry reply status update failed", {
-      table: "inquiries",
+      table: "leads",
       client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
@@ -644,6 +741,46 @@ function serializeSupabaseError(error: {
     details: error.details ?? null,
     hint: error.hint ?? null,
   };
+}
+
+function mapThreadStatusToLegacyStatus(
+  value: string,
+): "new" | "contacted" | "booked" {
+  if (value === "contacted") {
+    return "contacted";
+  }
+  if (value === "closed" || value === "archived") {
+    return "booked";
+  }
+  return "new";
+}
+
+function supportsLeadMessageFallback(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42P01" ||
+    (message.includes("column") &&
+      (message.includes("does not exist") || message.includes("could not find"))) ||
+    message.includes('relation "lead_messages" does not exist')
+  );
+}
+
+function supportsLeadStatusFallback(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "PGRST204" ||
+    (message.includes("column") &&
+      (message.includes("does not exist") || message.includes("could not find"))) ||
+    message.includes("invalid input value for enum") ||
+    message.includes("not-null constraint")
+  );
 }
 
 function isRlsDeniedError(error: {

@@ -23,6 +23,7 @@ export type PlannerSavedVendor = {
     businessName: string;
     category: string;
     location: string;
+    priceRange?: string | null;
     whatsapp: string | null;
     contactEmail: string | null;
     imageUrl: string;
@@ -59,25 +60,46 @@ export type VendorInquiry = {
   messages: InquiryMessage[];
 };
 
-type InquiryRow = {
+type LeadRow = {
   id: string;
-  created_at: string | null;
-  planner_user_id: string | null;
-  vendor_user_id: string | null;
-  vendor_profile_id: string;
-  initial_message: string | null;
-  status: string | null;
-  updated_at: string | null;
+  created_at?: string | null;
+  user_id?: string | null;
+  planner_user_id?: string | null;
+  vendor_user_id?: string | null;
+  vendor_id?: string | null;
+  wedding_id?: string | null;
+  message?: string | null;
+  status?: string | null;
   contacted_at?: string | null;
   archived_at?: string | null;
+  updated_at?: string | null;
+  users?: {
+    full_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  } | {
+    full_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  }[] | null;
+  weddings?: {
+    culture?: string | null;
+    wedding_type?: string | null;
+    location?: string | null;
+  } | {
+    culture?: string | null;
+    wedding_type?: string | null;
+    location?: string | null;
+  }[] | null;
 };
 
-type InquiryMessageRow = {
+type LeadMessageRow = {
   id: string;
-  inquiry_id: string;
-  sender_user_id: string | null;
-  message_body: string | null;
-  created_at: string | null;
+  lead_id: string;
+  sender_user_id?: string | null;
+  body?: string | null;
+  message?: string | null;
+  created_at?: string | null;
 };
 
 export async function getPlannerSavedVendors(userId: string) {
@@ -128,6 +150,7 @@ export async function getPlannerSavedVendors(userId: string) {
           businessName: vendor.businessName,
           category: normalizedCategory.category,
           location: vendor.location,
+          priceRange: vendor.priceRange ?? null,
           whatsapp: vendor.whatsapp || null,
           contactEmail: null,
           imageUrl: vendor.imageUrl,
@@ -157,13 +180,14 @@ export async function getPlannerInquiries(userId: string) {
     return [] as PlannerInquiry[];
   }
 
-  const inquirySelect = `
+  const leadSelect = `
     id,
     created_at,
+    user_id,
     planner_user_id,
-    vendor_user_id,
-    vendor_profile_id,
-    initial_message,
+    vendor_id,
+    wedding_id,
+    message,
     status,
     contacted_at,
     archived_at,
@@ -171,36 +195,59 @@ export async function getPlannerInquiries(userId: string) {
   `;
 
   const plannerResult = await supabase
-    .from("inquiries")
-    .select(inquirySelect)
+    .from("leads")
+    .select(leadSelect)
     .eq("planner_user_id", userId)
-    .order("updated_at", { ascending: false });
+    .order("created_at", { ascending: false });
 
-  console.log("Planner inquiries query", {
-    table: "inquiries",
+  console.log("Planner inquiries primary query", {
+    table: "leads",
     userId,
     filter: "planner_user_id",
-    select: inquirySelect,
+    select: leadSelect,
     count: plannerResult.data?.length ?? 0,
     error: plannerResult.error ? serializeSupabaseError(plannerResult.error) : null,
   });
 
-  if (plannerResult.error || !plannerResult.data) {
-    console.error("Planner inquiries query failed", {
-      table: "inquiries",
+  const legacyResult = await supabase
+    .from("leads")
+    .select(leadSelect)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (legacyResult.error || (legacyResult.data && legacyResult.data.length)) {
+    console.log("Planner inquiries legacy query", {
+      table: "leads",
       userId,
-      error: plannerResult.error ? serializeSupabaseError(plannerResult.error) : null,
+      filter: "user_id",
+      select: leadSelect,
+      count: legacyResult.data?.length ?? 0,
+      error: legacyResult.error ? serializeSupabaseError(legacyResult.error) : null,
+    });
+  }
+
+  const primaryRows = (plannerResult.data ?? []) as LeadRow[];
+  const legacyRows = (legacyResult.data ?? []) as LeadRow[];
+  const rows = [...primaryRows, ...legacyRows].filter(
+    (row, index, array) => array.findIndex((item) => item.id === row.id) === index,
+  );
+
+  if (plannerResult.error && legacyResult.error) {
+    console.error("Planner inquiries query failed", {
+      table: "leads",
+      userId,
+      primaryError: serializeSupabaseError(plannerResult.error),
+      fallbackError: serializeSupabaseError(legacyResult.error),
+      select: leadSelect,
     });
     return [] as PlannerInquiry[];
   }
-
-  const rows = plannerResult.data as InquiryRow[];
 
   if (!rows.length) {
     return [] as PlannerInquiry[];
   }
 
-  const vendorIds = rows.map((row) => row.vendor_profile_id).filter(Boolean);
+  const vendorIds = rows.map((row) => row.vendor_id).filter(Boolean) as string[];
   const vendorLookup = await getPlannerInquiryVendorMap(vendorIds);
   const directoryVendors = await getVendorDirectory();
   const directoryVendorMap = new Map(
@@ -208,15 +255,20 @@ export async function getPlannerInquiries(userId: string) {
       .filter((vendor) => vendor.id)
       .map((vendor) => [vendor.id as string, vendor]),
   );
-  const messagesByInquiry = await getInquiryMessagesMap(
-    rows.map((row) => row.id),
-    rows,
+  const rowsWithParticipants = rows.map((row) => ({
+    ...row,
+    vendor_user_id:
+      row.vendor_user_id ?? vendorLookup.get(row.vendor_id ?? "")?.user_id ?? null,
+  }));
+  const messagesByLead = await getLeadMessagesMap(
+    rowsWithParticipants.map((row) => row.id),
+    rowsWithParticipants,
   );
 
-  const inquiries = rows
+  const inquiries = rowsWithParticipants
     .map((row) => {
-      const vendor = vendorLookup.get(row.vendor_profile_id);
-      const directoryVendor = directoryVendorMap.get(row.vendor_profile_id);
+      const vendor = vendorLookup.get(row.vendor_id ?? "");
+      const directoryVendor = directoryVendorMap.get(row.vendor_id ?? "");
       const normalizedCategory = normalizeVendorCategory(
         vendor?.category ?? directoryVendor?.category ?? "Others",
         vendor?.custom_category ?? directoryVendor?.customCategory ?? null,
@@ -232,29 +284,31 @@ export async function getPlannerInquiries(userId: string) {
         getVendorPlaceholderImage(normalizedCategory.category ?? "Beauty");
       const threadMessages = buildThreadMessages(
         row.id,
-        row.initial_message ?? null,
+        row.message ?? null,
         "planner",
-        messagesByInquiry,
+        messagesByLead,
         toValidTimestamp(row.created_at),
       );
 
       console.log("Planner thread assembly", {
         leadId: row.id,
-        hasInitialMessage: Boolean(row.initial_message?.trim()),
-        leadMessagesCount: messagesByInquiry.get(row.id)?.length ?? 0,
+        hasInitialMessage: Boolean(row.message?.trim()),
+        leadMessagesCount: messagesByLead.get(row.id)?.length ?? 0,
         finalThreadCount: threadMessages.length,
       });
 
       return {
         id: row.id,
         createdAt: toValidTimestamp(row.created_at) ?? new Date().toISOString(),
-        threadStatus: normalizeThreadStatus(null, row.status),
+        threadStatus: row.archived_at
+          ? "archived"
+          : normalizeThreadStatus(null, row.status),
         contactMethod: null,
         vendor: {
           id:
             vendor?.id ??
             directoryVendor?.id ??
-            row.vendor_profile_id ??
+            row.vendor_id ??
             "unknown-vendor",
           slug: vendor?.slug ?? directoryVendor?.slug ?? "vendors",
           businessName:
@@ -367,7 +421,6 @@ async function getPlannerInquiryVendorMap(vendorIds: string[]) {
 }
 
 export async function getVendorInquiries(userId: string) {
-  noStore();
   const supabase = await createSupabaseServerClient();
   const dbConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -378,56 +431,94 @@ export async function getVendorInquiries(userId: string) {
     return [] as VendorInquiry[];
   }
 
-  const inquirySelect = `
+  const vendorSelect = "id, user_id, business_name, slug, category, location, whatsapp";
+  const vendorResult = await supabase
+    .from("vendors")
+    .select(vendorSelect)
+    .eq("user_id", userId);
+
+  console.log("Vendor inquiry vendor lookup", {
+    table: "vendors",
+    userId,
+    select: vendorSelect,
+    count: vendorResult.data?.length ?? 0,
+    error: vendorResult.error ? serializeSupabaseError(vendorResult.error) : null,
+  });
+
+  if (vendorResult.error || !vendorResult.data) {
+    console.error("Vendor inquiries query failed while loading vendor records", {
+      table: "vendors",
+      userId,
+      select: vendorSelect,
+      error: vendorResult.error ? serializeSupabaseError(vendorResult.error) : null,
+    });
+    return [] as VendorInquiry[];
+  }
+
+  const vendorIds = vendorResult.data.map((vendor) => vendor.id).filter(Boolean);
+  if (!vendorIds.length) {
+    return [] as VendorInquiry[];
+  }
+
+  const leadSelect = `
     id,
     created_at,
+    user_id,
     planner_user_id,
-    vendor_user_id,
-    vendor_profile_id,
-    initial_message,
+    vendor_id,
+    wedding_id,
+    message,
     status,
     contacted_at,
     archived_at,
     updated_at
   `;
-  const inquiryResult = await supabase
-    .from("inquiries")
-    .select(inquirySelect)
-    .eq("vendor_user_id", userId)
-    .order("updated_at", { ascending: false });
 
-  console.log("Vendor inquiries query", {
-    table: "inquiries",
+  const leadResult = await supabase
+    .from("leads")
+    .select(leadSelect)
+    .in("vendor_id", vendorIds)
+    .order("created_at", { ascending: false });
+
+  console.log("Vendor inquiries lead query", {
+    table: "leads",
     userId,
-    filter: "vendor_user_id",
-    select: inquirySelect,
-    count: inquiryResult.data?.length ?? 0,
-    error: inquiryResult.error ? serializeSupabaseError(inquiryResult.error) : null,
+    vendorIds,
+    select: leadSelect,
+    count: leadResult.data?.length ?? 0,
+    error: leadResult.error ? serializeSupabaseError(leadResult.error) : null,
   });
 
-  if (inquiryResult.error || !inquiryResult.data) {
+  if (leadResult.error || !leadResult.data) {
     console.error("Vendor inquiries query failed", {
-      table: "inquiries",
+      table: "leads",
       userId,
-      select: inquirySelect,
-      error: inquiryResult.error ? serializeSupabaseError(inquiryResult.error) : null,
+      vendorIds,
+      select: leadSelect,
+      error: leadResult.error ? serializeSupabaseError(leadResult.error) : null,
     });
     return [] as VendorInquiry[];
   }
 
-  const rows = inquiryResult.data as InquiryRow[];
+  const rows = leadResult.data as LeadRow[];
   if (!rows.length) {
     return [] as VendorInquiry[];
   }
 
   const plannerIds = rows
-    .map((row) => row.planner_user_id)
+    .map((row) => row.planner_user_id ?? row.user_id)
     .filter(Boolean) as string[];
   const uniquePlannerIds = [...new Set(plannerIds)];
+  const weddingIds = rows.map((row) => row.wedding_id).filter(Boolean) as string[];
+  const uniqueWeddingIds = [...new Set(weddingIds)];
 
   const plannerLookup = new Map<
     string,
     { full_name?: string | null; email?: string | null; phone?: string | null }
+  >();
+  const weddingLookup = new Map<
+    string,
+    { culture?: string | null; wedding_type?: string | null; location?: string | null }
   >();
 
   if (uniquePlannerIds.length) {
@@ -451,42 +542,76 @@ export async function getVendorInquiries(userId: string) {
     }
   }
 
-  const messagesByInquiry = await getInquiryMessagesMap(
-    rows.map((row) => row.id),
-    rows,
+  if (uniqueWeddingIds.length) {
+    const weddingResult = await supabase
+      .from("weddings")
+      .select("id, culture, wedding_type, location")
+      .in("id", uniqueWeddingIds);
+
+    console.log("Vendor inquiries wedding lookup", {
+      table: "weddings",
+      userId,
+      weddingIds: uniqueWeddingIds,
+      count: weddingResult.data?.length ?? 0,
+      error: weddingResult.error ? serializeSupabaseError(weddingResult.error) : null,
+    });
+
+    if (!weddingResult.error && weddingResult.data) {
+      for (const wedding of weddingResult.data) {
+        weddingLookup.set(wedding.id, wedding);
+      }
+    }
+  }
+
+  const vendorOwnerById = new Map(vendorResult.data.map((vendor) => [vendor.id, vendor.user_id]));
+  const rowsWithParticipants = rows.map((row) => ({
+    ...row,
+    vendor_user_id:
+      row.vendor_user_id ?? vendorOwnerById.get(row.vendor_id ?? "") ?? null,
+  }));
+  const messagesByLead = await getLeadMessagesMap(
+    rowsWithParticipants.map((row) => row.id),
+    rowsWithParticipants,
   );
 
-  return rows.map((row) => {
-    const plannerId = row.planner_user_id ?? "";
+  return rowsWithParticipants.map((row) => {
+    const plannerId = row.planner_user_id ?? row.user_id ?? "";
     const planner = plannerLookup.get(plannerId);
+    const wedding = row.wedding_id ? weddingLookup.get(row.wedding_id) : null;
     const createdAt = toValidTimestamp(row.created_at);
 
     return {
       id: row.id,
       createdAt: createdAt ?? new Date().toISOString(),
-      threadStatus: normalizeThreadStatus(null, row.status),
+      threadStatus: row.archived_at
+        ? "archived"
+        : normalizeThreadStatus(null, row.status),
       contactMethod: null,
       plannerName: planner?.full_name ?? null,
       plannerEmail: planner?.email ?? null,
       plannerPhone: planner?.phone ?? null,
-      weddingSummary: null,
+      weddingSummary: wedding
+        ? [wedding.culture, wedding.wedding_type, wedding.location]
+            .filter(Boolean)
+            .join(" · ")
+        : null,
       messages: buildThreadMessages(
         row.id,
-        row.initial_message ?? null,
+        row.message ?? null,
         planner?.full_name || planner?.email || "Planner",
-        messagesByInquiry,
+        messagesByLead,
         createdAt,
       ),
     } satisfies VendorInquiry;
   });
 }
 
-async function getInquiryMessagesMap(
-  inquiryIds: string[],
-  inquiries: InquiryRow[],
+async function getLeadMessagesMap(
+  leadIds: string[],
+  leads: LeadRow[],
 ) {
   noStore();
-  if (!inquiryIds.length) {
+  if (!leadIds.length) {
     return new Map<string, InquiryMessage[]>();
   }
 
@@ -500,56 +625,85 @@ async function getInquiryMessagesMap(
     return new Map<string, InquiryMessage[]>();
   }
 
-  const { data, error } = await supabase
-    .from("inquiry_messages")
-    .select("id, inquiry_id, sender_user_id, message_body, created_at")
-    .in("inquiry_id", inquiryIds)
+  let { data, error } = await supabase
+    .from("lead_messages")
+    .select("id, lead_id, sender_user_id, body, message, created_at")
+    .in("lead_id", leadIds)
     .order("created_at", { ascending: true });
 
+  if (error && supportsLeadMessageFallback(error)) {
+    console.warn("Lead messages query retrying with compatible select", {
+      table: "lead_messages",
+      leadIds,
+      error: serializeSupabaseError(error),
+    });
+
+    const fallback = await supabase
+      .from("lead_messages")
+      .select("id, lead_id, sender_user_id, body, message, created_at")
+      .in("lead_id", leadIds)
+      .order("created_at", { ascending: true });
+
+    data = fallback.data as typeof data;
+    error = fallback.error;
+  }
+
   if (error || !data) {
-    console.error("Inquiry messages query failed", {
-      table: "inquiry_messages",
-      inquiryIds,
-      error: error ? serializeSupabaseError(error) : null,
+    const serialized = error ? serializeSupabaseError(error) : null;
+
+    if (isMissingLeadMessagesRelation(error ?? {})) {
+      console.warn("Lead messages query skipped because relation is unavailable", {
+        table: "lead_messages",
+        leadIds,
+        error: serialized,
+      });
+      return new Map<string, InquiryMessage[]>();
+    }
+
+    console.error("Lead messages query failed", {
+      table: "lead_messages",
+      leadIds,
+      error: serialized,
     });
     return new Map<string, InquiryMessage[]>();
   }
 
-  console.log("Inquiry messages query result", {
-    table: "inquiry_messages",
-    inquiryIds,
+  console.log("Lead messages query result", {
+    table: "lead_messages",
+    leadIds,
     rowCount: data.length,
   });
 
   const map = new Map<string, InquiryMessage[]>();
-  const inquiryParticipants = new Map(
-    inquiries.map((inquiry) => [
-      inquiry.id,
+  const leadParticipants = new Map(
+    leads.map((lead) => [
+      lead.id,
       {
-        plannerUserId: inquiry.planner_user_id,
-        vendorUserId: inquiry.vendor_user_id,
-        inquiryCreatedAt: toValidTimestamp(inquiry.created_at),
+        plannerUserId: lead.planner_user_id ?? lead.user_id ?? null,
+        vendorUserId: lead.vendor_user_id ?? null,
+        leadCreatedAt: toValidTimestamp(lead.created_at),
       },
     ]),
   );
 
-  const inquiryMessageRows = data as InquiryMessageRow[];
+  const leadMessageRows = data as LeadMessageRow[];
 
   console.log("Thread messages loaded", {
-    inquiryIds,
-    rowCount: inquiryMessageRows.length,
-    messages: inquiryMessageRows.map((row) => ({
+    leadIds,
+    rowCount: leadMessageRows.length,
+    messages: leadMessageRows.map((row) => ({
       id: row.id,
-      inquiryId: row.inquiry_id,
+      leadId: row.lead_id,
       senderUserId: row.sender_user_id ?? null,
-      hasMessageBody: Boolean((row.message_body ?? "").trim()),
+      hasBody: Boolean((row.body ?? "").trim()),
+      hasMessage: Boolean((row.message ?? "").trim()),
       createdAt: row.created_at ?? null,
     })),
   });
 
-  for (const row of inquiryMessageRows) {
-    const current = map.get(row.inquiry_id) ?? [];
-    const participants = inquiryParticipants.get(row.inquiry_id);
+  for (const row of leadMessageRows) {
+    const current = map.get(row.lead_id) ?? [];
+    const participants = leadParticipants.get(row.lead_id);
     const senderRole = normalizeSenderRole(
       row.sender_user_id,
       participants?.plannerUserId,
@@ -559,18 +713,18 @@ async function getInquiryMessagesMap(
       id: row.id,
       senderRole,
       senderLabel: senderRole === "vendor" ? "Vendor" : "Planner",
-      body: (row.message_body ?? "").trim(),
-      createdAt: toValidTimestamp(row.created_at) ?? participants?.inquiryCreatedAt ?? null,
+      body: (row.body ?? row.message ?? "").trim(),
+      createdAt: toValidTimestamp(row.created_at) ?? participants?.leadCreatedAt ?? null,
     });
-    map.set(row.inquiry_id, current);
+    map.set(row.lead_id, current);
   }
 
-  console.log("Inquiry message role resolution", {
-    inquiryIds,
-    rows: (data as InquiryMessageRow[]).map((row) => {
-      const participants = inquiryParticipants.get(row.inquiry_id);
+  console.log("Lead message role resolution", {
+    leadIds,
+    rows: (data as LeadMessageRow[]).map((row) => {
+      const participants = leadParticipants.get(row.lead_id);
       return {
-        inquiryId: row.inquiry_id,
+        leadId: row.lead_id,
         messageId: row.id,
         senderUserId: row.sender_user_id ?? null,
         plannerUserId: participants?.plannerUserId ?? null,
@@ -584,10 +738,10 @@ async function getInquiryMessagesMap(
     }),
   });
 
-  console.log("Inquiry messages mapped per inquiry", {
-    inquiryIds,
-    perInquiryCounts: [...map.entries()].map(([inquiryId, messages]) => ({
-      inquiryId,
+  console.log("Lead messages mapped per lead", {
+    leadIds,
+    perLeadCounts: [...map.entries()].map(([leadId, messages]) => ({
+      leadId,
       count: messages.length,
     })),
   });
@@ -773,6 +927,21 @@ function isSchemaDriftError(error: {
     (message.includes("column") &&
       (message.includes("does not exist") || message.includes("could not find")))
   );
+}
+
+function supportsLeadMessageFallback(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  return isSchemaDriftError(error) || isMissingLeadMessagesRelation(error);
+}
+
+function isMissingLeadMessagesRelation(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  const message = error.message?.toLowerCase() ?? "";
+  return error.code === "42P01" || message.includes('relation "lead_messages" does not exist');
 }
 
 function serializeSupabaseError(error: {
