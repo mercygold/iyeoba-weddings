@@ -27,37 +27,17 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(91,44,131,0.08),_transparent_34%),linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
       <MainNav />
-      <section className="relative overflow-hidden px-6 pb-14 pt-1 md:px-10 md:pb-18 lg:px-12 lg:pb-20 lg:pt-2">
+      <section className="relative overflow-hidden px-6 pb-12 pt-1 md:px-10 md:pb-14 lg:px-12 lg:pb-16 lg:pt-1.5">
         <div
-          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.94]"
+          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.95]"
           style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')" }}
           aria-hidden="true"
         />
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-[58%] bg-[linear-gradient(96deg,rgba(31,31,31,0.34)_0%,rgba(31,31,31,0.18)_44%,rgba(31,31,31,0.06)_72%,rgba(31,31,31,0)_100%)]" />
-        <div className="relative mx-auto flex max-w-6xl flex-col gap-11">
-          <div className="mx-auto flex max-w-4xl flex-col items-center gap-5 rounded-[1.8rem] border border-white/50 bg-[rgba(250,249,247,0.66)] px-5 py-5 text-center shadow-[0_24px_55px_-40px_rgba(31,31,31,0.4)] backdrop-blur-[2px] md:px-8 md:py-7">
-            <h1 className="max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-[color:var(--color-ink)] sm:text-5xl lg:text-6xl">
-              Plan Your Nigerian Wedding Anywhere in the World
-            </h1>
-            <p className="max-w-3xl text-base leading-8 text-[#4A2268] sm:text-lg">
-              Discover trusted Nigerian wedding vendors across Nigeria and the diaspora.
-            </p>
-            <p className="max-w-3xl text-sm leading-7 text-[#4A2268]">
-              Browse by category, location, and cultural fit.
-            </p>
-            <div className="flex flex-col gap-3 pt-1 sm:flex-row">
-              <Link href="/vendors" className="btn-primary">
-                Find Vendors
-              </Link>
-              <Link href="/auth/sign-up?role=vendor" className="btn-secondary">
-                List Your Business
-              </Link>
-            </div>
-          </div>
-
-          <div className="mx-auto w-full max-w-5xl rounded-[2rem] border border-[rgba(106,62,124,0.08)] bg-white/96 p-5 shadow-[0_28px_70px_-42px_rgba(106,62,124,0.24)] backdrop-blur-sm md:p-6">
-            <form action="/vendors" method="get" className="space-y-5">
-              <div className="flex flex-col gap-4 md:flex-row md:items-end">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.06)_0%,rgba(31,31,31,0)_35%,rgba(31,31,31,0.04)_100%)]" />
+        <div className="relative mx-auto flex max-w-6xl flex-col gap-6">
+          <div className="mx-auto w-full max-w-6xl rounded-[1.4rem] border border-[rgba(106,62,124,0.1)] bg-white/88 p-3 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] md:p-3.5">
+            <form action="/vendors" method="get" className="space-y-2.5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end">
                 <SearchField
                   label="Category"
                   name="category"
@@ -76,22 +56,27 @@ export default async function Home() {
                   options={getSharedCultureOptions()}
                   allLabel="All cultures"
                 />
-                <button
-                  type="submit"
-                  className="btn-primary min-w-[160px]"
-                >
+              </div>
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                <button type="submit" className="btn-primary min-w-[145px] px-4 py-2.5 text-sm">
                   Find Vendors
                 </button>
+                <p className="max-w-2xl text-center text-[0.78rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:px-3">
+                  Discover trusted Nigerian wedding vendors across Nigeria and the diaspora. Browse by category, location, and cultural fit.
+                </p>
+                <Link href="/auth/sign-up?role=vendor" className="btn-secondary min-w-[150px] px-4 py-2.5 text-sm">
+                  List Your Business
+                </Link>
               </div>
 
-              <div className="grid gap-3 border-t border-[rgba(106,62,124,0.08)] pt-4 text-sm text-[color:var(--color-muted)] md:grid-cols-3">
+              <div className="grid gap-1.5 border-t border-[rgba(106,62,124,0.08)] pt-2 text-sm text-[color:var(--color-muted)] md:grid-cols-3">
                 {trustPoints.map((item) => (
                   <div
                     key={item}
-                    className="flex items-center gap-3 rounded-[1.25rem] border border-[rgba(106,62,124,0.06)] bg-[rgba(233,221,240,0.55)] px-4 py-3"
+                    className="flex items-center gap-1.5 rounded-[0.9rem] border border-[rgba(106,62,124,0.06)] bg-[rgba(233,221,240,0.55)] px-2.5 py-1.5"
                   >
-                    <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--color-brand-gold)]" />
-                    <span>{item}</span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-brand-gold)]" />
+                    <span className="text-[0.74rem] leading-5">{item}</span>
                   </div>
                 ))}
               </div>
@@ -323,13 +308,13 @@ function SearchField({
   allLabel: string;
 }) {
   return (
-    <label className="grid flex-1 gap-2 rounded-[1.5rem] border border-[rgba(106,62,124,0.05)] bg-[color:var(--color-surface)] p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--color-muted)]">
+    <label className="grid flex-1 gap-1.5 rounded-[1rem] border border-[rgba(106,62,124,0.05)] bg-[color:var(--color-surface)] p-2.5">
+      <p className="text-[0.63rem] uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
         {label}
       </p>
       <select
         name={name}
-        className="rounded-xl border border-[color:var(--color-brand-light)] bg-white px-4 py-3 text-base text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-brand-primary)] focus:shadow-[0_0_0_4px_rgba(233,221,240,0.45)]"
+        className="rounded-lg border border-[color:var(--color-brand-light)] bg-white px-3 py-2 text-sm text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-brand-primary)] focus:shadow-[0_0_0_4px_rgba(233,221,240,0.45)]"
         defaultValue=""
       >
         <option value="">{allLabel}</option>

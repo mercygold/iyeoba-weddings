@@ -11,7 +11,7 @@ export async function MainNav() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-[rgba(91,44,131,0.1)] bg-white/98 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-5 px-6 py-[0.2rem] md:px-10 lg:px-12 lg:py-[0.35rem]">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-[0.14rem] md:px-10 lg:px-12 lg:py-[0.24rem]">
         <Link
           href="/"
           aria-label="Iyeoba home"
@@ -20,7 +20,7 @@ export async function MainNav() {
           <IyeobaLogo priority className="gap-0" />
         </Link>
 
-        <nav className="flex items-center gap-2 text-[0.95rem] font-medium leading-none text-[color:var(--color-muted)] md:gap-5">
+        <nav className="flex items-center gap-2 text-[0.95rem] font-medium leading-none text-[color:var(--color-muted)] md:gap-4">
           <Link
             href="/"
             className="hidden rounded-full px-2.5 py-[0.42rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268] md:inline"
@@ -48,7 +48,7 @@ export async function MainNav() {
           {isPlanner ? (
             <Link
               href="/planner/dashboard"
-              className="rounded-full border border-[#5B2C83] bg-[#5B2C83] px-4 py-[0.42rem] text-sm font-semibold leading-none text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)]"
+              className="rounded-full border border-[#5B2C83] bg-[#5B2C83] px-4 py-[0.42rem] text-sm font-semibold leading-none !text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:!text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)]"
             >
               Planner
             </Link>
@@ -56,7 +56,7 @@ export async function MainNav() {
           {isVendor ? (
             <Link
               href="/vendor/dashboard"
-              className="rounded-full border border-[#5B2C83] bg-[#5B2C83] px-4 py-[0.42rem] text-sm font-semibold leading-none text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)]"
+              className="rounded-full border border-[#5B2C83] bg-[#5B2C83] px-4 py-[0.42rem] text-sm font-semibold leading-none !text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:!text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)]"
             >
               Vendor Dashboard
             </Link>
@@ -64,7 +64,7 @@ export async function MainNav() {
           {isAdmin ? (
             <Link
               href="/admin/vendors"
-              className="rounded-full border border-[#5B2C83] bg-[#5B2C83] px-4 py-[0.42rem] text-sm font-semibold leading-none text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)]"
+              className="rounded-full border border-[#5B2C83] bg-[#5B2C83] px-4 py-[0.42rem] text-sm font-semibold leading-none !text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:!text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)]"
             >
               Admin
             </Link>
