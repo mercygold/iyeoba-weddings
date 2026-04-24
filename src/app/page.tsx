@@ -1,14 +1,14 @@
 import Link from "next/link";
 
 import { MainNav } from "@/components/main-nav";
-import { TikTokFeed } from "@/components/tiktok-feed";
-import { getHomepageTikTokVideos } from "@/lib/tiktok";
+import { TikTokSection } from "@/components/TikTokSection";
 import { VENDOR_CATEGORY_GROUPS } from "@/lib/vendor-categories";
 import {
   getSharedCategoryOptions,
   getSharedCultureOptions,
   getSharedLocationOptions,
 } from "@/lib/vendor-filter-options";
+import { getHomepageTikTokSectionData } from "@/lib/tiktok";
 import { VendorCard } from "@/components/vendor-card";
 import { getFeaturedVendors } from "@/lib/vendors";
 
@@ -20,22 +20,21 @@ const trustPoints = [
 
 export default async function Home() {
   const featuredVendors = await getFeaturedVendors();
-  const featuredTikToks = await getHomepageTikTokVideos();
   const vendorRailItems = ensureMinimumItems(featuredVendors, 10);
-  const tikTokRailItems = ensureMinimumItems(featuredTikToks, 10);
+  const { latestTikToks, topTikToks } = getHomepageTikTokSectionData();
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(91,44,131,0.08),_transparent_34%),linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
       <MainNav />
       <section className="relative h-[640px] overflow-hidden px-6 pb-10 pt-1 md:h-[700px] md:px-10 md:pb-12 lg:h-[760px] lg:px-12 lg:pb-14 lg:pt-1.5">
         <div
-          className="pointer-events-none absolute inset-0 bg-cover opacity-[0.9]"
+          className="pointer-events-none absolute inset-0 bg-cover opacity-[0.84]"
           style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')", backgroundPosition: "center top" }}
           aria-hidden="true"
         />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.04)_0%,rgba(31,31,31,0)_34%,rgba(31,31,31,0.03)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.12)_0%,rgba(31,31,31,0.02)_34%,rgba(31,31,31,0.06)_100%)]" />
         <div className="relative mx-auto flex h-full max-w-6xl flex-col justify-end">
-          <h1 className="mx-auto mb-3 max-w-4xl px-4 text-center text-3xl font-semibold tracking-[-0.03em] text-white drop-shadow-[0_3px_14px_rgba(31,31,31,0.55)] sm:text-4xl md:mb-4 md:text-5xl">
+          <h1 className="mx-auto mb-3 max-w-4xl rounded-[1.1rem] bg-[linear-gradient(180deg,rgba(74,34,104,0.3)_0%,rgba(74,34,104,0.14)_64%,rgba(74,34,104,0)_100%)] px-5 py-2 text-center text-3xl font-semibold tracking-[-0.03em] text-white/95 drop-shadow-[0_4px_20px_rgba(74,34,104,0.45)] sm:text-4xl md:mb-4 md:text-5xl">
             Plan Your Nigerian Wedding Anywhere in the World
           </h1>
           <div className="mx-auto w-full max-w-5xl rounded-[1.4rem] border border-[rgba(106,62,124,0.1)] bg-white/88 p-3.5 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] md:p-4">
@@ -67,7 +66,10 @@ export default async function Home() {
                 <p className="max-w-2xl text-center text-[0.86rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:px-3">
                   Discover trusted Nigerian wedding vendors across Nigeria and the diaspora. Browse by category, location, and cultural fit.
                 </p>
-                <Link href="/auth/sign-up?role=vendor" className="btn-secondary min-w-[150px] px-4 py-2.5 text-sm">
+                <Link
+                  href="/auth/sign-up?role=vendor"
+                  className="whitespace-nowrap rounded-full border border-[#C9A15B] bg-white px-4 py-2.5 text-sm font-semibold !text-[#5B2C83] transition-all duration-200 ease-in-out hover:border-[#5B2C83] hover:bg-[#5B2C83] hover:!text-white sm:min-w-[175px]"
+                >
                   List Your Business
                 </Link>
               </div>
@@ -212,18 +214,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,241,252,0.84)_100%)] p-6 shadow-[0_28px_70px_-48px_rgba(91,44,131,0.22)] md:p-8">
-          <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[rgba(201,161,91,0.12)] blur-3xl" />
-          <div className="wedding-floral-accent-gold absolute -right-10 -top-10 h-44 w-44" />
-          <div className="relative">
-            <TikTokFeed
-              videos={tikTokRailItems}
-              title="Trending on TikTok"
-              subtitle="Move from wedding inspiration into trusted vendor discovery with category-linked content from Iyeoba Weddings."
-              source="homepage_tiktok"
-            />
-          </div>
-        </section>
+        <TikTokSection latestTikToks={latestTikToks} topTikToks={topTikToks} />
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.92)] p-8 shadow-[0_18px_44px_-38px_rgba(31,31,31,0.2)] backdrop-blur-sm">

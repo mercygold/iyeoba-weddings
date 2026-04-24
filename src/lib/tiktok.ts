@@ -9,6 +9,17 @@ import {
   type TikTokVideo,
 } from "@/lib/tiktok-shared";
 
+export type HomepageTikTokItem = {
+  id: string;
+  title: string;
+  url: string;
+  thumbnail: string;
+  views: number;
+  likes: number;
+  category: string;
+  createdAt: string;
+};
+
 type TikTokVideoRecord = {
   post_id: string;
   share_url: string;
@@ -27,6 +38,125 @@ type TikTokVideoRecord = {
   active: boolean | null;
   created_at: string | null;
 };
+
+// Homepage MVP placeholders (no TikTok API dependency yet).
+// Replace these arrays with TikTok API response once developer app access is available.
+// Planned env vars for future integration:
+// - TIKTOK_CLIENT_KEY
+// - TIKTOK_CLIENT_SECRET
+// - TIKTOK_ACCESS_TOKEN
+const homepageLatestTikToks: HomepageTikTokItem[] = [
+  {
+    id: "latest-1",
+    title: "Yoruba Bridal Looks",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/bridal-fashion.svg",
+    views: 15200,
+    likes: 1800,
+    category: "Beauty & Grooming",
+    createdAt: "2026-04-23T09:00:00.000Z",
+  },
+  {
+    id: "latest-2",
+    title: "Wedding Decor Ideas",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/decorator.svg",
+    views: 13100,
+    likes: 1400,
+    category: "Decor & Floral",
+    createdAt: "2026-04-22T09:00:00.000Z",
+  },
+  {
+    id: "latest-3",
+    title: "Vendor Inspiration",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/event-planner.svg",
+    views: 9800,
+    likes: 1090,
+    category: "Event Planning",
+    createdAt: "2026-04-21T09:00:00.000Z",
+  },
+  {
+    id: "latest-4",
+    title: "Nigerian Wedding Trends",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/venue.svg",
+    views: 11200,
+    likes: 1260,
+    category: "Wedding Trends",
+    createdAt: "2026-04-20T09:00:00.000Z",
+  },
+  {
+    id: "latest-5",
+    title: "Reception Style Inspiration",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/catering.svg",
+    views: 8700,
+    likes: 940,
+    category: "Reception",
+    createdAt: "2026-04-19T09:00:00.000Z",
+  },
+];
+
+const homepageTopTikToks: HomepageTikTokItem[] = [
+  {
+    id: "top-1",
+    title: "Luxury Bridal Entrance",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/bridal-fashion.svg",
+    views: 65400,
+    likes: 6400,
+    category: "Bridal Style",
+    createdAt: "2026-04-10T09:00:00.000Z",
+  },
+  {
+    id: "top-2",
+    title: "Signature Decor Reveal",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/decorator.svg",
+    views: 71200,
+    likes: 7100,
+    category: "Decor & Floral",
+    createdAt: "2026-04-09T09:00:00.000Z",
+  },
+  {
+    id: "top-3",
+    title: "Vendor Spotlight Moments",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/photographer.svg",
+    views: 52100,
+    likes: 5300,
+    category: "Vendors",
+    createdAt: "2026-04-08T09:00:00.000Z",
+  },
+  {
+    id: "top-4",
+    title: "Cultural Ceremony Highlights",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/mc-host.svg",
+    views: 58300,
+    likes: 5900,
+    category: "Culture",
+    createdAt: "2026-04-07T09:00:00.000Z",
+  },
+  {
+    id: "top-5",
+    title: "Reception Energy Planning",
+    url: "https://www.tiktok.com/@iyeobaweddings",
+    thumbnail: "/vendors/placeholders/venue.svg",
+    views: 47600,
+    likes: 4420,
+    category: "Entertainment",
+    createdAt: "2026-04-06T09:00:00.000Z",
+  },
+];
+
+export function getHomepageTikTokSectionData() {
+  return {
+    latestTikToks: homepageLatestTikToks,
+    topTikToks: homepageTopTikToks,
+  };
+}
 
 export async function getTikTokVideos(filters?: {
   featuredHome?: boolean;

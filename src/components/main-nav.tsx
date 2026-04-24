@@ -80,6 +80,9 @@ export async function MainNav() {
                   Sign out
                 </button>
               </form>
+              <span className="hidden whitespace-nowrap text-[0.68rem] font-medium uppercase tracking-[0.18em] text-[color:var(--color-muted)]/78 md:inline">
+                {isVendor ? "Vendor account" : "Planner account"}
+              </span>
             </div>
           )}
         </nav>
