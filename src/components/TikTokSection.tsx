@@ -46,9 +46,9 @@ export function TikTokSection({
     };
   }, []);
 
-  const split = useMemo(() => {
+  const carouselItems = useMemo(() => {
     if (!apiVideos || !apiVideos.length) {
-      return null;
+      return buildMergedCarouselItems(latestTikToks, topTikToks, 10);
     }
 
     const normalized = apiVideos.map(mapApiVideoToHomepageItem);
@@ -66,12 +66,12 @@ export function TikTokSection({
       })
       .slice(0, 5);
 
-    return { latest, top };
-  }, [apiVideos]);
+    return buildMergedCarouselItems(latest, top, 10);
+  }, [apiVideos, latestTikToks, topTikToks]);
 
-  const latestToRender = split?.latest ?? latestTikToks;
-  const topToRender = split?.top ?? topTikToks;
-  const showFallback = apiFailed || (!split && !latestTikToks.length && !topTikToks.length);
+  const showFallback =
+    apiFailed || (!carouselItems.length && !latestTikToks.length && !topTikToks.length);
+  const itemsToRender = carouselItems.length ? carouselItems : fallbackCards();
 
   return (
     <section className="rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[color:var(--bg-soft)] p-6 shadow-[0_22px_58px_-46px_rgba(91,44,131,0.24)] md:p-8">
@@ -88,33 +88,17 @@ export function TikTokSection({
           href="https://www.tiktok.com/@iyeobaweddings"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex w-fit whitespace-nowrap rounded-full border border-[#5B2C83] bg-[#5B2C83] px-5 py-2.5 text-sm font-semibold text-white transition-all duration-200 ease-in-out hover:bg-[#4A2268]"
+          className="inline-flex w-fit whitespace-nowrap rounded-full border border-[#5B2C83] bg-[#5B2C83] px-5 py-2.5 text-sm font-semibold !text-white transition-all duration-300 ease-in-out hover:scale-[1.03] hover:border-[#C9A15B] hover:bg-white hover:!text-[#5B2C83] hover:shadow-[0_12px_28px_-16px_rgba(201,161,91,0.75)]"
         >
-          Follow Iyeoba on TikTok
+          Follow @IyeobaWeddings on TikTok
         </Link>
       </div>
 
-      <div className="mt-6 space-y-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
-            Latest TikTok Posts
-          </p>
-          <div className="mt-3 flex gap-4 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent]">
-            {(latestToRender.length ? latestToRender : fallbackCards("latest")).map((item) => (
-              <TikTokCard key={item.id} item={item} />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
-            Top TikTok Posts
-          </p>
-          <div className="mt-3 flex gap-4 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent]">
-            {(topToRender.length ? topToRender : fallbackCards("top")).map((item) => (
-              <TikTokCard key={item.id} item={item} />
-            ))}
-          </div>
+      <div className="mt-6">
+        <div className="flex snap-x snap-mandatory flex-nowrap gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {itemsToRender.map((item) => (
+            <TikTokCard key={item.id} item={item} />
+          ))}
         </div>
       </div>
 
@@ -150,13 +134,10 @@ function mapApiVideoToHomepageItem(video: TikTokApiVideo): HomepageTikTokItem {
   };
 }
 
-function fallbackCards(type: "latest" | "top"): HomepageTikTokItem[] {
-  const baseTitle =
-    type === "latest" ? "Latest inspiration from Iyeoba" : "Top inspiration from Iyeoba";
-
-  return Array.from({ length: 4 }).map((_, index) => ({
-    id: `${type}-fallback-${index + 1}`,
-    title: `${baseTitle} ${index + 1}`,
+function fallbackCards(): HomepageTikTokItem[] {
+  return Array.from({ length: 10 }).map((_, index) => ({
+    id: `fallback-${index + 1}`,
+    title: `Wedding inspiration ${index + 1}`,
     url: "https://www.tiktok.com/@iyeobaweddings",
     thumbnail: "/vendors/placeholders/event-planner.svg",
     views: 0,
@@ -164,4 +145,31 @@ function fallbackCards(type: "latest" | "top"): HomepageTikTokItem[] {
     category: "Wedding Inspiration",
     createdAt: new Date().toISOString(),
   }));
+}
+
+function buildMergedCarouselItems(
+  latest: HomepageTikTokItem[],
+  top: HomepageTikTokItem[],
+  total: number,
+) {
+  const seen = new Set<string>();
+  const merged: HomepageTikTokItem[] = [];
+
+  for (const item of latest) {
+    if (merged.length >= total || seen.has(item.id)) {
+      continue;
+    }
+    seen.add(item.id);
+    merged.push(item);
+  }
+
+  for (const item of top) {
+    if (merged.length >= total || seen.has(item.id)) {
+      continue;
+    }
+    seen.add(item.id);
+    merged.push(item);
+  }
+
+  return merged.slice(0, total);
 }
