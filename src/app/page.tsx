@@ -27,15 +27,18 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(91,44,131,0.08),_transparent_34%),linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
       <MainNav />
-      <section className="relative overflow-hidden px-6 pb-12 pt-1 md:px-10 md:pb-14 lg:px-12 lg:pb-16 lg:pt-1.5">
+      <section className="relative h-[640px] overflow-hidden px-6 pb-10 pt-1 md:h-[700px] md:px-10 md:pb-12 lg:h-[760px] lg:px-12 lg:pb-14 lg:pt-1.5">
         <div
-          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.95]"
-          style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')" }}
+          className="pointer-events-none absolute inset-0 bg-cover opacity-[0.9]"
+          style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')", backgroundPosition: "center top" }}
           aria-hidden="true"
         />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.06)_0%,rgba(31,31,31,0)_35%,rgba(31,31,31,0.04)_100%)]" />
-        <div className="relative mx-auto flex max-w-6xl flex-col gap-6">
-          <div className="mx-auto w-full max-w-6xl rounded-[1.4rem] border border-[rgba(106,62,124,0.1)] bg-white/88 p-3 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] md:p-3.5">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.04)_0%,rgba(31,31,31,0)_34%,rgba(31,31,31,0.03)_100%)]" />
+        <div className="relative mx-auto flex h-full max-w-6xl flex-col justify-end">
+          <h1 className="mx-auto mb-3 max-w-4xl px-4 text-center text-3xl font-semibold tracking-[-0.03em] text-white drop-shadow-[0_3px_14px_rgba(31,31,31,0.55)] sm:text-4xl md:mb-4 md:text-5xl">
+            Plan Your Nigerian Wedding Anywhere in the World
+          </h1>
+          <div className="mx-auto w-full max-w-5xl rounded-[1.4rem] border border-[rgba(106,62,124,0.1)] bg-white/88 p-3.5 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] md:p-4">
             <form action="/vendors" method="get" className="space-y-2.5">
               <div className="flex flex-col gap-2 md:flex-row md:items-end">
                 <SearchField
@@ -61,7 +64,7 @@ export default async function Home() {
                 <button type="submit" className="btn-primary min-w-[145px] px-4 py-2.5 text-sm">
                   Find Vendors
                 </button>
-                <p className="max-w-2xl text-center text-[0.78rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:px-3">
+                <p className="max-w-2xl text-center text-[0.86rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:px-3">
                   Discover trusted Nigerian wedding vendors across Nigeria and the diaspora. Browse by category, location, and cultural fit.
                 </p>
                 <Link href="/auth/sign-up?role=vendor" className="btn-secondary min-w-[150px] px-4 py-2.5 text-sm">
