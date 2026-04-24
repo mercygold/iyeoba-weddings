@@ -25,28 +25,25 @@ export default async function Home() {
   const tikTokRailItems = ensureMinimumItems(featuredTikToks, 10);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(106,62,124,0.08),_transparent_34%),linear-gradient(180deg,#ffffff_0%,#fcf9fe_42%,#ffffff_100%)]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(91,44,131,0.08),_transparent_34%),linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
       <MainNav />
       <section className="relative overflow-hidden px-6 pb-14 pt-1 md:px-10 md:pb-18 lg:px-12 lg:pb-20 lg:pt-2">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] bg-[linear-gradient(180deg,#ffffff_0%,rgba(252,249,254,0.92)_18%,rgba(233,221,240,0.42)_52%,transparent_78%)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-6 h-[420px] bg-[radial-gradient(circle_at_top,rgba(233,221,240,0.68),transparent_60%)]" />
-        <div className="pointer-events-none absolute left-1/2 top-10 h-48 w-48 -translate-x-1/2 rounded-full bg-[rgba(201,161,91,0.06)] blur-3xl" />
-        <div className="pointer-events-none absolute inset-x-0 top-[17rem] h-36 bg-[linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,0.82))]" />
+        <div
+          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.94]"
+          style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')" }}
+          aria-hidden="true"
+        />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-[58%] bg-[linear-gradient(96deg,rgba(31,31,31,0.34)_0%,rgba(31,31,31,0.18)_44%,rgba(31,31,31,0.06)_72%,rgba(31,31,31,0)_100%)]" />
         <div className="relative mx-auto flex max-w-6xl flex-col gap-11">
-          <div className="mx-auto flex max-w-4xl flex-col items-center gap-5 pt-3 text-center md:pt-5">
-            <p className="w-fit rounded-full border border-[rgba(106,62,124,0.1)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
-              Premium wedding marketplace
-            </p>
+          <div className="mx-auto flex max-w-4xl flex-col items-center gap-5 rounded-[1.8rem] border border-white/50 bg-[rgba(250,249,247,0.66)] px-5 py-5 text-center shadow-[0_24px_55px_-40px_rgba(31,31,31,0.4)] backdrop-blur-[2px] md:px-8 md:py-7">
             <h1 className="max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-[color:var(--color-ink)] sm:text-5xl lg:text-6xl">
               Plan Your Nigerian Wedding Anywhere in the World
             </h1>
-            <p className="max-w-3xl text-base leading-8 text-[color:var(--color-muted)] sm:text-lg">
-              Discover trusted Nigerian wedding vendors across Nigeria and the
-              diaspora, and start planning your wedding with confidence.
+            <p className="max-w-3xl text-base leading-8 text-[#4A2268] sm:text-lg">
+              Discover trusted Nigerian wedding vendors across Nigeria and the diaspora.
             </p>
-            <p className="max-w-3xl text-sm leading-7 text-[color:var(--color-muted)]">
-              Browse verified vendors by category, location, and cultural fit,
-              then use the planner privately after sign-in.
+            <p className="max-w-3xl text-sm leading-7 text-[#4A2268]">
+              Browse by category, location, and cultural fit.
             </p>
             <div className="flex flex-col gap-3 pt-1 sm:flex-row">
               <Link href="/vendors" className="btn-primary">
@@ -126,7 +123,7 @@ export default async function Home() {
                 href={`/vendors?category=${encodeURIComponent(category.category)}`}
                 className="rounded-[1.65rem] border border-[rgba(106,62,124,0.09)] bg-white/92 p-5 shadow-[0_18px_44px_-38px_rgba(106,62,124,0.28)] transition hover:-translate-y-0.5 hover:border-[color:var(--color-brand-primary)] hover:shadow-[0_24px_54px_-34px_rgba(106,62,124,0.2)]"
               >
-                <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--color-brand-gold)]">
+                <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
                   Vendor category
                 </p>
                 <h3 className="font-display mt-3 line-clamp-2 break-words text-2xl text-[color:var(--color-ink)]">
@@ -140,7 +137,15 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="space-y-7">
+        <section className="relative space-y-7 overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.08)] bg-[rgba(255,255,255,0.85)] p-5 shadow-[0_20px_55px_-44px_rgba(31,31,31,0.22)] backdrop-blur-sm md:p-6">
+          <div
+            className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-18"
+            style={{ backgroundImage: "url('/images/wedding-diaspora-bg.jpg')" }}
+            aria-hidden="true"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(250,249,247,0.9)_0%,rgba(255,255,255,0.88)_100%)]" />
+          <div className="wedding-floral-texture absolute inset-0" />
+          <div className="relative">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
@@ -172,10 +177,56 @@ export default async function Home() {
               </div>
             ))}
           </div>
+          </div>
         </section>
 
-        <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(106,62,124,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,241,252,0.84)_100%)] p-6 shadow-[0_28px_70px_-48px_rgba(106,62,124,0.25)] md:p-8">
-          <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[rgba(201,161,91,0.08)] blur-3xl" />
+        <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.92)] p-6 shadow-[0_22px_56px_-40px_rgba(31,31,31,0.22)] backdrop-blur-sm md:p-8">
+          <div className="wedding-floral-texture absolute inset-0" />
+          <div className="relative grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div className="space-y-4">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
+                Yoruba wedding culture
+              </p>
+              <h2 className="font-display text-4xl text-[color:var(--color-ink)]">
+                Celebrate Yoruba elegance with vendors who understand tradition.
+              </h2>
+              <p className="text-base leading-8 text-[color:var(--color-muted)]">
+                From engagement ceremonies to the main wedding day, discover
+                planners, photographers, decor teams, and fashion vendors who
+                reflect Yoruba style, heritage, and modern luxury.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/vendors?culture=Yoruba%20weddings"
+                  className="btn-primary"
+                >
+                  Explore Yoruba Vendors
+                </Link>
+                <Link href="/vendors" className="btn-secondary">
+                  Browse all cultures
+                </Link>
+              </div>
+            </div>
+            <div
+              role="img"
+              aria-label="Yoruba wedding celebration with traditional fashion and decor"
+              className="relative min-h-[320px] overflow-hidden rounded-[1.6rem] border border-[rgba(91,44,131,0.1)] bg-cover bg-center"
+              style={{
+                backgroundImage:
+                  "url('/images/yoruba-wedding-bg.jpg'), url('/images/yoruba-wedding-bg.png')",
+              }}
+            >
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.04)_0%,rgba(31,31,31,0.5)_100%)]" />
+              <p className="absolute bottom-4 left-4 rounded-full border border-white/34 bg-white/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white backdrop-blur-sm">
+                Culture-first vendor discovery
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,241,252,0.84)_100%)] p-6 shadow-[0_28px_70px_-48px_rgba(91,44,131,0.22)] md:p-8">
+          <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[rgba(201,161,91,0.12)] blur-3xl" />
+          <div className="wedding-floral-accent-gold absolute -right-10 -top-10 h-44 w-44" />
           <div className="relative">
             <TikTokFeed
               videos={tikTokRailItems}
@@ -187,7 +238,7 @@ export default async function Home() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[2rem] border border-[rgba(106,62,124,0.08)] bg-white p-8 shadow-[0_18px_44px_-38px_rgba(106,62,124,0.18)]">
+          <div className="rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.92)] p-8 shadow-[0_18px_44px_-38px_rgba(31,31,31,0.2)] backdrop-blur-sm">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
               Trust and verification
             </p>
@@ -206,7 +257,8 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-[rgba(106,62,124,0.08)] bg-[linear-gradient(180deg,rgba(233,221,240,0.78)_0%,rgba(255,255,255,0.92)_100%)] p-8 shadow-[0_18px_44px_-38px_rgba(106,62,124,0.18)]">
+          <div className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[linear-gradient(180deg,rgba(231,217,240,0.72)_0%,rgba(255,255,255,0.92)_100%)] p-8 shadow-[0_18px_44px_-38px_rgba(31,31,31,0.2)] backdrop-blur-sm">
+            <div className="wedding-floral-accent-gold absolute -right-8 -bottom-8 h-36 w-36" />
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
               Planner, privately
             </p>
@@ -229,6 +281,29 @@ export default async function Home() {
                 List your business
               </Link>
             </div>
+          </div>
+        </section>
+
+        <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.76)] p-8 shadow-[0_20px_55px_-42px_rgba(31,31,31,0.24)] backdrop-blur-sm">
+          <div
+            className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.9]"
+            style={{ backgroundImage: "url('/images/wedding-diaspora-bg.jpg')" }}
+            aria-hidden="true"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.4)_0%,rgba(250,249,247,0.46)_100%)]" />
+          <div className="wedding-floral-accent-gold absolute -left-10 bottom-0 h-40 w-40" />
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
+                Iyeoba Weddings
+              </p>
+              <h3 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
+                Plan your Nigerian wedding anywhere in the world.
+              </h3>
+            </div>
+            <Link href="/vendors" className="btn-primary w-fit">
+              Continue to Vendor Discovery
+            </Link>
           </div>
         </section>
       </main>

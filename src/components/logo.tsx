@@ -28,7 +28,7 @@ export function IyeobaLogo({
           height={72}
           priority={priority}
           onError={() => setImageFailed(true)}
-          className="h-auto w-[104px] max-w-full object-contain sm:w-[122px] lg:w-[136px]"
+          className="h-auto w-[118px] max-w-full object-contain sm:w-[138px] lg:w-[154px]"
         />
       )}
     </div>

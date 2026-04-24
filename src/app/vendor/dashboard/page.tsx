@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
+import { VendorConversationCenter } from "@/components/vendor-conversation-center";
 import { VendorDashboardForm } from "@/components/vendor-dashboard-form";
 import {
   replyToInquiryAction,
@@ -9,13 +10,16 @@ import {
 } from "@/app/vendor/dashboard/actions";
 import { requireVendorProfile } from "@/lib/auth";
 import {
-  buildEmailLink,
-  buildWhatsAppMessageLink,
   getVendorInquiries,
 } from "@/lib/inquiries";
 import { getVendorByUserId } from "@/lib/vendors";
 
-type SearchParams = Promise<{ message?: string; error?: string; edit?: string }>;
+type SearchParams = Promise<{
+  message?: string;
+  error?: string;
+  edit?: string;
+  thread?: string;
+}>;
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,10 +31,11 @@ export default async function VendorDashboardPage(props: {
   const searchParams = await props.searchParams;
   const vendor = await getVendorByUserId(profile.id);
   const inquiries = await getVendorInquiries(profile.id);
-  const openInquiries = inquiries.filter((inquiry) => inquiry.threadStatus !== "archived");
-  const archivedInquiries = inquiries.filter(
-    (inquiry) => inquiry.threadStatus === "archived",
-  );
+  const openInquiriesCount = inquiries.filter(
+    (inquiry) => inquiry.threadStatus !== "archived",
+  ).length;
+  const initialInquiryId =
+    typeof searchParams.thread === "string" ? searchParams.thread : null;
   const status = vendor?.status || "draft";
   console.log("Vendor dashboard status view", {
     userId: profile.id,
@@ -50,10 +55,13 @@ export default async function VendorDashboardPage(props: {
     : sanitizeVendorFacingError(searchParams.error);
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fdfbfd_0%,#ffffff_42%,#ffffff_100%)]">
+    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_44%,#ffffff_100%)]">
+      <div className="wedding-floral-texture absolute inset-0 opacity-[0.1]" />
+      <div className="wedding-floral-accent-gold absolute -right-16 top-28 h-56 w-56 opacity-[0.12]" />
+      <div className="wedding-floral-accent-gold absolute -left-20 bottom-10 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
       <MainNav />
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
+      <main className="relative mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="surface-card rounded-[2rem] p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
@@ -107,7 +115,11 @@ export default async function VendorDashboardPage(props: {
               />
               <SideTile
                 label="Lead inbox"
-                value={status === "approved" ? `${openInquiries.length} active inquiries` : "Available after approval"}
+                value={
+                  status === "approved"
+                    ? `${openInquiriesCount} active inquiries`
+                    : "Available after approval"
+                }
               />
               <SideTile label="Next step" value={getNextStep(status)} />
             </div>
@@ -194,33 +206,12 @@ export default async function VendorDashboardPage(props: {
         )}
 
         {!showOnboarding ? (
-          <section className="surface-card rounded-[2rem] p-8">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
-                  Inquiry inbox
-                </p>
-                <h2 className="font-display mt-3 text-3xl text-[color:var(--color-ink)]">
-                  Planner inquiries
-                </h2>
-              </div>
-              <p className="rounded-full bg-[rgba(106,62,124,0.08)] px-4 py-2 text-sm font-semibold text-[color:var(--color-brand-primary)]">
-                {inquiries.length} inquiries
-              </p>
-            </div>
-            {inquiries.length ? (
-              <div className="mt-6 grid gap-4">
-                <div className="grid gap-6">
-                  <InquirySection title="Open inquiries" inquiries={openInquiries} />
-                  <InquirySection title="Archived inquiries" inquiries={archivedInquiries} />
-                </div>
-              </div>
-            ) : (
-              <p className="mt-6 text-sm leading-7 text-[color:var(--color-muted)]">
-                Planner inquiries will appear here after couples save your listing and start reaching out.
-              </p>
-            )}
-          </section>
+          <VendorConversationCenter
+            inquiries={inquiries}
+            initialInquiryId={initialInquiryId}
+            replyToInquiryAction={replyToInquiryAction}
+            updateInquiryStatusAction={updateInquiryStatusAction}
+          />
         ) : null}
       </main>
     </div>
@@ -270,160 +261,11 @@ function getNextStep(status: string) {
   return "Complete your draft";
 }
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
 function SideTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[1.5rem] bg-white/10 p-4">
       <p className="text-xs uppercase tracking-[0.18em] text-white/70">{label}</p>
       <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-    </div>
-  );
-}
-
-function InquirySection({
-  title,
-  inquiries,
-}: {
-  title: string;
-  inquiries: Awaited<ReturnType<typeof getVendorInquiries>>;
-}) {
-  if (!inquiries.length) {
-    return (
-      <div>
-        <h3 className="text-base font-semibold text-[color:var(--color-ink)]">{title}</h3>
-        <p className="mt-3 text-sm leading-7 text-[color:var(--color-muted)]">
-          No inquiries in this section yet.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="text-base font-semibold text-[color:var(--color-ink)]">{title}</h3>
-      <div className="mt-4 grid gap-4">
-        {inquiries.map((inquiry) => (
-          <div key={inquiry.id} className="surface-soft rounded-[1.5rem] p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-lg font-semibold text-[color:var(--color-ink)]">
-                  {inquiry.plannerName || inquiry.plannerEmail || "Planner inquiry"}
-                </p>
-                <p className="mt-1 text-sm text-[color:var(--color-muted)]">
-                  {formatDateTime(inquiry.createdAt) ?? "Date not available"}
-                </p>
-              </div>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-brand-primary)]">
-                {formatStatus(inquiry.threadStatus)}
-              </span>
-            </div>
-            {inquiry.weddingSummary ? (
-              <p className="mt-3 text-sm text-[color:var(--color-muted)]">
-                Wedding: {inquiry.weddingSummary}
-              </p>
-            ) : null}
-            <p className="mt-3 text-sm text-[color:var(--color-muted)]">
-              Contact path: {inquiry.contactMethod || "Marketplace inquiry"}
-            </p>
-            <div className="mt-4 grid gap-3">
-              {inquiry.messages.map((message) => (
-                <div key={message.id} className="rounded-[1.25rem] bg-white px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-[color:var(--color-ink)]">
-                      {message.senderLabel}
-                    </p>
-                    {formatDateTime(message.createdAt) ? (
-                      <p className="text-xs text-[color:var(--color-muted)]">
-                        {formatDateTime(message.createdAt)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 text-sm leading-7 text-[color:var(--color-muted)]">
-                    {message.body}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 grid gap-3">
-              <form action={replyToInquiryAction} className="grid gap-3">
-                <input type="hidden" name="inquiryId" value={inquiry.id} />
-                <textarea
-                  name="message"
-                  rows={3}
-                  placeholder="Send a reply before moving the conversation to WhatsApp or email."
-                  className="field-input min-h-[90px] rounded-[1.25rem] text-sm"
-                />
-                <button type="submit" className="btn-primary px-4 py-2">
-                  Reply
-                </button>
-              </form>
-              <div className="flex flex-wrap gap-3">
-                {buildWhatsAppMessageLink(
-                  inquiry.plannerPhone,
-                  `Hello, thanks for your inquiry on Iyeoba Weddings. I am following up on your request${inquiry.weddingSummary ? ` for ${inquiry.weddingSummary}` : ""}.`,
-                ) ? (
-                  <a
-                    href={buildWhatsAppMessageLink(
-                      inquiry.plannerPhone,
-                      `Hello, thanks for your inquiry on Iyeoba Weddings. I am following up on your request${inquiry.weddingSummary ? ` for ${inquiry.weddingSummary}` : ""}.`,
-                    )!}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-secondary px-4 py-2"
-                  >
-                    WhatsApp
-                  </a>
-                ) : null}
-                {buildEmailLink(inquiry.plannerEmail, "Iyeoba Weddings inquiry") ? (
-                  <a
-                    href={buildEmailLink(
-                      inquiry.plannerEmail,
-                      "Iyeoba Weddings inquiry",
-                    )!}
-                    className="btn-secondary px-4 py-2"
-                  >
-                    Email
-                  </a>
-                ) : null}
-                <form action={updateInquiryStatusAction} className="flex flex-wrap gap-3">
-                  <input type="hidden" name="inquiryId" value={inquiry.id} />
-                  <select
-                    name="status"
-                    defaultValue={inquiry.threadStatus}
-                    className="field-input rounded-[1.25rem] px-4 py-2 text-sm"
-                  >
-                    <option value="open">Open</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="closed">Closed</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                  <button type="submit" className="btn-primary px-4 py-2">
-                    Update status
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

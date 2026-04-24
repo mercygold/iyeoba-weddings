@@ -8,6 +8,7 @@ import {
 } from "@/app/planner/actions";
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
+import { PlannerConversationCenter } from "@/components/planner-conversation-center";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 import { requirePlannerProfile } from "@/lib/auth";
 import {
@@ -105,12 +106,11 @@ export default async function PlannerDashboardPage(props: {
 
   const threadVendorId =
     typeof searchParams.thread === "string" ? searchParams.thread : null;
-  const selectedVendor =
-    savedVendors.find((item) => item.vendor.id === threadVendorId)?.vendor ??
-    (threadVendorId ? inquiryVendorMap.get(threadVendorId) ?? null : null);
-  const selectedConversation = threadVendorId
-    ? conversationsByVendor.get(threadVendorId) ?? null
-    : null;
+  const plannerConversations = buildPlannerConversationItems(
+    conversationsByVendor,
+    savedVendors,
+    inquiryVendorMap,
+  );
 
   const compareIds = parseCompareIds(searchParams.compare);
   const compareVendors = savedVendors
@@ -142,15 +142,19 @@ export default async function PlannerDashboardPage(props: {
       inquiryVendorIds: inquiries.map((item) => item.vendor.id),
       conversationVendorIds: [...conversationsByVendor.keys()],
       selectedThreadVendorId: threadVendorId,
-      selectedConversationId: selectedConversation?.id ?? null,
+      selectedConversationId:
+        (threadVendorId && conversationsByVendor.get(threadVendorId)?.id) ?? null,
     },
   });
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f6effa_0%,#fcf8ff_18%,#ffffff_48%,#ffffff_100%)]">
+    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_46%,#ffffff_100%)]">
+      <div className="wedding-floral-texture absolute inset-0 opacity-[0.1]" />
+      <div className="wedding-floral-accent-gold absolute -right-16 top-32 h-56 w-56 opacity-[0.12]" />
+      <div className="wedding-floral-accent-gold absolute -left-20 bottom-16 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
       <MainNav />
-      <main className="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
+      <main className="relative mx-auto flex max-w-7xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
         <section className="surface-card rounded-[2rem] p-7">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
             Wedding Overview
@@ -378,106 +382,13 @@ export default async function PlannerDashboardPage(props: {
             )}
           </article>
 
-          <article className="surface-card flex min-h-[560px] flex-col rounded-[2rem] p-7" id="conversation-thread">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
-              Conversation Thread
-            </p>
-            <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
-              {selectedVendor?.businessName || "Select a saved vendor"}
-            </h2>
-            {selectedVendor ? (
-              <>
-                <p className="mt-2 text-sm text-[color:var(--color-muted)]">
-                  {selectedVendor.category} · {selectedVendor.location}
-                </p>
-                <div className="mt-4 flex min-h-0 flex-1 flex-col">
-                  <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-                    {selectedConversation?.messages.length ? (
-                      selectedConversation.messages.map((item) => (
-                        <div
-                          key={item.id}
-                          className={`flex ${item.senderRole === "planner" ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[90%] rounded-[1.25rem] px-4 py-3 ${
-                              item.senderRole === "planner"
-                                ? "bg-[color:var(--color-brand-primary)] text-white"
-                                : "bg-[rgba(106,62,124,0.08)] text-[color:var(--color-ink)]"
-                            }`}
-                          >
-                            <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-80">
-                              {item.senderLabel}
-                            </p>
-                            <p className="mt-1 text-sm leading-6">{item.body}</p>
-                            {formatDateTime(item.createdAt) ? (
-                              <p className="mt-1 text-[11px] opacity-75">
-                                {formatDateTime(item.createdAt)}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-[color:var(--color-muted)]">
-                        No messages yet. Send your first note to this vendor.
-                      </p>
-                    )}
-                  </div>
-
-                  <form action={createVendorInquiryAction} className="mt-4 grid gap-3 border-t border-[rgba(106,62,124,0.12)] pt-4">
-                    <input type="hidden" name="vendorId" value={selectedVendor.id} />
-                    <input type="hidden" name="vendorSlug" value={selectedVendor.slug} />
-                    <input type="hidden" name="contactMethod" value="planner_thread" />
-                    <input type="hidden" name="nextPath" value={`/planner/dashboard?thread=${encodeURIComponent(selectedVendor.id)}&compare=${encodeURIComponent(compareIds.join(","))}`} />
-                    <textarea
-                      name="message"
-                      rows={3}
-                      placeholder="Write your message to this vendor."
-                      className="field-input min-h-[92px] rounded-[1.1rem] text-sm"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <button type="submit" className="btn-primary px-4 py-2">
-                        Send Message
-                      </button>
-                      {buildWhatsAppLink(selectedVendor.whatsapp, selectedVendor.businessName) ? (
-                        <a
-                          href={buildWhatsAppLink(selectedVendor.whatsapp, selectedVendor.businessName)!}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn-secondary px-4 py-2"
-                        >
-                          WhatsApp
-                        </a>
-                      ) : null}
-                    </div>
-                  </form>
-                  {selectedConversation ? (
-                    <form action={updatePlannerInquiryStatusAction} className="mt-3 flex flex-wrap gap-2">
-                      <input type="hidden" name="inquiryId" value={selectedConversation.id} />
-                      <input type="hidden" name="nextPath" value={`/planner/dashboard?thread=${encodeURIComponent(selectedVendor.id)}&compare=${encodeURIComponent(compareIds.join(","))}`} />
-                      <select
-                        name="status"
-                        defaultValue={selectedConversation.threadStatus}
-                        className="field-input rounded-[999px] px-3 py-1.5 text-sm"
-                      >
-                        <option value="open">Open</option>
-                        <option value="contacted">Contacted</option>
-                        <option value="closed">Closed</option>
-                        <option value="archived">Archived</option>
-                      </select>
-                      <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">
-                        Update Status
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <p className="mt-4 text-sm leading-7 text-[color:var(--color-muted)]">
-                Open a saved vendor to view or continue your conversation thread.
-              </p>
-            )}
-          </article>
+          <PlannerConversationCenter
+            conversations={plannerConversations}
+            compareIds={compareIds}
+            initialVendorId={threadVendorId}
+            createVendorInquiryAction={createVendorInquiryAction}
+            updatePlannerInquiryStatusAction={updatePlannerInquiryStatusAction}
+          />
         </section>
 
         <section className="surface-card rounded-[2rem] p-7">
@@ -547,23 +458,6 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       </p>
     </div>
   );
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
 }
 
 function formatStatus(value: string) {
@@ -646,6 +540,79 @@ function buildConversationsByVendor(inquiries: PlannerInquiry[]) {
   }
 
   return map;
+}
+
+function buildPlannerConversationItems(
+  conversationsByVendor: Map<
+    string,
+    {
+      id: string;
+      threadStatus: PlannerInquiry["threadStatus"];
+      messages: PlannerInquiry["messages"];
+      createdAt: string;
+    }
+  >,
+  savedVendors: {
+    vendor: {
+      id: string;
+      slug: string;
+      businessName: string;
+      category: string;
+      location: string;
+      whatsapp: string | null;
+      contactEmail: string | null;
+      imageUrl: string;
+    };
+  }[],
+  inquiryVendorMap: Map<
+    string,
+    {
+      id: string;
+      slug: string;
+      businessName: string;
+      category: string;
+      location: string;
+      whatsapp: string | null;
+      contactEmail: string | null;
+      imageUrl: string;
+    }
+  >,
+) {
+  const savedVendorMap = new Map(savedVendors.map((item) => [item.vendor.id, item.vendor]));
+
+  return [...conversationsByVendor.entries()]
+    .map(([vendorId, conversation]) => {
+      const vendor =
+        savedVendorMap.get(vendorId) ?? inquiryVendorMap.get(vendorId) ?? null;
+
+      if (!vendor) {
+        return null;
+      }
+
+      return {
+        id: conversation.id,
+        threadStatus: conversation.threadStatus,
+        createdAt: conversation.createdAt,
+        vendor,
+        messages: conversation.messages,
+      };
+    })
+    .filter(Boolean) as {
+    id: string;
+    threadStatus: PlannerInquiry["threadStatus"];
+    createdAt: string;
+    vendor: {
+      id: string;
+      slug: string;
+      businessName: string;
+      category: string;
+      location: string;
+      whatsapp: string | null;
+      contactEmail: string | null;
+      imageUrl: string;
+    };
+    messages: PlannerInquiry["messages"];
+  }[];
 }
 
 function toTime(value: string | null | undefined) {

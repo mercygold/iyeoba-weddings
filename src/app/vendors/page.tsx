@@ -59,7 +59,7 @@ export default async function VendorsPage(props: {
   const locationOptions = getSharedLocationOptions(location);
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fdfbfd_0%,#ffffff_38%,#ffffff_100%)]">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_38%,#ffffff_100%)]">
       <MainNav />
       {source === "tiktok" ? (
         <PageViewTracker
@@ -69,7 +69,15 @@ export default async function VendorsPage(props: {
         />
       ) : null}
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
-        <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.08)] bg-[rgba(255,255,255,0.9)] p-4 shadow-[0_20px_55px_-42px_rgba(31,31,31,0.22)] backdrop-blur-sm md:p-6">
+          <div
+            className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-16"
+            style={{ backgroundImage: "url('/images/wedding-diaspora-bg.jpg')" }}
+            aria-hidden="true"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(250,249,247,0.9)_0%,rgba(255,255,255,0.88)_100%)]" />
+          <div className="wedding-floral-texture absolute inset-0" />
+          <div className="relative grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="surface-card space-y-4 rounded-[2rem] p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
               Trusted vendor discovery
@@ -137,6 +145,7 @@ export default async function VendorsPage(props: {
               </button>
             </form>
           </section>
+          </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">

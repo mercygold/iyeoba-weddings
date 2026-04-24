@@ -23,10 +23,17 @@ export async function updateInquiryStatusAction(formData: FormData) {
 
   const inquiryId = String(formData.get("inquiryId") ?? "").trim();
   const threadStatus = String(formData.get("status") ?? "").trim();
+  const nextPath = normalizeVendorDashboardNextPath(formData.get("nextPath"));
   const allowedStatuses = new Set(["open", "contacted", "closed", "archived"]);
 
   if (!inquiryId || !allowedStatuses.has(threadStatus)) {
-    redirect("/vendor/dashboard?error=We%20could%20not%20update%20this%20inquiry%20right%20now.");
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not update this inquiry right now.",
+      ),
+    );
   }
 
   const { data: vendor, error: vendorError } = await supabase
@@ -43,7 +50,13 @@ export async function updateInquiryStatusAction(formData: FormData) {
       threadStatus,
       error: serializeSupabaseError(vendorError ?? {}),
     });
-    redirect("/vendor/dashboard?error=We%20could%20not%20update%20this%20inquiry%20right%20now.");
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not update this inquiry right now.",
+      ),
+    );
   }
 
   console.log("Vendor inquiry status update attempt", {
@@ -120,12 +133,18 @@ export async function updateInquiryStatusAction(formData: FormData) {
       payload,
       error: serializeSupabaseError(error),
     });
-    redirect("/vendor/dashboard?error=We%20could%20not%20update%20this%20inquiry%20right%20now.");
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not update this inquiry right now.",
+      ),
+    );
   }
 
   revalidatePath("/vendor/dashboard");
   revalidatePath("/planner/dashboard");
-  redirect("/vendor/dashboard?message=Inquiry%20status%20updated.");
+  redirect(withQueryParam(nextPath, "message", "Inquiry status updated."));
 }
 
 export async function replyToInquiryAction(formData: FormData) {
@@ -134,9 +153,10 @@ export async function replyToInquiryAction(formData: FormData) {
 
   const inquiryId = String(formData.get("inquiryId") ?? "").trim();
   const body = String(formData.get("message") ?? "").trim();
+  const nextPath = normalizeVendorDashboardNextPath(formData.get("nextPath"));
 
   if (!inquiryId || !body) {
-    redirect("/vendor/dashboard?error=Add%20a%20reply%20before%20sending.");
+    redirect(withQueryParam(nextPath, "error", "Add a reply before sending."));
   }
 
   const { data: vendor, error: vendorError } = await supabase
@@ -152,7 +172,13 @@ export async function replyToInquiryAction(formData: FormData) {
       inquiryId,
       error: serializeSupabaseError(vendorError ?? {}),
     });
-    redirect("/vendor/dashboard?error=We%20could%20not%20send%20this%20reply%20right%20now.");
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not send this reply right now.",
+      ),
+    );
   }
 
   const { data: lead, error: leadError } = await supabase
@@ -170,7 +196,13 @@ export async function replyToInquiryAction(formData: FormData) {
       inquiryId,
       error: serializeSupabaseError(leadError ?? {}),
     });
-    redirect("/vendor/dashboard?error=We%20could%20not%20send%20this%20reply%20right%20now.");
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not send this reply right now.",
+      ),
+    );
   }
 
   const now = new Date().toISOString();
@@ -264,7 +296,13 @@ export async function replyToInquiryAction(formData: FormData) {
       payload: messagePayload,
       error: serializeSupabaseError(messageError),
     });
-    redirect("/vendor/dashboard?error=We%20could%20not%20send%20this%20reply%20right%20now.");
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not send this reply right now.",
+      ),
+    );
   }
 
   const statusPayload = {
@@ -318,7 +356,25 @@ export async function replyToInquiryAction(formData: FormData) {
 
   revalidatePath("/vendor/dashboard");
   revalidatePath("/planner/dashboard");
-  redirect("/vendor/dashboard?message=Reply%20sent.");
+  redirect(withQueryParam(nextPath, "message", "Reply sent."));
+}
+
+function normalizeVendorDashboardNextPath(raw: FormDataEntryValue | null) {
+  const value = String(raw ?? "").trim();
+  if (!value.startsWith("/vendor/dashboard")) {
+    return "/vendor/dashboard";
+  }
+  return value;
+}
+
+function withQueryParam(path: string, key: string, value: string) {
+  const [pathname, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  params.delete("error");
+  params.delete("message");
+  params.set(key, value);
+  const serialized = params.toString();
+  return serialized ? `${pathname}?${serialized}` : pathname;
 }
 
 async function persistVendorProfile(
