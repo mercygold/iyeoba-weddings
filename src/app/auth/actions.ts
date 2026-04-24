@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { trackServerEvent } from "@/lib/analytics-server";
@@ -158,10 +159,86 @@ export async function signOutAction() {
   redirect("/");
 }
 
+export async function requestPasswordResetAction(formData: FormData) {
+  const config = getSupabaseConfigStatus();
+  if (config.authMessage) {
+    redirect(`/auth/reset-password?error=${encodeURIComponent(config.authMessage)}`);
+  }
+
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) {
+    redirect("/auth/reset-password?error=Please enter your account email.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const origin = await getRequestOrigin();
+  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/auth/update-password")}`;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  if (error) {
+    redirect(`/auth/reset-password?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect(
+    `/auth/reset-password?message=${encodeURIComponent(
+      "Password reset instructions were sent to your email.",
+    )}`,
+  );
+}
+
+export async function updatePasswordAction(formData: FormData) {
+  const config = getSupabaseConfigStatus();
+  if (config.authMessage) {
+    redirect(`/auth/update-password?error=${encodeURIComponent(config.authMessage)}`);
+  }
+
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (password.length < 8) {
+    redirect(
+      "/auth/update-password?error=Please choose a password with at least 8 characters.",
+    );
+  }
+
+  if (password !== confirmPassword) {
+    redirect("/auth/update-password?error=Passwords do not match.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    redirect(`/auth/update-password?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/");
+  redirect(
+    `/auth/sign-in?message=${encodeURIComponent(
+      "Password updated successfully. You can sign in now.",
+    )}`,
+  );
+}
+
 function buildVendorSlug(value: string) {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
+}
+
+async function getRequestOrigin() {
+  const headerStore = await headers();
+  const forwardedProto = headerStore.get("x-forwarded-proto");
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  if (!host) {
+    return "http://localhost:3000";
+  }
+
+  const protocol = forwardedProto ?? (host.includes("localhost") ? "http" : "https");
+  return `${protocol}://${host}`;
 }

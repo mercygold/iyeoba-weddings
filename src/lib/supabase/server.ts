@@ -63,6 +63,12 @@ function nullSupabaseClient(
       async signOut() {
         return { error: null };
       },
+      async resetPasswordForEmail() {
+        return { data: {}, error: new Error(message) };
+      },
+      async updateUser() {
+        return { data: { user: null }, error: new Error(message) };
+      },
       async exchangeCodeForSession() {
         return {
           data: { session: null, user: null },

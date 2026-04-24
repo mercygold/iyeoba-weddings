@@ -4,7 +4,7 @@ import { MainNav } from "@/components/main-nav";
 import { signInAction } from "@/app/auth/actions";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 
-type SearchParams = Promise<{ error?: string; next?: string }>;
+type SearchParams = Promise<{ error?: string; next?: string; message?: string }>;
 
 export default async function SignInPage(props: {
   searchParams: SearchParams;
@@ -52,12 +52,20 @@ export default async function SignInPage(props: {
             </div>
 
             <div className="grid gap-2">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-[color:var(--color-ink)]"
-              >
-                Password
-              </label>
+              <div className="flex items-center justify-between gap-3">
+                <label
+                  htmlFor="password"
+                  className="text-sm font-medium text-[color:var(--color-ink)]"
+                >
+                  Password
+                </label>
+                <Link
+                  href="/auth/reset-password"
+                  className="text-xs font-semibold text-[color:var(--color-brand-primary)] hover:text-[color:var(--color-brand-primary-dark)]"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 name="password"
@@ -66,6 +74,12 @@ export default async function SignInPage(props: {
                 className="field-input rounded-2xl"
               />
             </div>
+
+            {searchParams.message ? (
+              <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {searchParams.message}
+              </p>
+            ) : null}
 
             {searchParams.error ? (
               <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -81,13 +95,15 @@ export default async function SignInPage(props: {
             </button>
           </form>
 
-          <p className="mt-5 text-sm text-[color:var(--color-muted)]">
-            Need an account?{" "}
-            <Link href="/auth/sign-up" className="font-medium text-[color:var(--color-brand-primary)]">
-              Create one here
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[color:var(--color-muted)]">
+            <span>Need an account?</span>
+            <Link href="/auth/sign-up?role=planner" className="font-medium text-[color:var(--color-brand-primary)]">
+              Create planner account
             </Link>
-            .
-          </p>
+            <Link href="/auth/sign-up?role=vendor" className="font-medium text-[color:var(--color-brand-primary)]">
+              List your business
+            </Link>
+          </div>
         </section>
       </main>
     </div>
