@@ -17,7 +17,6 @@ import {
   getPlannerInquiries,
   getPlannerSavedVendors,
 } from "@/lib/inquiries";
-import { getPlannerInputFromSearchParams } from "@/lib/planner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getVendorsBySlugs } from "@/lib/vendors";
 
@@ -55,7 +54,6 @@ export default async function PlannerDashboardPage(props: {
 }) {
   const profile = await requirePlannerProfile("/planner/dashboard");
   const searchParams = await props.searchParams;
-  const plannerInput = getPlannerInputFromSearchParams(searchParams);
 
   const message =
     typeof searchParams.message === "string" ? searchParams.message : undefined;
@@ -63,7 +61,7 @@ export default async function PlannerDashboardPage(props: {
     typeof searchParams.error === "string" ? searchParams.error : undefined;
   const feedbackError = message ? undefined : error;
 
-  const weddingOverview = await getWeddingOverview(profile.id, plannerInput);
+  const weddingOverview = await getWeddingOverview(profile.id);
   const progressItems = await getPlannerProgressItems(profile.id);
 
   const dbSavedVendors = await getPlannerSavedVendors(profile.id);
@@ -154,21 +152,37 @@ export default async function PlannerDashboardPage(props: {
       <div className="wedding-floral-accent-gold absolute -left-20 bottom-16 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
       <MainNav />
-      <main className="relative mx-auto flex max-w-7xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
-        <section className="surface-card rounded-[2rem] p-7">
+      <main className="relative mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
+        <section className="surface-card rounded-[2rem] p-5 sm:p-7">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
             Wedding Overview
           </p>
-          <h1 className="font-display mt-3 text-4xl text-[color:var(--color-ink)]">
-            {weddingOverview.culture} {weddingOverview.weddingType}
-          </h1>
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="Culture" value={weddingOverview.culture} />
-            <MetricCard label="Wedding type" value={weddingOverview.weddingType} />
-            <MetricCard label="Location" value={weddingOverview.location} />
-            <MetricCard label="Guest count" value={String(weddingOverview.guestCount)} />
-            <MetricCard label="Budget" value={weddingOverview.budgetRange} />
-          </div>
+          {weddingOverview ? (
+            <>
+              <h1 className="font-display mt-3 text-3xl text-[color:var(--color-ink)] sm:text-4xl">
+                {weddingOverview.culture} {weddingOverview.weddingType}
+              </h1>
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <MetricCard label="Culture" value={weddingOverview.culture} />
+                <MetricCard label="Wedding type" value={weddingOverview.weddingType} />
+                <MetricCard label="Location" value={weddingOverview.location} />
+                <MetricCard label="Guest count" value={String(weddingOverview.guestCount)} />
+                <MetricCard label="Budget" value={weddingOverview.budgetRange} />
+              </div>
+            </>
+          ) : (
+            <div className="mt-4 surface-soft rounded-[1.35rem] p-5 sm:p-6">
+              <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+                Set up your wedding overview
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-7 text-[color:var(--color-muted)] sm:text-base">
+                Add your culture, wedding type, location, guest count, and budget to personalize your planner.
+              </p>
+              <Link href="/planner/setup" className="btn-primary mt-4 inline-flex">
+                Edit Planner
+              </Link>
+            </div>
+          )}
         </section>
 
         {message ? (
@@ -182,13 +196,13 @@ export default async function PlannerDashboardPage(props: {
           </p>
         ) : null}
 
-        <section className="surface-card rounded-[2rem] p-7">
+        <section className="surface-card rounded-[2rem] p-5 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
                 Planning Progress
               </p>
-              <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
+              <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
                 Track your planning items
               </h2>
             </div>
@@ -216,12 +230,12 @@ export default async function PlannerDashboardPage(props: {
 
           <div className="mt-6 grid gap-3">
             {progressItems.map((item) => (
-              <form key={item.key} action={savePlannerProgressItemAction} className="surface-soft flex flex-wrap items-center justify-between gap-3 rounded-[1.3rem] px-4 py-3">
+              <form key={item.key} action={savePlannerProgressItemAction} className="surface-soft flex flex-col gap-3 rounded-[1.3rem] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <input type="hidden" name="nextPath" value="/planner/dashboard" />
                 <input type="hidden" name="itemKey" value={item.key} />
                 <input type="hidden" name="itemLabel" value={item.label} />
                 <p className="text-sm font-medium text-[color:var(--color-ink)]">{item.label}</p>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                   <select
                     name="status"
                     defaultValue={item.status}
@@ -231,14 +245,14 @@ export default async function PlannerDashboardPage(props: {
                     <option value="ongoing">Ongoing</option>
                     <option value="done">Done</option>
                   </select>
-                  <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">
+                  <button type="submit" className="btn-secondary w-full px-3 py-1.5 text-sm sm:w-auto">
                     Save
                   </button>
                 </div>
                 <button
                   formAction={removePlannerProgressItemAction}
                   type="submit"
-                  className="btn-secondary px-3 py-1.5 text-sm"
+                  className="btn-secondary w-full px-3 py-1.5 text-sm sm:w-auto"
                 >
                   Remove
                 </button>
@@ -283,7 +297,7 @@ export default async function PlannerDashboardPage(props: {
             <input type="hidden" name="status" value="not_done" />
             <button
               type="submit"
-              className="btn-primary px-4 py-2"
+              className="btn-primary w-full px-4 py-2 sm:w-auto"
             >
               Add Item
             </button>
@@ -291,11 +305,11 @@ export default async function PlannerDashboardPage(props: {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <article className="surface-card rounded-[2rem] p-7">
+          <article className="surface-card rounded-[2rem] p-5 sm:p-7">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
               Saved Vendors
             </p>
-            <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
+            <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
               Your shortlist
             </h2>
             {savedVendors.length ? (
@@ -331,7 +345,7 @@ export default async function PlannerDashboardPage(props: {
                           href={`/vendors/${saved.vendor.slug}`}
                           businessName={saved.vendor.businessName}
                           imageUrl={saved.vendor.imageUrl}
-                          sizeClassName="h-[78px] w-[78px]"
+                          sizeClassName="h-[64px] w-[64px] sm:h-[78px] sm:w-[78px]"
                         />
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -391,11 +405,11 @@ export default async function PlannerDashboardPage(props: {
           />
         </section>
 
-        <section className="surface-card rounded-[2rem] p-7">
+        <section className="surface-card rounded-[2rem] p-5 sm:p-7">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
             Compare Vendors
           </p>
-          <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
+          <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
             Side-by-side shortlist
           </h2>
           {compareVendors.length ? (
@@ -621,34 +635,43 @@ function toTime(value: string | null | undefined) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-async function getWeddingOverview(
-  userId: string,
-  fallback: {
-    culture: string;
-    weddingType: string;
-    location: string;
-    guestCount: number;
-    budgetRange: string;
-  },
-) {
+async function getWeddingOverview(userId: string) {
   const supabase = await createSupabaseServerClient();
-  const { data: weddings } = await supabase
+  const { data: weddings, error } = await supabase
     .from("weddings")
     .select("culture, wedding_type, location, guest_count, budget_range")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
+  console.log("Planner wedding overview read", {
+    table: "weddings",
+    plannerUserId: userId,
+    dataCount: weddings?.length ?? 0,
+    error: error
+      ? {
+          code: error.code ?? null,
+          message: error.message ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        }
+      : null,
+  });
+
+  if (error) {
+    return null;
+  }
+
   const data = Array.isArray(weddings) ? weddings[0] ?? null : null;
+  if (!data) {
+    return null;
+  }
 
   return {
-    culture: data?.culture ?? fallback.culture,
-    weddingType: data?.wedding_type ?? fallback.weddingType,
-    location: data?.location ?? fallback.location,
-    guestCount:
-      typeof data?.guest_count === "number"
-        ? data.guest_count
-        : fallback.guestCount,
-    budgetRange: data?.budget_range ?? fallback.budgetRange,
+    culture: data.culture ?? "",
+    weddingType: data.wedding_type ?? "",
+    location: data.location ?? "",
+    guestCount: typeof data.guest_count === "number" ? data.guest_count : 0,
+    budgetRange: data.budget_range ?? "",
   };
 }
 

@@ -38,7 +38,7 @@ export default async function VendorProfilePage(props: {
         path={`/vendors/${vendor.slug}`}
         vendorSlug={vendor.slug}
       />
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/vendors"
@@ -67,7 +67,7 @@ export default async function VendorProfilePage(props: {
         ) : null}
 
         <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="surface-card space-y-6 rounded-[2rem] p-7">
+          <div className="surface-card space-y-6 rounded-[2rem] p-5 sm:p-7">
             <div className="relative overflow-hidden rounded-[1.75rem]">
               <div className="relative aspect-[16/9]">
                 <Image
@@ -86,7 +86,7 @@ export default async function VendorProfilePage(props: {
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-gold)]">
                   {vendor.category}
                 </p>
-                <h1 className="font-display mt-2 text-5xl leading-none text-[color:var(--color-ink)]">
+                <h1 className="font-display mt-2 text-3xl leading-none text-[color:var(--color-ink)] sm:text-4xl md:text-5xl">
                   {vendor.businessName}
                 </h1>
                 <p className="mt-3 max-w-2xl text-base leading-8 text-[color:var(--color-muted)]">
@@ -94,9 +94,9 @@ export default async function VendorProfilePage(props: {
                 </p>
               </div>
               {vendor.verified ? (
-                <span className="surface-soft rounded-full px-4 py-2 text-sm font-semibold text-[color:var(--color-brand-primary)]">
-                  Verified vendor
-                </span>
+                  <span className="surface-soft rounded-full px-3 py-1.5 text-xs font-semibold text-[color:var(--color-brand-primary)] sm:px-4 sm:py-2 sm:text-sm">
+                    Verified vendor
+                  </span>
               ) : null}
             </div>
 
@@ -108,9 +108,9 @@ export default async function VendorProfilePage(props: {
             </div>
 
             <div className="space-y-3">
-              <h2 className="font-display text-3xl text-[color:var(--color-ink)]">
-                Services offered
-              </h2>
+                <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+                  Services offered
+                </h2>
               <div className="flex flex-wrap gap-3">
                 {vendor.servicesOffered.map((service: string) => (
                   <span
@@ -124,18 +124,18 @@ export default async function VendorProfilePage(props: {
             </div>
 
             <div className="space-y-3">
-              <h2 className="font-display text-3xl text-[color:var(--color-ink)]">
-                Why this vendor fits
-              </h2>
+                <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+                  Why this vendor fits
+                </h2>
               <p className="text-base leading-8 text-[color:var(--color-muted)]">
                 {vendor.valueStatement}
               </p>
             </div>
 
             <div className="space-y-3">
-              <h2 className="font-display text-3xl text-[color:var(--color-ink)]">
-                Gallery preview
-              </h2>
+                <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+                  Gallery preview
+                </h2>
               {vendor.portfolioImageUrls?.length ? (
                 <div className="grid gap-4 sm:grid-cols-2">
                   {vendor.portfolioImageUrls.map((imageUrl: string) => (
@@ -169,12 +169,12 @@ export default async function VendorProfilePage(props: {
             </div>
           </div>
 
-          <aside className="space-y-5 rounded-[2rem] bg-[color:var(--color-brand-primary)] p-7 text-white">
+          <aside className="space-y-5 rounded-[2rem] bg-[color:var(--color-brand-primary)] p-5 text-white sm:p-7">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-white/70">
                 Vendor contact
               </p>
-              <h2 className="font-display mt-2 text-3xl">
+              <h2 className="font-display mt-2 text-2xl sm:text-3xl">
                 Introduce this vendor after planning starts.
               </h2>
               <p className="mt-3 text-sm leading-7 text-white/80">

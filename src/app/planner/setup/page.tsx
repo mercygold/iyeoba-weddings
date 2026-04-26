@@ -1,9 +1,26 @@
 import { MainNav } from "@/components/main-nav";
+import { savePlannerOverviewAction } from "@/app/planner/actions";
 import { requirePlannerProfile } from "@/lib/auth";
 import { budgetRanges, cultures, locations, weddingTypes } from "@/lib/planner";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function PlannerSetupPage() {
-  await requirePlannerProfile("/planner/setup");
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function PlannerSetupPage(props: { searchParams: SearchParams }) {
+  const profile = await requirePlannerProfile("/planner/setup");
+  const searchParams = await props.searchParams;
+  const message =
+    typeof searchParams.message === "string" ? searchParams.message : undefined;
+  const error =
+    typeof searchParams.error === "string" ? searchParams.error : undefined;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: weddings } = await supabase
+    .from("weddings")
+    .select("culture, wedding_type, location, guest_count, budget_range")
+    .eq("user_id", profile.id)
+    .order("created_at", { ascending: false });
+  const weddingOverview = Array.isArray(weddings) ? weddings[0] ?? null : null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(106,62,124,0.12),_transparent_38%),linear-gradient(180deg,#ffffff_0%,#fdfbfd_45%,#ffffff_100%)]">
@@ -38,34 +55,52 @@ export default async function PlannerSetupPage() {
         </section>
 
         <section className="surface-card rounded-[2rem] p-8 shadow-[0_32px_90px_-42px_rgba(106,62,124,0.22)]">
+          {message ? (
+            <p className="mb-4 rounded-[1.1rem] border border-[rgba(106,62,124,0.2)] bg-[rgba(106,62,124,0.08)] px-4 py-2 text-sm text-[color:var(--color-brand-primary)]">
+              {message}
+            </p>
+          ) : null}
+          {error ? (
+            <p className="mb-4 rounded-[1.1rem] border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          ) : null}
           <form
-            action="/planner/dashboard"
-            method="get"
+            action={savePlannerOverviewAction}
             className="grid gap-5 md:grid-cols-2"
           >
+            <input type="hidden" name="nextPath" value="/planner/dashboard" />
             <SelectField
               name="culture"
               label="Culture"
               options={cultures}
               placeholder="Select culture"
+              defaultValue={weddingOverview?.culture ?? ""}
             />
             <SelectField
               name="weddingType"
               label="Wedding type"
               options={weddingTypes}
               placeholder="Select wedding type"
+              defaultValue={weddingOverview?.wedding_type ?? ""}
             />
             <SelectField
               name="location"
               label="Location"
               options={locations}
               placeholder="Select location"
+              defaultValue={weddingOverview?.location ?? ""}
             />
             <Field
               name="guestCount"
               label="Guest count"
               placeholder="e.g. 250"
               type="number"
+              defaultValue={
+                typeof weddingOverview?.guest_count === "number"
+                  ? String(weddingOverview.guest_count)
+                  : ""
+              }
             />
             <div className="md:col-span-2">
               <SelectField
@@ -73,6 +108,7 @@ export default async function PlannerSetupPage() {
                 label="Budget range"
                 options={budgetRanges}
                 placeholder="Select budget range"
+                defaultValue={weddingOverview?.budget_range ?? ""}
               />
             </div>
 
@@ -81,7 +117,7 @@ export default async function PlannerSetupPage() {
                 type="submit"
                 className="btn-primary"
               >
-                Open Planner
+                Save and open planner
               </button>
               <p className="text-sm leading-7 text-[color:var(--color-muted)]">
                 You can refine details later. This is the lean MVP version of the
@@ -113,11 +149,13 @@ function Field({
   name,
   placeholder,
   type = "text",
+  defaultValue,
 }: {
   label: string;
   name: string;
   placeholder: string;
   type?: string;
+  defaultValue?: string;
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
@@ -128,6 +166,7 @@ function Field({
         name={name}
         required
         placeholder={placeholder}
+        defaultValue={defaultValue}
         className="field-input rounded-[1.25rem]"
       />
     </label>
@@ -139,11 +178,13 @@ function SelectField({
   name,
   options,
   placeholder,
+  defaultValue,
 }: {
   label: string;
   name: string;
   options: string[];
   placeholder: string;
+  defaultValue?: string;
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
@@ -151,7 +192,7 @@ function SelectField({
       <select
         name={name}
         required
-        defaultValue=""
+        defaultValue={defaultValue || ""}
         className="field-input rounded-[1.25rem]"
       >
         <option value="" disabled>

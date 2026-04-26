@@ -16,12 +16,12 @@ export default async function SignInPage(props: {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fdfbfd_0%,#ffffff_52%,#ffffff_100%)]">
       <MainNav />
-      <main className="mx-auto grid max-w-5xl gap-8 px-6 py-10 md:grid-cols-[0.9fr_1.1fr] md:px-10 lg:px-12">
-        <section className="rounded-[2rem] bg-[linear-gradient(160deg,#6A3E7C_0%,#8d5d9f_78%,#C9A15B_100%)] p-8 text-stone-50">
+      <main className="mx-auto grid max-w-5xl gap-8 px-4 py-8 sm:px-6 md:grid-cols-[0.9fr_1.1fr] md:px-10 lg:px-12">
+        <section className="rounded-[2rem] bg-[linear-gradient(160deg,#6A3E7C_0%,#8d5d9f_78%,#C9A15B_100%)] p-6 text-stone-50 sm:p-8">
           <p className="text-sm uppercase tracking-[0.24em] text-white/70">
             Sign in
           </p>
-          <h1 className="font-display mt-4 text-5xl leading-none">
+          <h1 className="font-display mt-4 text-3xl leading-none sm:text-4xl md:text-5xl">
             Return to your Planner or vendor workspace.
           </h1>
           <p className="mt-4 text-base leading-8 text-white/80">
@@ -30,7 +30,7 @@ export default async function SignInPage(props: {
           </p>
         </section>
 
-        <section className="surface-card rounded-[2rem] p-8">
+        <section className="surface-card rounded-[2rem] p-6 sm:p-8">
           {configError ? (
             <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {configError}
@@ -89,7 +89,7 @@ export default async function SignInPage(props: {
 
             <button
               type="submit"
-              className="btn-primary"
+              className="btn-primary w-full sm:w-auto"
             >
               Sign in
             </button>

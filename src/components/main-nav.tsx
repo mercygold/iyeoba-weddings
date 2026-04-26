@@ -16,7 +16,7 @@ export async function MainNav() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-[rgba(91,44,131,0.1)] bg-white/98 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-[0.14rem] md:px-8 lg:px-10 lg:py-[0.24rem]">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-1.5 sm:gap-3 sm:px-5 sm:py-[0.14rem] md:px-8 lg:px-10 lg:py-[0.24rem]">
         <Link
           href="/"
           aria-label="Iyeoba home"
@@ -25,7 +25,7 @@ export async function MainNav() {
           <IyeobaLogo priority className="gap-0" />
         </Link>
 
-        <nav className="flex flex-nowrap items-center gap-1.5 text-[0.95rem] font-medium leading-none text-[color:var(--color-muted)] md:gap-2.5 lg:gap-3.5">
+        <nav className="flex flex-nowrap items-center gap-1 text-[0.82rem] font-medium leading-none text-[color:var(--color-muted)] sm:gap-1.5 sm:text-[0.95rem] md:gap-2.5 lg:gap-3.5">
           <Link
             href="/"
             className="hidden whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268] lg:inline"
@@ -34,7 +34,7 @@ export async function MainNav() {
           </Link>
           <Link
             href="/vendors"
-            className="whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268]"
+            className="hidden whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268] sm:inline"
           >
             Find Vendors
           </Link>

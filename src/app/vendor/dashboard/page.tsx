@@ -61,13 +61,13 @@ export default async function VendorDashboardPage(props: {
       <div className="wedding-floral-accent-gold absolute -left-20 bottom-10 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
       <MainNav />
-      <main className="relative mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
+      <main className="relative mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="surface-card rounded-[2rem] p-8">
+          <div className="surface-card rounded-[2rem] p-5 sm:p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
               Vendor Dashboard
             </p>
-            <h1 className="font-display mt-4 text-5xl leading-none text-[color:var(--color-ink)]">
+            <h1 className="font-display mt-4 text-3xl leading-none text-[color:var(--color-ink)] sm:text-4xl md:text-5xl">
               {showOnboarding
                 ? "Complete your business registration."
                 : `Welcome back, ${vendor?.businessName || profile.full_name || "vendor"}.`}
@@ -99,7 +99,7 @@ export default async function VendorDashboardPage(props: {
             ) : null}
           </div>
 
-          <aside className="rounded-[2rem] bg-[color:var(--color-brand-primary)] p-8 text-white">
+          <aside className="rounded-[2rem] bg-[color:var(--color-brand-primary)] p-5 text-white sm:p-8">
             <p className="text-sm uppercase tracking-[0.24em] text-white/70">
               Status
             </p>
@@ -127,12 +127,12 @@ export default async function VendorDashboardPage(props: {
         </section>
 
         {showOnboarding ? (
-          <section className="surface-card rounded-[2rem] p-8">
+          <section className="surface-card rounded-[2rem] p-5 sm:p-8">
             <div className="flex flex-col gap-3">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
                 Business registration form
               </p>
-              <h2 className="font-display text-4xl text-[color:var(--color-ink)]">
+              <h2 className="font-display text-3xl text-[color:var(--color-ink)] sm:text-4xl">
                 Tell couples who you are and what you offer.
               </h2>
               <p className="max-w-3xl text-sm leading-7 text-[color:var(--color-muted)]">
@@ -153,7 +153,7 @@ export default async function VendorDashboardPage(props: {
           </section>
         ) : (
           <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="surface-card rounded-[2rem] p-8">
+            <div className="surface-card rounded-[2rem] p-5 sm:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
                 Business summary
               </p>
@@ -182,7 +182,7 @@ export default async function VendorDashboardPage(props: {
               </div>
             </div>
 
-            <div className="surface-card rounded-[2rem] p-8">
+            <div className="surface-card rounded-[2rem] p-5 sm:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
                 Publication details
               </p>

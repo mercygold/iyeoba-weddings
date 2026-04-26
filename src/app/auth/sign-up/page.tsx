@@ -22,12 +22,12 @@ export default async function SignUpPage(props: {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fdfbfd_0%,#ffffff_52%,#ffffff_100%)]">
       <MainNav />
-      <main className="mx-auto grid max-w-5xl gap-8 px-6 py-10 md:grid-cols-[0.9fr_1.1fr] md:px-10 lg:px-12">
-        <section className="surface-soft rounded-[2rem] p-8">
+      <main className="mx-auto grid max-w-5xl gap-8 px-4 py-8 sm:px-6 md:grid-cols-[0.9fr_1.1fr] md:px-10 lg:px-12">
+        <section className="surface-soft rounded-[2rem] p-6 sm:p-8">
           <p className="text-sm uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
             Create account
           </p>
-          <h1 className="font-display mt-4 text-5xl leading-none text-[color:var(--color-ink)]">
+          <h1 className="font-display mt-4 text-3xl leading-none text-[color:var(--color-ink)] sm:text-4xl md:text-5xl">
             Join as a planner or a vendor.
           </h1>
           <p className="mt-4 text-base leading-8 text-[color:var(--color-muted)]">
@@ -37,7 +37,7 @@ export default async function SignUpPage(props: {
           </p>
         </section>
 
-        <section className="surface-card rounded-[2rem] p-8">
+        <section className="surface-card rounded-[2rem] p-6 sm:p-8">
           {configError ? (
             <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {configError}
@@ -144,7 +144,7 @@ export default async function SignUpPage(props: {
 
             <button
               type="submit"
-              className="btn-primary"
+              className="btn-primary w-full sm:w-auto"
             >
               Create account
             </button>

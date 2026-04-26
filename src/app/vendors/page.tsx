@@ -68,7 +68,7 @@ export default async function VendorsPage(props: {
           path="/vendors"
         />
       ) : null}
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 md:px-10 lg:px-12 lg:py-12">
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.08)] bg-[rgba(255,255,255,0.9)] p-4 shadow-[0_20px_55px_-42px_rgba(31,31,31,0.22)] backdrop-blur-sm md:p-6">
           <div
             className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-16"
@@ -77,12 +77,12 @@ export default async function VendorsPage(props: {
           />
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(250,249,247,0.9)_0%,rgba(255,255,255,0.88)_100%)]" />
           <div className="wedding-floral-texture absolute inset-0" />
-          <div className="relative grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="surface-card space-y-4 rounded-[2rem] p-8">
+          <div className="relative grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="surface-card space-y-4 rounded-[2rem] p-5 sm:p-8">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
               Trusted vendor discovery
             </p>
-            <h1 className="font-display text-5xl leading-none text-[color:var(--color-ink)]">
+            <h1 className="font-display text-3xl leading-none text-[color:var(--color-ink)] sm:text-4xl md:text-5xl">
               Browse approved vendors across key wedding categories.
             </h1>
             <p className="max-w-2xl text-base leading-8 text-[color:var(--color-muted)]">
@@ -107,8 +107,8 @@ export default async function VendorsPage(props: {
             </div>
           </div>
 
-          <section className="surface-soft rounded-[2rem] p-6">
-            <form className="grid gap-4 md:grid-cols-2">
+          <section className="surface-soft rounded-[2rem] p-5 sm:p-6">
+            <form className="grid gap-4 sm:grid-cols-2">
               <SelectField
                 name="category"
                 label="Category"
@@ -139,7 +139,7 @@ export default async function VendorsPage(props: {
               />
               <button
                 type="submit"
-                className="btn-primary self-end"
+                className="btn-primary w-full self-end sm:w-auto"
               >
                 Filter vendors
               </button>

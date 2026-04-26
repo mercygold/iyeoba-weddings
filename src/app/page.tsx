@@ -26,7 +26,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(91,44,131,0.08),_transparent_34%),linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
       <MainNav />
-      <section className="relative h-[640px] overflow-hidden px-6 pb-10 pt-1 md:h-[700px] md:px-10 md:pb-12 lg:h-[760px] lg:px-12 lg:pb-14 lg:pt-1.5">
+      <section className="relative h-[560px] overflow-hidden px-4 pb-7 pt-1 sm:h-[620px] sm:px-6 sm:pb-10 md:h-[700px] md:px-10 md:pb-12 lg:h-[760px] lg:px-12 lg:pb-14 lg:pt-1.5">
         <div
           className="pointer-events-none absolute inset-0 bg-cover opacity-[0.84]"
           style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')", backgroundPosition: "center top" }}
@@ -34,10 +34,10 @@ export default async function Home() {
         />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.12)_0%,rgba(31,31,31,0.02)_34%,rgba(31,31,31,0.06)_100%)]" />
         <div className="relative mx-auto flex h-full max-w-6xl flex-col justify-end">
-          <h1 className="mx-auto mb-3 max-w-4xl rounded-[1.1rem] bg-[linear-gradient(180deg,rgba(74,34,104,0.3)_0%,rgba(74,34,104,0.14)_64%,rgba(74,34,104,0)_100%)] px-5 py-2 text-center text-3xl font-semibold tracking-[-0.03em] text-white/95 drop-shadow-[0_4px_20px_rgba(74,34,104,0.45)] sm:text-4xl md:mb-4 md:text-5xl">
+          <h1 className="mx-auto mb-2 max-w-4xl rounded-[1.1rem] bg-[linear-gradient(180deg,rgba(74,34,104,0.3)_0%,rgba(74,34,104,0.14)_64%,rgba(74,34,104,0)_100%)] px-3 py-1.5 text-center text-2xl font-semibold tracking-[-0.03em] text-white/95 drop-shadow-[0_4px_20px_rgba(74,34,104,0.45)] sm:mb-3 sm:px-5 sm:py-2 sm:text-3xl md:mb-4 md:text-5xl">
             Plan Your Nigerian Wedding Anywhere in the World
           </h1>
-          <div className="mx-auto w-full max-w-5xl rounded-[1.4rem] border border-[rgba(106,62,124,0.1)] bg-white/88 p-3.5 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] md:p-4">
+          <div className="mx-auto w-full max-w-5xl rounded-[1.4rem] border border-[rgba(106,62,124,0.1)] bg-white/88 p-3 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] sm:p-3.5 md:p-4">
             <form action="/vendors" method="get" className="space-y-2.5">
               <div className="flex flex-col gap-2 md:flex-row md:items-end">
                 <SearchField
@@ -63,7 +63,7 @@ export default async function Home() {
                 <button type="submit" className="btn-primary min-w-[145px] px-4 py-2.5 text-sm">
                   Find Vendors
                 </button>
-                <p className="max-w-2xl text-center text-[0.86rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:px-3">
+                <p className="max-w-2xl text-center text-[0.8rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:px-3 sm:text-[0.86rem]">
                   Discover trusted Nigerian wedding vendors across Nigeria and the diaspora. Browse by category, location, and cultural fit.
                 </p>
                 <Link
@@ -74,7 +74,7 @@ export default async function Home() {
                 </Link>
               </div>
 
-              <div className="grid gap-1.5 border-t border-[rgba(106,62,124,0.08)] pt-2 text-sm text-[color:var(--color-muted)] md:grid-cols-3">
+              <div className="grid gap-1.5 border-t border-[rgba(106,62,124,0.08)] pt-2 text-sm text-[color:var(--color-muted)] sm:grid-cols-2 md:grid-cols-3">
                 {trustPoints.map((item) => (
                   <div
                     key={item}
@@ -90,14 +90,14 @@ export default async function Home() {
         </div>
       </section>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-18 px-6 pb-12 md:px-10 lg:px-12 lg:pb-16">
+      <main className="mx-auto flex max-w-6xl flex-col gap-14 px-4 pb-12 sm:px-6 md:gap-18 md:px-10 lg:px-12 lg:pb-16">
         <section id="categories" className="space-y-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
               Browse categories
             </p>
-            <h2 className="font-display mt-2 text-4xl text-[color:var(--color-ink)]">
+            <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)] sm:text-4xl">
               Explore trusted wedding vendors by category
             </h2>
             </div>
@@ -141,7 +141,7 @@ export default async function Home() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
                 Approved vendors
               </p>
-              <h2 className="font-display mt-2 text-4xl text-[color:var(--color-ink)]">
+              <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)] sm:text-4xl">
                 Browse approved vendors with confidence
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--color-muted)]">
@@ -177,7 +177,7 @@ export default async function Home() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
                 Yoruba wedding culture
               </p>
-              <h2 className="font-display text-4xl text-[color:var(--color-ink)]">
+              <h2 className="font-display text-3xl text-[color:var(--color-ink)] sm:text-4xl">
                 Celebrate Yoruba elegance with vendors who understand tradition.
               </h2>
               <p className="text-base leading-8 text-[color:var(--color-muted)]">

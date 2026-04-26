@@ -89,7 +89,7 @@ export function VendorCard({
           {vendor.description}
         </p>
 
-        <div className={isHomepage ? "flex flex-nowrap gap-2 overflow-x-auto pb-1" : "flex flex-wrap gap-2.5"}>
+        <div className={isHomepage ? "flex flex-wrap gap-2 pb-1" : "flex flex-wrap gap-2.5"}>
           {!isHomepage ? (
             <VendorProfileAvatarLink
               href={`/vendors/${vendor.slug}`}
@@ -100,13 +100,13 @@ export function VendorCard({
           ) : null}
           <Link
             href={`/planner/dashboard?saved=${vendor.slug}`}
-            className={isHomepage ? "btn-secondary px-3 py-1.5 text-sm leading-none" : "btn-secondary"}
+            className={isHomepage ? "btn-secondary w-full px-3 py-1.5 text-sm leading-none sm:w-auto" : "btn-secondary"}
           >
             Save Vendor
           </Link>
           <Link
             href={`/vendors/${vendor.slug}`}
-            className={isHomepage ? "btn-secondary px-3 py-1.5 text-sm leading-none" : "btn-secondary"}
+            className={isHomepage ? "btn-secondary w-full px-3 py-1.5 text-sm leading-none sm:w-auto" : "btn-secondary"}
           >
             Start Inquiry
           </Link>

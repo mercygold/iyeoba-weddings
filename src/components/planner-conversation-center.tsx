@@ -66,11 +66,11 @@ export function PlannerConversationCenter({
   });
 
   return (
-    <article className="surface-card rounded-[2rem] p-7">
+    <article className="surface-card rounded-[2rem] p-5 sm:p-7">
       <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
         Conversations
       </p>
-      <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
+      <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
         Planner and vendor chat
       </h2>
 
@@ -79,7 +79,7 @@ export function PlannerConversationCenter({
           No conversations yet.
         </p>
       ) : (
-        <div className="mt-5 grid min-h-[560px] gap-4 lg:grid-cols-[320px_1fr]">
+        <div className="mt-5 grid min-h-[480px] gap-4 lg:min-h-[560px] lg:grid-cols-[320px_1fr]">
           <div
             className={`min-h-0 ${selectedConversation ? "hidden lg:block" : "block"}`}
           >
@@ -100,7 +100,7 @@ export function PlannerConversationCenter({
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-[color:var(--color-ink)]">
+                      <p className="min-w-0 truncate text-sm font-semibold text-[color:var(--color-ink)]">
                         {conversation.vendor.businessName}
                       </p>
                       <span className="shrink-0 text-[11px] text-[color:var(--color-muted)]">
@@ -131,7 +131,7 @@ export function PlannerConversationCenter({
                       href={`/vendors/${selectedVendor.slug}`}
                       businessName={selectedVendor.businessName}
                       imageUrl={selectedVendor.imageUrl}
-                      sizeClassName="h-[72px] w-[72px]"
+                      sizeClassName="h-[60px] w-[60px] sm:h-[72px] sm:w-[72px]"
                     />
                     <div className="min-w-0">
                       <p className="truncate text-base font-semibold text-[color:var(--color-ink)]">
@@ -199,7 +199,7 @@ export function PlannerConversationCenter({
                       className="field-input min-h-[92px] rounded-[1.1rem] text-sm"
                     />
                     <div className="flex flex-wrap gap-2">
-                      <button type="submit" className="btn-primary px-4 py-2">
+                      <button type="submit" className="btn-primary w-full px-4 py-2 sm:w-auto">
                         Send Message
                       </button>
                       {buildWhatsAppLink(
@@ -213,14 +213,14 @@ export function PlannerConversationCenter({
                           )!}
                           target="_blank"
                           rel="noreferrer"
-                          className="btn-secondary px-4 py-2"
+                          className="btn-secondary w-full px-4 py-2 sm:w-auto"
                         >
                           WhatsApp
                         </a>
                       ) : null}
                       <Link
                         href={`/vendors/${selectedVendor.slug}`}
-                        className="btn-secondary px-4 py-2"
+                        className="btn-secondary w-full px-4 py-2 sm:w-auto"
                       >
                         View Profile
                       </Link>
@@ -243,7 +243,7 @@ export function PlannerConversationCenter({
                       <option value="closed">Closed</option>
                       <option value="archived">Archived</option>
                     </select>
-                    <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">
+                    <button type="submit" className="btn-secondary w-full px-3 py-1.5 text-sm sm:w-auto">
                       Update Status
                     </button>
                   </form>

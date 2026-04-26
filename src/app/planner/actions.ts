@@ -8,6 +8,100 @@ import { getPlannerPrimaryWeddingId } from "@/lib/inquiries";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export async function savePlannerOverviewAction(formData: FormData) {
+  const profile = await requirePlannerProfile("/planner/setup");
+  const supabase = await createSupabaseServerClient();
+  await ensurePlannerUserRow(supabase, profile);
+
+  const nextPath = normalizePlannerNextPath(
+    String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
+  );
+  const culture = String(formData.get("culture") ?? "").trim();
+  const weddingType = String(formData.get("weddingType") ?? "").trim();
+  const location = String(formData.get("location") ?? "").trim();
+  const guestCount = Number(String(formData.get("guestCount") ?? "").trim());
+  const budgetRange = String(formData.get("budgetRange") ?? "").trim();
+
+  if (!culture || !weddingType || !location || !Number.isFinite(guestCount) || guestCount <= 0 || !budgetRange) {
+    redirect(
+      `${nextPath}?error=${encodeURIComponent("We could not save your planner setup right now.")}`,
+    );
+  }
+
+  const payload = {
+    user_id: profile.id,
+    culture,
+    wedding_type: weddingType,
+    location,
+    guest_count: Math.round(guestCount),
+    budget_range: budgetRange,
+  };
+
+  console.log("Planner overview save attempt", {
+    table: "weddings",
+    plannerUserId: profile.id,
+    payload,
+  });
+
+  const existingResult = await supabase
+    .from("weddings")
+    .select("id")
+    .eq("user_id", profile.id)
+    .order("created_at", { ascending: false });
+
+  console.log("Planner overview existing row lookup", {
+    table: "weddings",
+    plannerUserId: profile.id,
+    dataCount: existingResult.data?.length ?? 0,
+    error: existingResult.error ? serializeSupabaseError(existingResult.error) : null,
+  });
+
+  if (existingResult.error) {
+    redirect(
+      `${nextPath}?error=${encodeURIComponent("We could not save your planner setup right now.")}`,
+    );
+  }
+
+  const existingId = existingResult.data?.[0]?.id ?? null;
+  if (existingId) {
+    const updateResult = await supabase
+      .from("weddings")
+      .update(payload)
+      .eq("id", existingId)
+      .eq("user_id", profile.id);
+
+    console.log("Planner overview update response", {
+      table: "weddings",
+      plannerUserId: profile.id,
+      rowId: existingId,
+      error: updateResult.error ? serializeSupabaseError(updateResult.error) : null,
+    });
+
+    if (updateResult.error) {
+      redirect(
+        `${nextPath}?error=${encodeURIComponent("We could not save your planner setup right now.")}`,
+      );
+    }
+  } else {
+    const insertResult = await supabase.from("weddings").insert(payload);
+    console.log("Planner overview insert response", {
+      table: "weddings",
+      plannerUserId: profile.id,
+      error: insertResult.error ? serializeSupabaseError(insertResult.error) : null,
+    });
+
+    if (insertResult.error) {
+      redirect(
+        `${nextPath}?error=${encodeURIComponent("We could not save your planner setup right now.")}`,
+      );
+    }
+  }
+
+  revalidatePath("/planner/setup");
+  revalidatePath("/planner/dashboard");
+  redirect(`${nextPath}?message=${encodeURIComponent("Planner updated successfully.")}`);
+}
+
 export async function saveVendorForPlannerAction(formData: FormData) {
   const profile = await requirePlannerProfile("/planner/dashboard");
   const vendorId = String(formData.get("vendorId") ?? "").trim();
