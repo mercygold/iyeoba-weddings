@@ -12,6 +12,7 @@ export async function savePlannerOverviewAction(formData: FormData) {
   const profile = await requirePlannerProfile("/planner/setup");
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
 
   const nextPath = normalizePlannerNextPath(
     String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
@@ -29,7 +30,7 @@ export async function savePlannerOverviewAction(formData: FormData) {
   }
 
   const payload = {
-    user_id: profile.id,
+    user_id: ownerId,
     culture,
     wedding_type: weddingType,
     location,
@@ -39,19 +40,20 @@ export async function savePlannerOverviewAction(formData: FormData) {
 
   console.log("Planner overview save attempt", {
     table: "weddings",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
+    profileId: profile.id,
     payload,
   });
 
   const existingResult = await supabase
     .from("weddings")
     .select("id")
-    .eq("user_id", profile.id)
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
 
   console.log("Planner overview existing row lookup", {
     table: "weddings",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     dataCount: existingResult.data?.length ?? 0,
     error: existingResult.error ? serializeSupabaseError(existingResult.error) : null,
   });
@@ -68,13 +70,21 @@ export async function savePlannerOverviewAction(formData: FormData) {
       .from("weddings")
       .update(payload)
       .eq("id", existingId)
-      .eq("user_id", profile.id);
+      .eq("user_id", ownerId);
+    const persistedResult = await supabase
+      .from("weddings")
+      .select("id, user_id, culture, wedding_type, location, guest_count, budget_range")
+      .eq("id", existingId)
+      .eq("user_id", ownerId)
+      .maybeSingle();
 
     console.log("Planner overview update response", {
       table: "weddings",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       rowId: existingId,
+      row: persistedResult.data ?? null,
       error: updateResult.error ? serializeSupabaseError(updateResult.error) : null,
+      persistedError: persistedResult.error ? serializeSupabaseError(persistedResult.error) : null,
     });
 
     if (updateResult.error) {
@@ -83,11 +93,20 @@ export async function savePlannerOverviewAction(formData: FormData) {
       );
     }
   } else {
-    const insertResult = await supabase.from("weddings").insert(payload);
+    const insertResult = await supabase
+      .from("weddings")
+      .insert(payload);
+    const persistedResult = await supabase
+      .from("weddings")
+      .select("id, user_id, culture, wedding_type, location, guest_count, budget_range")
+      .eq("user_id", ownerId)
+      .order("created_at", { ascending: false });
     console.log("Planner overview insert response", {
       table: "weddings",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
+      row: persistedResult.data?.[0] ?? null,
       error: insertResult.error ? serializeSupabaseError(insertResult.error) : null,
+      persistedError: persistedResult.error ? serializeSupabaseError(persistedResult.error) : null,
     });
 
     if (insertResult.error) {
@@ -102,6 +121,173 @@ export async function savePlannerOverviewAction(formData: FormData) {
   redirect(`${nextPath}?message=${encodeURIComponent("Planner updated successfully.")}`);
 }
 
+export async function saveWeddingEventAction(formData: FormData) {
+  const profile = await requirePlannerProfile("/planner/dashboard");
+  const supabase = await createSupabaseServerClient();
+  await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
+
+  const nextPath = normalizePlannerNextPath(
+    String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
+  );
+  const weddingId = String(formData.get("weddingId") ?? "").trim();
+  const eventName = String(formData.get("eventName") ?? "").trim();
+  const culture = String(formData.get("culture") ?? "").trim();
+  const weddingType = String(formData.get("weddingType") ?? "").trim();
+  const location = String(formData.get("location") ?? "").trim();
+  const guestCount = Number(String(formData.get("guestCount") ?? "").trim());
+  const budgetRange = String(formData.get("budgetRange") ?? "").trim();
+
+  if (
+    !culture ||
+    !weddingType ||
+    !location ||
+    !Number.isFinite(guestCount) ||
+    guestCount <= 0 ||
+    !budgetRange
+  ) {
+    redirect(
+      `${nextPath}?error=${encodeURIComponent("We could not save this wedding event right now.")}`,
+    );
+  }
+
+  const payloadWithTitle = {
+    user_id: ownerId,
+    event_name: eventName || null,
+    culture,
+    wedding_type: weddingType,
+    location,
+    guest_count: Math.round(guestCount),
+    budget_range: budgetRange,
+  };
+  const payloadWithoutTitle = {
+    user_id: ownerId,
+    culture,
+    wedding_type: weddingType,
+    location,
+    guest_count: Math.round(guestCount),
+    budget_range: budgetRange,
+  };
+
+  console.log("Planner wedding event save attempt", {
+    table: "weddings",
+    plannerUserId: ownerId,
+    profileId: profile.id,
+    weddingId: weddingId || null,
+    payload: payloadWithTitle,
+  });
+
+  if (weddingId) {
+    let updateResult = await supabase
+      .from("weddings")
+      .update(payloadWithTitle)
+      .eq("id", weddingId)
+      .eq("user_id", ownerId);
+
+    if (updateResult.error && isSchemaDriftError(updateResult.error)) {
+      updateResult = await supabase
+        .from("weddings")
+        .update(payloadWithoutTitle)
+        .eq("id", weddingId)
+        .eq("user_id", ownerId);
+    }
+    const persistedResult = await supabase
+      .from("weddings")
+      .select("id, user_id, event_name, culture, wedding_type, location, guest_count, budget_range")
+      .eq("id", weddingId)
+      .eq("user_id", ownerId)
+      .maybeSingle();
+
+    console.log("Planner wedding event update response", {
+      table: "weddings",
+      plannerUserId: ownerId,
+      weddingId,
+      row: persistedResult.data ?? null,
+      error: updateResult.error ? serializeSupabaseError(updateResult.error) : null,
+      persistedError: persistedResult.error ? serializeSupabaseError(persistedResult.error) : null,
+    });
+
+    if (updateResult.error) {
+      redirect(
+        `${nextPath}?error=${encodeURIComponent("We could not save this wedding event right now.")}`,
+      );
+    }
+  } else {
+    let insertResult = await supabase
+      .from("weddings")
+      .insert(payloadWithTitle);
+    if (insertResult.error && isSchemaDriftError(insertResult.error)) {
+      insertResult = await supabase
+        .from("weddings")
+        .insert(payloadWithoutTitle);
+    }
+    const persistedResult = await supabase
+      .from("weddings")
+      .select("id, user_id, event_name, culture, wedding_type, location, guest_count, budget_range")
+      .eq("user_id", ownerId)
+      .order("created_at", { ascending: false });
+
+    console.log("Planner wedding event insert response", {
+      table: "weddings",
+      plannerUserId: ownerId,
+      row: persistedResult.data?.[0] ?? null,
+      error: insertResult.error ? serializeSupabaseError(insertResult.error) : null,
+      persistedError: persistedResult.error ? serializeSupabaseError(persistedResult.error) : null,
+    });
+
+    if (insertResult.error) {
+      redirect(
+        `${nextPath}?error=${encodeURIComponent("We could not save this wedding event right now.")}`,
+      );
+    }
+  }
+
+  revalidatePath(nextPath);
+  revalidatePath("/planner/dashboard");
+  revalidatePath("/planner/setup");
+  redirect(`${nextPath}?message=${encodeURIComponent("Wedding event updated.")}`);
+}
+
+export async function deleteWeddingEventAction(formData: FormData) {
+  const profile = await requirePlannerProfile("/planner/dashboard");
+  const supabase = await createSupabaseServerClient();
+  await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
+
+  const nextPath = normalizePlannerNextPath(
+    String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
+  );
+  const weddingId = String(formData.get("weddingId") ?? "").trim();
+
+  if (!weddingId) {
+    redirect(
+      `${nextPath}?error=${encodeURIComponent("We could not remove this wedding event right now.")}`,
+    );
+  }
+
+  const deleteResult = await supabase
+    .from("weddings")
+    .delete()
+    .eq("id", weddingId)
+    .eq("user_id", ownerId);
+
+  console.log("Planner wedding event delete response", {
+    table: "weddings",
+    plannerUserId: ownerId,
+    weddingId,
+    error: deleteResult.error ? serializeSupabaseError(deleteResult.error) : null,
+  });
+
+  if (deleteResult.error) {
+    redirect(
+      `${nextPath}?error=${encodeURIComponent("We could not remove this wedding event right now.")}`,
+    );
+  }
+
+  revalidatePath("/planner/dashboard");
+  redirect(`${nextPath}?message=${encodeURIComponent("Wedding event removed.")}`);
+}
+
 export async function saveVendorForPlannerAction(formData: FormData) {
   const profile = await requirePlannerProfile("/planner/dashboard");
   const vendorId = String(formData.get("vendorId") ?? "").trim();
@@ -110,14 +296,16 @@ export async function saveVendorForPlannerAction(formData: FormData) {
   );
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
   const plannerUserRow = await supabase
     .from("users")
     .select("id, role")
-    .eq("id", profile.id)
+    .eq("id", ownerId)
     .maybeSingle();
   console.log("Planner action auth/profile resolution", {
     action: "saveVendorForPlannerAction",
     authProfileId: profile.id,
+    authOwnerId: ownerId,
     usersRowId: plannerUserRow.data?.id ?? null,
     usersRowRole: plannerUserRow.data?.role ?? null,
     usersRowError: plannerUserRow.error ? serializeSupabaseError(plannerUserRow.error) : null,
@@ -128,12 +316,12 @@ export async function saveVendorForPlannerAction(formData: FormData) {
   }
 
   const payload = {
-    user_id: profile.id,
+    user_id: ownerId,
     vendor_id: vendorId,
   };
   console.log("Planner save vendor write attempt", {
     table: "saved_vendors",
-    authUserId: profile.id,
+    authUserId: ownerId,
     payload,
   });
 
@@ -143,7 +331,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
   });
   console.log("Planner save vendor upsert response", {
     table: "saved_vendors",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     vendorId,
     data: null,
     error: error ? serializeSupabaseError(error) : null,
@@ -153,7 +341,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
     const serializedError = serializeSupabaseError(error);
     console.warn("Planner save vendor upsert failed, attempting compatibility fallback", {
       table: "saved_vendors",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       payload,
       error: serializedError,
@@ -170,11 +358,11 @@ export async function saveVendorForPlannerAction(formData: FormData) {
     const existingResult = await supabase
       .from("saved_vendors")
       .select("id")
-      .eq("user_id", profile.id)
+      .eq("user_id", ownerId)
       .eq("vendor_id", vendorId);
     console.log("Planner save vendor fallback lookup response", {
       table: "saved_vendors",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       dataCount: existingResult.data?.length ?? 0,
       error: existingResult.error ? serializeSupabaseError(existingResult.error) : null,
@@ -183,7 +371,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
     if (existingResult.error) {
       console.error("Planner save vendor fallback lookup failed", {
         table: "saved_vendors",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         vendorId,
         payload,
         error: serializeSupabaseError(existingResult.error),
@@ -206,7 +394,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
       .insert(payload);
     console.log("Planner save vendor fallback insert response", {
       table: "saved_vendors",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       data: null,
       error: insertResult.error ? serializeSupabaseError(insertResult.error) : null,
@@ -222,7 +410,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
 
     console.error("Planner save vendor failed", {
       table: "saved_vendors",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       payload,
       error: serializeSupabaseError(insertResult.error ?? error),
@@ -233,7 +421,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
   }
 
   console.log("Planner save vendor revalidating routes", {
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     routes: ["/planner/dashboard", "/vendors"],
   });
   revalidatePath("/planner/dashboard");
@@ -254,14 +442,16 @@ export async function createVendorInquiryAction(formData: FormData) {
   const message = String(formData.get("message") ?? "").trim();
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
   const plannerUserRow = await supabase
     .from("users")
     .select("id, role")
-    .eq("id", profile.id)
+    .eq("id", ownerId)
     .maybeSingle();
   console.log("Planner action auth/profile resolution", {
     action: "createVendorInquiryAction",
     authProfileId: profile.id,
+    authOwnerId: ownerId,
     usersRowId: plannerUserRow.data?.id ?? null,
     usersRowRole: plannerUserRow.data?.role ?? null,
     usersRowError: plannerUserRow.error ? serializeSupabaseError(plannerUserRow.error) : null,
@@ -269,7 +459,7 @@ export async function createVendorInquiryAction(formData: FormData) {
 
   if (!vendorId) {
     console.error("Planner inquiry validation failed", {
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       vendorSlug,
       reason: "missing_vendor_reference",
@@ -278,7 +468,7 @@ export async function createVendorInquiryAction(formData: FormData) {
   }
   if (!isUuid(vendorId)) {
     console.error("Planner inquiry validation failed", {
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       vendorSlug,
       reason: "invalid_vendor_uuid",
@@ -295,7 +485,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     .maybeSingle();
   console.log("Planner inquiry vendor validation response", {
     table: "vendors",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     vendorId,
     foundVendorId: vendorExistsResult.data?.id ?? null,
     foundVendorUserId: vendorExistsResult.data?.user_id ?? null,
@@ -310,16 +500,16 @@ export async function createVendorInquiryAction(formData: FormData) {
     );
   }
 
-  const weddingId = await getPlannerPrimaryWeddingId(profile.id);
+  const weddingId = await getPlannerPrimaryWeddingId(ownerId);
   let existingLeadResult = await supabase
     .from("leads")
     .select("id, created_at, updated_at, status, archived_at")
-    .eq("planner_user_id", profile.id)
+    .eq("planner_user_id", ownerId)
     .eq("vendor_id", vendorId)
     .order("updated_at", { ascending: false });
   console.log("Planner inquiry primary lookup response", {
     table: "leads",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     vendorId,
     dataCount: existingLeadResult.data?.length ?? 0,
     error: existingLeadResult.error ? serializeSupabaseError(existingLeadResult.error) : null,
@@ -327,17 +517,17 @@ export async function createVendorInquiryAction(formData: FormData) {
 
   if (existingLeadResult.error && isSchemaDriftError(existingLeadResult.error)) {
     existingLeadResult = await supabase
-      .from("leads")
-      .select("id, created_at, updated_at, status, archived_at")
-      .eq("planner_user_id", profile.id)
-      .eq("vendor_id", vendorId)
+        .from("leads")
+        .select("id, created_at, updated_at, status, archived_at")
+        .eq("planner_user_id", ownerId)
+        .eq("vendor_id", vendorId)
       .order("created_at", { ascending: false });
   }
 
   if (existingLeadResult.error) {
     console.error("Planner inquiry lookup failed", {
       table: "leads",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       vendorSlug,
       error: serializeSupabaseError(existingLeadResult.error),
@@ -353,12 +543,12 @@ export async function createVendorInquiryAction(formData: FormData) {
     let legacyLeadResult = await supabase
       .from("leads")
       .select("id, created_at, updated_at, status, archived_at")
-      .eq("user_id", profile.id)
+      .eq("user_id", ownerId)
       .eq("vendor_id", vendorId)
       .order("updated_at", { ascending: false });
     console.log("Planner inquiry legacy lookup response", {
       table: "leads",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       dataCount: legacyLeadResult.data?.length ?? 0,
       error: legacyLeadResult.error ? serializeSupabaseError(legacyLeadResult.error) : null,
@@ -368,7 +558,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       legacyLeadResult = await supabase
         .from("leads")
         .select("id, created_at, updated_at, status, archived_at")
-        .eq("user_id", profile.id)
+        .eq("user_id", ownerId)
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false });
     }
@@ -376,7 +566,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     if (legacyLeadResult.error) {
       console.error("Planner inquiry legacy lookup failed", {
         table: "leads",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         vendorId,
         vendorSlug,
         error: serializeSupabaseError(legacyLeadResult.error),
@@ -394,7 +584,7 @@ export async function createVendorInquiryAction(formData: FormData) {
   if (leadId) {
     console.log("Planner inquiry reusing existing lead thread", {
       table: "leads",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       vendorSlug,
       chosenLeadId: leadId,
@@ -405,8 +595,8 @@ export async function createVendorInquiryAction(formData: FormData) {
 
   if (!leadId) {
     const payloadBase = {
-      user_id: profile.id,
-      planner_user_id: profile.id,
+      user_id: ownerId,
+      planner_user_id: ownerId,
       vendor_id: vendorId,
       wedding_id: weddingId,
       contact_method: contactMethod || null,
@@ -416,7 +606,7 @@ export async function createVendorInquiryAction(formData: FormData) {
 
     console.log("Planner inquiry write attempt", {
       table: "leads",
-      authUserId: profile.id,
+      authUserId: ownerId,
       vendorId,
       vendorSlug,
       payload: payloadBase,
@@ -457,7 +647,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       insertError = insertResult.error;
       console.log("Planner inquiry create attempt response", {
         table: "leads",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         vendorId,
         insertedId,
         error: insertError ? serializeSupabaseError(insertError) : null,
@@ -474,7 +664,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     if (insertError || !insertedId) {
       console.error("Planner inquiry create failed", {
         table: "leads",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         vendorId,
         vendorSlug,
         payload: payloadBase,
@@ -488,7 +678,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     leadId = insertedId;
     console.log("Planner inquiry created new lead thread", {
       table: "leads",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       vendorSlug,
       createdLeadId: leadId,
@@ -498,7 +688,7 @@ export async function createVendorInquiryAction(formData: FormData) {
   if (leadId && message) {
     const messagePayload = {
       lead_id: leadId,
-      sender_user_id: profile.id,
+      sender_user_id: ownerId,
       sender_role: "planner",
       message,
       body: message,
@@ -507,7 +697,7 @@ export async function createVendorInquiryAction(formData: FormData) {
 
     console.log("Planner inquiry message write attempt", {
       table: "lead_messages",
-      authUserId: profile.id,
+      authUserId: ownerId,
       vendorId,
       leadId,
       payload: messagePayload,
@@ -518,7 +708,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       .insert(messagePayload);
     console.log("Planner inquiry message write response", {
       table: "lead_messages",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       leadId,
       data: null,
@@ -528,14 +718,14 @@ export async function createVendorInquiryAction(formData: FormData) {
     if (messageError) {
       const fallbackPayload = {
         lead_id: leadId,
-        sender_user_id: profile.id,
+        sender_user_id: ownerId,
         body: message,
         message,
       };
 
       console.warn("Planner inquiry message retrying with fallback payload", {
         table: "lead_messages",
-        authUserId: profile.id,
+        authUserId: ownerId,
         vendorId,
         leadId,
         payload: fallbackPayload,
@@ -547,7 +737,7 @@ export async function createVendorInquiryAction(formData: FormData) {
         .insert(fallbackPayload);
       console.log("Planner inquiry message fallback response", {
         table: "lead_messages",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         vendorId,
         leadId,
         data: null,
@@ -564,13 +754,13 @@ export async function createVendorInquiryAction(formData: FormData) {
 
       const minimalPayload = {
         lead_id: leadId,
-        sender_user_id: profile.id,
+        sender_user_id: ownerId,
         message,
       };
       const minimalResult = await supabase.from("lead_messages").insert(minimalPayload);
       console.log("Planner inquiry message minimal fallback response", {
         table: "lead_messages",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         vendorId,
         leadId,
         data: null,
@@ -587,7 +777,7 @@ export async function createVendorInquiryAction(formData: FormData) {
 
       console.error("Planner inquiry message create failed", {
         table: "lead_messages",
-        authUserId: profile.id,
+        authUserId: ownerId,
         vendorId,
         leadId,
         payload: minimalPayload,
@@ -610,7 +800,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       .eq("id", leadId);
     console.log("Planner inquiry lead touch response", {
       table: "leads",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       vendorId,
       leadId,
       error: leadTouchError ? serializeSupabaseError(leadTouchError) : null,
@@ -619,7 +809,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     if (leadTouchError) {
       console.warn("Planner inquiry lead touch failed", {
         table: "leads",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         vendorId,
         leadId,
         payload: leadTouchPayload,
@@ -629,7 +819,7 @@ export async function createVendorInquiryAction(formData: FormData) {
   }
 
   console.log("Planner inquiry revalidating routes", {
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     vendorId,
     leadId,
     routes: ["/planner/dashboard", "/vendor/dashboard"],
@@ -645,14 +835,16 @@ export async function savePlannerProgressItemAction(formData: FormData) {
   const profile = await requirePlannerProfile("/planner/dashboard");
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
   const plannerUserRow = await supabase
     .from("users")
     .select("id, role")
-    .eq("id", profile.id)
+    .eq("id", ownerId)
     .maybeSingle();
   console.log("Planner action auth/profile resolution", {
     action: "savePlannerProgressItemAction",
     authProfileId: profile.id,
+    authOwnerId: ownerId,
     usersRowId: plannerUserRow.data?.id ?? null,
     usersRowRole: plannerUserRow.data?.role ?? null,
     usersRowError: plannerUserRow.error ? serializeSupabaseError(plannerUserRow.error) : null,
@@ -670,7 +862,7 @@ export async function savePlannerProgressItemAction(formData: FormData) {
 
   console.log("Planner progress save attempt", {
     table: "blueprints",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     itemKey,
     itemLabel,
     requestedStatus: status,
@@ -683,15 +875,15 @@ export async function savePlannerProgressItemAction(formData: FormData) {
   }
   const requestedStatus = normalizePlannerProgressStatus(status);
 
-  const weddingId = await getPlannerPrimaryWeddingId(profile.id);
+  const weddingId = await getPlannerPrimaryWeddingId(ownerId);
   const { data: blueprints, error: blueprintError } = await supabase
     .from("blueprints")
     .select("id, checklist_json")
-    .eq("user_id", profile.id)
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
   console.log("Planner progress blueprint load response", {
     table: "blueprints",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     dataCount: blueprints?.length ?? 0,
     error: blueprintError ? serializeSupabaseError(blueprintError) : null,
   });
@@ -701,7 +893,7 @@ export async function savePlannerProgressItemAction(formData: FormData) {
   if (blueprintError) {
     console.error("Planner progress load failed", {
       table: "blueprints",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       error: serializeSupabaseError(blueprintError),
     });
     redirect(
@@ -737,7 +929,7 @@ export async function savePlannerProgressItemAction(formData: FormData) {
       .eq("id", blueprint.id);
     console.log("Planner progress update response", {
       table: "blueprints",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       blueprintId: blueprint.id,
       normalizedCount: normalized.length,
       error: error ? serializeSupabaseError(error) : null,
@@ -756,7 +948,7 @@ export async function savePlannerProgressItemAction(formData: FormData) {
     }
   } else {
     const payload = {
-      user_id: profile.id,
+      user_id: ownerId,
       wedding_id: weddingId,
       summary: null,
       timeline_json: [],
@@ -767,14 +959,14 @@ export async function savePlannerProgressItemAction(formData: FormData) {
     const { error } = await supabase.from("blueprints").insert(payload);
     console.log("Planner progress create response", {
       table: "blueprints",
-      plannerUserId: profile.id,
+      plannerUserId: ownerId,
       payload,
       error: error ? serializeSupabaseError(error) : null,
     });
     if (error) {
       console.error("Planner progress create failed", {
         table: "blueprints",
-        plannerUserId: profile.id,
+        plannerUserId: ownerId,
         payload,
         error: serializeSupabaseError(error),
       });
@@ -784,8 +976,22 @@ export async function savePlannerProgressItemAction(formData: FormData) {
     }
   }
 
+  const persistedChecklistResult = await supabase
+    .from("blueprints")
+    .select("id, user_id, checklist_json")
+    .eq("user_id", ownerId)
+    .order("created_at", { ascending: false });
+  console.log("Planner progress persisted checklist rows", {
+    table: "blueprints",
+    plannerUserId: ownerId,
+    rows: persistedChecklistResult.data ?? [],
+    error: persistedChecklistResult.error
+      ? serializeSupabaseError(persistedChecklistResult.error)
+      : null,
+  });
+
   console.log("Planner progress revalidating routes", {
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     routes: ["/planner/dashboard"],
   });
   revalidatePath("/planner/dashboard");
@@ -798,6 +1004,7 @@ export async function removePlannerProgressItemAction(formData: FormData) {
   const profile = await requirePlannerProfile("/planner/dashboard");
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
 
   const nextPath = normalizePlannerNextPath(
     String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
@@ -813,12 +1020,12 @@ export async function removePlannerProgressItemAction(formData: FormData) {
   const { data: blueprints, error: blueprintError } = await supabase
     .from("blueprints")
     .select("id, checklist_json")
-    .eq("user_id", profile.id)
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
 
   console.log("Planner progress remove load response", {
     table: "blueprints",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     itemKey,
     dataCount: blueprints?.length ?? 0,
     error: blueprintError ? serializeSupabaseError(blueprintError) : null,
@@ -858,7 +1065,7 @@ export async function removePlannerProgressItemAction(formData: FormData) {
 
   console.log("Planner progress remove update response", {
     table: "blueprints",
-    plannerUserId: profile.id,
+    plannerUserId: ownerId,
     blueprintId: blueprint.id,
     itemKey,
     normalizedCount: normalized.length,
@@ -1136,6 +1343,24 @@ async function ensurePlannerUserRow(
     payload,
     error: error ? serializeSupabaseError(error) : null,
   });
+}
+
+async function resolvePlannerOwnerId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  fallbackId: string,
+) {
+  const { data, error } = await supabase.auth.getUser();
+  const authUserId = data.user?.id ?? null;
+
+  if (error) {
+    console.error("Planner action auth owner resolution failed", {
+      fallbackId,
+      error: serializeSupabaseError(error),
+    });
+    return fallbackId;
+  }
+
+  return authUserId || fallbackId;
 }
 
 function isUuid(value: string) {

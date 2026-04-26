@@ -56,7 +56,6 @@ export default async function VendorDashboardPage(props: {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_44%,#ffffff_100%)]">
-      <div className="wedding-floral-texture absolute inset-0 opacity-[0.1]" />
       <div className="wedding-floral-accent-gold absolute -right-16 top-28 h-56 w-56 opacity-[0.12]" />
       <div className="wedding-floral-accent-gold absolute -left-20 bottom-10 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />

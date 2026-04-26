@@ -1,0 +1,25 @@
+"use client";
+
+import type { ButtonHTMLAttributes, MouseEvent } from "react";
+
+type ConfirmSubmitButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  confirmMessage: string;
+};
+
+export function ConfirmSubmitButton({
+  confirmMessage,
+  onClick,
+  ...props
+}: ConfirmSubmitButtonProps) {
+  const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (!window.confirm(confirmMessage)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    onClick?.(event);
+  };
+
+  return <button {...props} onClick={handleClick} />;
+}

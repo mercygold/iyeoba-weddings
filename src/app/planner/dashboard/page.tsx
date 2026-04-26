@@ -2,10 +2,13 @@ import Link from "next/link";
 
 import {
   createVendorInquiryAction,
+  deleteWeddingEventAction,
   removePlannerProgressItemAction,
   savePlannerProgressItemAction,
+  saveWeddingEventAction,
   updatePlannerInquiryStatusAction,
 } from "@/app/planner/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
 import { PlannerConversationCenter } from "@/components/planner-conversation-center";
@@ -17,8 +20,8 @@ import {
   getPlannerInquiries,
   getPlannerSavedVendors,
 } from "@/lib/inquiries";
+import { budgetRanges, cultures, locations, weddingTypes } from "@/lib/planner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getVendorsBySlugs } from "@/lib/vendors";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -54,6 +57,8 @@ export default async function PlannerDashboardPage(props: {
 }) {
   const profile = await requirePlannerProfile("/planner/dashboard");
   const searchParams = await props.searchParams;
+  const supabase = await createSupabaseServerClient();
+  const ownerId = await resolvePlannerOwnerIdForDashboard(supabase, profile.id);
 
   const message =
     typeof searchParams.message === "string" ? searchParams.message : undefined;
@@ -61,42 +66,15 @@ export default async function PlannerDashboardPage(props: {
     typeof searchParams.error === "string" ? searchParams.error : undefined;
   const feedbackError = message ? undefined : error;
 
-  const weddingOverview = await getWeddingOverview(profile.id);
-  const progressItems = await getPlannerProgressItems(profile.id);
+  const { weddingEvents, loadError: weddingEventsLoadError } = await getWeddingEvents(ownerId);
+  const editWeddingId =
+    typeof searchParams.editWedding === "string" ? searchParams.editWedding : null;
+  const showAddWeddingForm = searchParams.addWedding === "1";
+  const progressItems = await getPlannerProgressItems(ownerId);
 
-  const dbSavedVendors = await getPlannerSavedVendors(profile.id);
-  const legacySavedVendors = await getVendorsBySlugs(
-    typeof searchParams.saved === "string"
-      ? [searchParams.saved]
-      : Array.isArray(searchParams.saved)
-        ? searchParams.saved
-        : [],
-  );
-  const savedVendors = [
-    ...dbSavedVendors,
-    ...legacySavedVendors
-      .filter((vendor) => vendor.id)
-      .map((vendor) => ({
-        id: `legacy-${vendor.id}`,
-        createdAt: new Date(0).toISOString(),
-        vendor: {
-          id: vendor.id!,
-          slug: vendor.slug,
-          businessName: vendor.businessName,
-          category: vendor.category,
-          location: vendor.location,
-          whatsapp: vendor.whatsapp || null,
-          contactEmail: vendor.contactEmail || null,
-          imageUrl: vendor.imageUrl,
-          priceRange: vendor.priceRange ?? "Contact vendor",
-        },
-      })),
-  ].filter(
-    (item, index, array) =>
-      array.findIndex((entry) => entry.vendor.id === item.vendor.id) === index,
-  );
+  const savedVendors = await getPlannerSavedVendors(ownerId);
 
-  const inquiries = await getPlannerInquiries(profile.id);
+  const inquiries = await getPlannerInquiries(ownerId);
   const conversationsByVendor = buildConversationsByVendor(inquiries);
   const inquiryVendorMap = new Map(
     inquiries.map((inquiry) => [inquiry.vendor.id, inquiry.vendor]),
@@ -121,17 +99,17 @@ export default async function PlannerDashboardPage(props: {
 
   console.log("Planner dashboard data source summary", {
     plannerUserId: profile.id,
+    authOwnerId: ownerId,
+    ownerIdMismatch: ownerId !== profile.id,
     readSources: {
       weddingOverview: "weddings",
-      progressItems: "blueprints.checklist_json + catalog defaults",
-      savedVendors: "saved_vendors + vendors directory",
+      progressItems: "blueprints.checklist_json",
+      savedVendors: "saved_vendors",
       inquiries: "leads + lead_messages",
     },
     counts: {
       progressItems: progressItems.length,
       savedVendors: savedVendors.length,
-      dbSavedVendors: dbSavedVendors.length,
-      legacySavedVendors: legacySavedVendors.length,
       inquiries: inquiries.length,
       conversationsByVendor: conversationsByVendor.size,
     },
@@ -147,42 +125,175 @@ export default async function PlannerDashboardPage(props: {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_46%,#ffffff_100%)]">
-      <div className="wedding-floral-texture absolute inset-0 opacity-[0.1]" />
       <div className="wedding-floral-accent-gold absolute -right-16 top-32 h-56 w-56 opacity-[0.12]" />
       <div className="wedding-floral-accent-gold absolute -left-20 bottom-16 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
       <MainNav />
-      <main className="relative mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
+      <main className="relative mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <section className="surface-card rounded-[2rem] p-5 sm:p-7">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
-            Wedding Overview
-          </p>
-          {weddingOverview ? (
-            <>
-              <h1 className="font-display mt-3 text-3xl text-[color:var(--color-ink)] sm:text-4xl">
-                {weddingOverview.culture} {weddingOverview.weddingType}
-              </h1>
-              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <MetricCard label="Culture" value={weddingOverview.culture} />
-                <MetricCard label="Wedding type" value={weddingOverview.weddingType} />
-                <MetricCard label="Location" value={weddingOverview.location} />
-                <MetricCard label="Guest count" value={String(weddingOverview.guestCount)} />
-                <MetricCard label="Budget" value={weddingOverview.budgetRange} />
-              </div>
-            </>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
+              Wedding Overview
+            </p>
+            <Link href="/planner/dashboard?addWedding=1" className="btn-primary px-4 py-2 text-sm">
+              Add wedding event
+            </Link>
+          </div>
+          {weddingEventsLoadError ? (
+            <div className="mt-4 rounded-[1.35rem] border border-red-200 bg-red-50 p-5 sm:p-6">
+              <h2 className="font-display text-2xl text-red-700 sm:text-3xl">
+                We could not load your wedding events right now
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-7 text-red-700/90 sm:text-base">
+                Try refreshing this page. Your saved events were not loaded from the database in this request.
+              </p>
+            </div>
+          ) : weddingEvents.length ? (
+            <div className="mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent] md:grid md:overflow-visible md:pb-0 md:[scrollbar-width:auto] md:[scrollbar-color:auto]">
+              {weddingEvents.map((event) => {
+                const isEditing = editWeddingId === event.id;
+                return (
+                  <article key={event.id} className="surface-soft min-w-[88%] snap-start rounded-[1.35rem] p-4 sm:min-w-0 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <h2 className="font-display text-2xl text-[color:var(--color-ink)]">
+                        {event.eventName || `${event.culture} ${event.weddingType}`.trim() || "Wedding event"}
+                      </h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/planner/dashboard?editWedding=${encodeURIComponent(event.id)}`}
+                          className="btn-secondary px-3 py-1.5 text-xs"
+                        >
+                          Edit
+                        </Link>
+                        <form action={deleteWeddingEventAction}>
+                          <input type="hidden" name="weddingId" value={event.id} />
+                          <input type="hidden" name="nextPath" value="/planner/dashboard" />
+                          <ConfirmSubmitButton
+                            type="submit"
+                            confirmMessage="Delete this wedding event? This action cannot be undone."
+                            className="btn-secondary px-3 py-1.5 text-xs"
+                          >
+                            Delete
+                          </ConfirmSubmitButton>
+                        </form>
+                      </div>
+                    </div>
+
+                    {isEditing ? (
+                      <form action={saveWeddingEventAction} className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <input type="hidden" name="weddingId" value={event.id} />
+                        <input type="hidden" name="nextPath" value="/planner/dashboard" />
+                        <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)] sm:col-span-2">
+                          Event title
+                          <input
+                            name="eventName"
+                            defaultValue={event.eventName}
+                            placeholder="Edo Traditional wedding"
+                            className="field-input rounded-[1rem]"
+                          />
+                        </label>
+                        <SelectInput name="culture" label="Culture" options={cultures} defaultValue={event.culture} />
+                        <SelectInput
+                          name="weddingType"
+                          label="Wedding type"
+                          options={weddingTypes}
+                          defaultValue={event.weddingType}
+                        />
+                        <SelectInput
+                          name="location"
+                          label="Location"
+                          options={locations}
+                          defaultValue={event.location}
+                        />
+                        <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                          Guest count
+                          <input
+                            type="number"
+                            min={1}
+                            name="guestCount"
+                            required
+                            defaultValue={String(event.guestCount)}
+                            className="field-input rounded-[1rem]"
+                          />
+                        </label>
+                        <div className="sm:col-span-2">
+                          <SelectInput
+                            name="budgetRange"
+                            label="Budget range"
+                            options={budgetRanges}
+                            defaultValue={event.budgetRange}
+                          />
+                        </div>
+                        <div className="sm:col-span-2 flex flex-wrap gap-2">
+                          <button type="submit" className="btn-primary px-4 py-2 text-sm">
+                            Save
+                          </button>
+                          <Link href="/planner/dashboard" className="btn-secondary px-4 py-2 text-sm">
+                            Cancel
+                          </Link>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                        <MetricCard label="Culture" value={event.culture} />
+                        <MetricCard label="Wedding type" value={event.weddingType} />
+                        <MetricCard label="Location" value={event.location} />
+                        <MetricCard label="Guest count" value={String(event.guestCount)} />
+                        <MetricCard label="Budget" value={event.budgetRange} />
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
           ) : (
             <div className="mt-4 surface-soft rounded-[1.35rem] p-5 sm:p-6">
               <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
-                Set up your wedding overview
+                Set up your first wedding event
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-7 text-[color:var(--color-muted)] sm:text-base">
                 Add your culture, wedding type, location, guest count, and budget to personalize your planner.
               </p>
-              <Link href="/planner/setup" className="btn-primary mt-4 inline-flex">
-                Edit Planner
-              </Link>
             </div>
           )}
+          {showAddWeddingForm ? (
+            <form action={saveWeddingEventAction} className="mt-4 surface-soft grid gap-3 rounded-[1.35rem] p-4 sm:grid-cols-2 sm:p-5">
+              <input type="hidden" name="nextPath" value="/planner/dashboard" />
+              <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)] sm:col-span-2">
+                Event title
+                <input
+                  name="eventName"
+                  placeholder="White wedding"
+                  className="field-input rounded-[1rem]"
+                />
+              </label>
+              <SelectInput name="culture" label="Culture" options={cultures} />
+              <SelectInput name="weddingType" label="Wedding type" options={weddingTypes} />
+              <SelectInput name="location" label="Location" options={locations} />
+              <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                Guest count
+                <input
+                  type="number"
+                  min={1}
+                  name="guestCount"
+                  required
+                  placeholder="e.g. 250"
+                  className="field-input rounded-[1rem]"
+                />
+              </label>
+              <div className="sm:col-span-2">
+                <SelectInput name="budgetRange" label="Budget range" options={budgetRanges} />
+              </div>
+              <div className="sm:col-span-2 flex flex-wrap gap-2">
+                <button type="submit" className="btn-primary px-4 py-2 text-sm">
+                  Save wedding event
+                </button>
+                <Link href="/planner/dashboard" className="btn-secondary px-4 py-2 text-sm">
+                  Cancel
+                </Link>
+              </div>
+            </form>
+          ) : null}
         </section>
 
         {message ? (
@@ -196,7 +307,7 @@ export default async function PlannerDashboardPage(props: {
           </p>
         ) : null}
 
-        <section className="surface-card rounded-[2rem] p-5 sm:p-7">
+        <section className="surface-card rounded-[2rem] p-4 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
@@ -228,9 +339,9 @@ export default async function PlannerDashboardPage(props: {
             />
           </div>
 
-          <div className="mt-6 grid gap-3">
+          <div className="mt-5 grid gap-2.5 sm:mt-6 sm:gap-3">
             {progressItems.map((item) => (
-              <form key={item.key} action={savePlannerProgressItemAction} className="surface-soft flex flex-col gap-3 rounded-[1.3rem] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <form key={item.key} action={savePlannerProgressItemAction} className="surface-soft flex flex-col gap-2.5 rounded-[1.1rem] px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:rounded-[1.3rem] sm:px-4 sm:py-3">
                 <input type="hidden" name="nextPath" value="/planner/dashboard" />
                 <input type="hidden" name="itemKey" value={item.key} />
                 <input type="hidden" name="itemLabel" value={item.label} />
@@ -239,20 +350,20 @@ export default async function PlannerDashboardPage(props: {
                   <select
                     name="status"
                     defaultValue={item.status}
-                    className="field-input rounded-[999px] px-3 py-1.5 text-xs font-semibold"
+                    className="field-input rounded-[999px] px-3 py-1.5 text-[11px] font-semibold sm:text-xs"
                   >
                     <option value="not_done">Not done</option>
                     <option value="ongoing">Ongoing</option>
                     <option value="done">Done</option>
                   </select>
-                  <button type="submit" className="btn-secondary w-full px-3 py-1.5 text-sm sm:w-auto">
+                  <button type="submit" className="btn-secondary w-full px-3 py-1.5 text-xs sm:w-auto sm:text-sm">
                     Save
                   </button>
                 </div>
                 <button
                   formAction={removePlannerProgressItemAction}
                   type="submit"
-                  className="btn-secondary w-full px-3 py-1.5 text-sm sm:w-auto"
+                  className="btn-secondary w-full px-3 py-1.5 text-xs sm:w-auto sm:text-sm"
                 >
                   Remove
                 </button>
@@ -260,7 +371,7 @@ export default async function PlannerDashboardPage(props: {
             ))}
           </div>
 
-          <form action={savePlannerProgressItemAction} className="mt-5 flex flex-wrap items-end gap-3">
+          <form action={savePlannerProgressItemAction} className="mt-4 flex flex-wrap items-end gap-2.5 sm:mt-5 sm:gap-3">
             <input type="hidden" name="nextPath" value="/planner/dashboard" />
             <div className="min-w-[220px] flex-1">
               <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-muted)]">
@@ -313,7 +424,7 @@ export default async function PlannerDashboardPage(props: {
               Your shortlist
             </h2>
             {savedVendors.length ? (
-              <div className="mt-5 grid gap-4">
+              <div className="mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent] sm:grid sm:overflow-visible sm:pb-0 sm:[scrollbar-width:auto] sm:[scrollbar-color:auto] sm:gap-4">
                 {savedVendors.map((saved) => {
                   const conversation = conversationsByVendor.get(saved.vendor.id) ?? null;
                   const compareActive = compareIds.includes(saved.vendor.id);
@@ -325,7 +436,7 @@ export default async function PlannerDashboardPage(props: {
                   );
 
                   return (
-                    <div key={saved.id} className="surface-soft rounded-[1.5rem] p-5">
+                    <div key={saved.id} className="surface-soft min-w-[88%] snap-start rounded-[1.5rem] p-4 sm:min-w-0 sm:p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
@@ -635,13 +746,38 @@ function toTime(value: string | null | undefined) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-async function getWeddingOverview(userId: string) {
+type WeddingEvent = {
+  id: string;
+  eventName: string;
+  culture: string;
+  weddingType: string;
+  location: string;
+  guestCount: number;
+  budgetRange: string;
+  createdAt: string | null;
+};
+
+async function getWeddingEvents(
+  userId: string,
+): Promise<{ weddingEvents: WeddingEvent[]; loadError: boolean }> {
   const supabase = await createSupabaseServerClient();
-  const { data: weddings, error } = await supabase
+  const primaryResult = await supabase
     .from("weddings")
-    .select("culture, wedding_type, location, guest_count, budget_range")
+    .select("id, event_name, culture, wedding_type, location, guest_count, budget_range, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
+
+  const fallbackResult =
+    primaryResult.error && isWeddingSchemaDriftError(primaryResult.error)
+      ? await supabase
+      .from("weddings")
+      .select("id, culture, wedding_type, location, guest_count, budget_range, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      : null;
+
+  const weddings = fallbackResult?.data ?? primaryResult.data;
+  const error = fallbackResult?.error ?? primaryResult.error;
 
   console.log("Planner wedding overview read", {
     table: "weddings",
@@ -658,30 +794,51 @@ async function getWeddingOverview(userId: string) {
   });
 
   if (error) {
-    return null;
+    return {
+      weddingEvents: [],
+      loadError: true,
+    };
   }
 
-  const data = Array.isArray(weddings) ? weddings[0] ?? null : null;
-  if (!data) {
-    return null;
-  }
-
+  const rows = Array.isArray(weddings) ? weddings : [];
+  console.log("weddings:", rows);
   return {
-    culture: data.culture ?? "",
-    weddingType: data.wedding_type ?? "",
-    location: data.location ?? "",
-    guestCount: typeof data.guest_count === "number" ? data.guest_count : 0,
-    budgetRange: data.budget_range ?? "",
+    loadError: false,
+    weddingEvents: rows
+    .filter((row) => Boolean(row?.id))
+    .map((row) => ({
+      id: String(row.id),
+      eventName:
+        typeof (row as Record<string, unknown>)["event_name"] === "string"
+          ? String((row as Record<string, unknown>)["event_name"]).trim()
+          : "",
+      culture: typeof row.culture === "string" ? row.culture.trim() || "Not set" : "Not set",
+      weddingType:
+        typeof row.wedding_type === "string"
+          ? row.wedding_type.trim() || "Not set"
+          : "Not set",
+      location: typeof row.location === "string" ? row.location.trim() || "Not set" : "Not set",
+      guestCount: typeof row.guest_count === "number" ? row.guest_count : 0,
+      budgetRange:
+        typeof row.budget_range === "string" ? row.budget_range.trim() || "Not set" : "Not set",
+      createdAt: typeof row.created_at === "string" ? row.created_at : null,
+    })),
   };
 }
 
-async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> {
-  const defaults: ProgressItem[] = progressCatalog.map((label) => ({
-    key: slugify(label),
-    label,
-    status: "not_done",
-  }));
+function isWeddingSchemaDriftError(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "PGRST204" ||
+    (message.includes("column") &&
+      (message.includes("does not exist") || message.includes("could not find")))
+  );
+}
 
+async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> {
   const supabase = await createSupabaseServerClient();
   const { data: blueprints, error } = await supabase
     .from("blueprints")
@@ -711,10 +868,12 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
   }
 
   if (!data?.id) {
-    return defaults;
+    console.log("checklist:", []);
+    return [];
   }
 
   if (!Array.isArray(data?.checklist_json)) {
+    console.log("checklist:", []);
     return [];
   }
 
@@ -730,10 +889,7 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
     }))
     .filter((item) => item.key && item.label) as ProgressItem[];
 
-  if (!loaded.length) {
-    return defaults;
-  }
-
+  console.log("checklist:", loaded);
   return loaded;
 }
 
@@ -746,4 +902,57 @@ function normalizePlannerProgressStatus(value: unknown): ProgressStatus {
     return "ongoing";
   }
   return "not_done";
+}
+
+function SelectInput({
+  name,
+  label,
+  options,
+  defaultValue,
+}: {
+  name: string;
+  label: string;
+  options: string[];
+  defaultValue?: string;
+}) {
+  return (
+    <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+      {label}
+      <select
+        name={name}
+        required
+        className="field-input rounded-[1rem]"
+        defaultValue={defaultValue || ""}
+      >
+        <option value="" disabled>
+          Select {label.toLowerCase()}
+        </option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+async function resolvePlannerOwnerIdForDashboard(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  fallbackId: string,
+) {
+  const { data, error } = await supabase.auth.getUser();
+  const authUserId = data.user?.id ?? null;
+
+  if (error) {
+    console.error("Planner dashboard auth owner resolution failed", {
+      fallbackId,
+      error: {
+        message: error.message ?? null,
+      },
+    });
+    return fallbackId;
+  }
+
+  return authUserId || fallbackId;
 }

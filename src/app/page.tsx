@@ -26,20 +26,23 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(91,44,131,0.08),_transparent_34%),linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
       <MainNav />
-      <section className="relative h-[560px] overflow-hidden px-4 pb-7 pt-1 sm:h-[620px] sm:px-6 sm:pb-10 md:h-[700px] md:px-10 md:pb-12 lg:h-[760px] lg:px-12 lg:pb-14 lg:pt-1.5">
+      <section className="relative h-[560px] overflow-hidden px-4 pb-4 pt-0.5 sm:h-[620px] sm:px-6 sm:pb-10 md:h-[700px] md:px-10 md:pb-12 lg:h-[760px] lg:px-12 lg:pb-14 lg:pt-1.5">
         <div
           className="pointer-events-none absolute inset-0 bg-cover opacity-[0.84]"
-          style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')", backgroundPosition: "center top" }}
+          style={{ backgroundImage: "url('/images/wedding-romance-bg.jpg')", backgroundPosition: "center 20%" }}
           aria-hidden="true"
         />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.12)_0%,rgba(31,31,31,0.02)_34%,rgba(31,31,31,0.06)_100%)]" />
         <div className="relative mx-auto flex h-full max-w-6xl flex-col justify-end">
-          <h1 className="mx-auto mb-2 max-w-4xl rounded-[1.1rem] bg-[linear-gradient(180deg,rgba(74,34,104,0.3)_0%,rgba(74,34,104,0.14)_64%,rgba(74,34,104,0)_100%)] px-3 py-1.5 text-center text-2xl font-semibold tracking-[-0.03em] text-white/95 drop-shadow-[0_4px_20px_rgba(74,34,104,0.45)] sm:mb-3 sm:px-5 sm:py-2 sm:text-3xl md:mb-4 md:text-5xl">
+          <h1 className="mx-auto mb-1 max-w-4xl rounded-[1rem] bg-[linear-gradient(180deg,rgba(74,34,104,0.22)_0%,rgba(74,34,104,0.1)_64%,rgba(74,34,104,0)_100%)] px-3 py-1 text-center text-[1.28rem] font-semibold leading-tight tracking-[-0.03em] text-white/95 drop-shadow-[0_4px_20px_rgba(74,34,104,0.45)] sm:mb-3 sm:px-5 sm:py-2 sm:text-3xl md:mb-4 md:text-5xl">
             Plan Your Nigerian Wedding Anywhere in the World
           </h1>
-          <div className="mx-auto w-full max-w-5xl rounded-[1.4rem] border border-[rgba(106,62,124,0.1)] bg-white/88 p-3 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] sm:p-3.5 md:p-4">
-            <form action="/vendors" method="get" className="space-y-2.5">
-              <div className="flex flex-col gap-2 md:flex-row md:items-end">
+          <div className="mx-auto w-full max-w-5xl rounded-[1.1rem] border border-[rgba(106,62,124,0.1)] bg-white/86 p-2 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] sm:rounded-[1.4rem] sm:p-3.5 md:p-4">
+            <form action="/vendors" method="get" className="space-y-1.5 sm:space-y-2">
+              <p className="px-0.5 text-center text-[0.72rem] leading-4 text-[color:var(--color-brand-primary-dark)] sm:hidden">
+                Search by category, location, and cultural fit.
+              </p>
+              <div className="grid gap-1.5 md:grid-cols-3 md:items-end md:gap-2">
                 <SearchField
                   label="Category"
                   name="category"
@@ -59,29 +62,29 @@ export default async function Home() {
                   allLabel="All cultures"
                 />
               </div>
-              <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-                <button type="submit" className="btn-primary min-w-[145px] px-4 py-2.5 text-sm">
-                  Find Vendors
-                </button>
-                <p className="max-w-2xl text-center text-[0.8rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:px-3 sm:text-[0.86rem]">
+              <div className="grid gap-1.5 sm:flex sm:flex-row sm:items-center sm:justify-between sm:gap-2.5">
+                <p className="order-1 hidden text-center text-[0.78rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:order-2 sm:block sm:max-w-2xl sm:px-3 sm:text-[0.86rem]">
                   Discover trusted Nigerian wedding vendors across Nigeria and the diaspora. Browse by category, location, and cultural fit.
                 </p>
+                <button type="submit" className="btn-primary order-2 w-full min-w-[145px] px-4 py-2 text-sm sm:order-1 sm:w-auto sm:py-2.5">
+                  Find Vendors
+                </button>
                 <Link
                   href="/auth/sign-up?role=vendor"
-                  className="whitespace-nowrap rounded-full border border-[#C9A15B] bg-white px-4 py-2.5 text-sm font-semibold !text-[#5B2C83] transition-all duration-200 ease-in-out hover:border-[#5B2C83] hover:bg-[#5B2C83] hover:!text-white sm:min-w-[175px]"
+                  className="order-3 w-full whitespace-nowrap rounded-full border border-[#C9A15B] bg-white px-4 py-1.5 text-center text-[0.82rem] font-semibold !text-[#5B2C83] transition-all duration-200 ease-in-out hover:border-[#5B2C83] hover:bg-[#5B2C83] hover:!text-white sm:w-auto sm:min-w-[175px] sm:py-2.5 sm:text-sm"
                 >
                   List Your Business
                 </Link>
               </div>
 
-              <div className="grid gap-1.5 border-t border-[rgba(106,62,124,0.08)] pt-2 text-sm text-[color:var(--color-muted)] sm:grid-cols-2 md:grid-cols-3">
+              <div className="hidden gap-1.5 border-t border-[rgba(106,62,124,0.08)] pt-2 text-sm text-[color:var(--color-muted)] sm:grid sm:grid-cols-2 md:grid-cols-3">
                 {trustPoints.map((item) => (
                   <div
                     key={item}
-                    className="flex items-center gap-1.5 rounded-[0.9rem] border border-[rgba(106,62,124,0.06)] bg-[rgba(233,221,240,0.55)] px-2.5 py-1.5"
+                    className="flex items-center gap-1.5 rounded-[0.9rem] border border-[rgba(106,62,124,0.06)] bg-[rgba(233,221,240,0.55)] px-2 py-1.5"
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-brand-gold)]" />
-                    <span className="text-[0.74rem] leading-5">{item}</span>
+                    <span className="text-[0.7rem] leading-[1.1rem] sm:text-[0.74rem] sm:leading-5">{item}</span>
                   </div>
                 ))}
               </div>
@@ -90,43 +93,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-14 px-4 pb-12 sm:px-6 md:gap-18 md:px-10 lg:px-12 lg:pb-16">
-        <section id="categories" className="space-y-8">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
-              Browse categories
-            </p>
-            <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)] sm:text-4xl">
-              Explore trusted wedding vendors by category
-            </h2>
-            </div>
-            <p className="max-w-xl text-sm leading-7 text-[color:var(--color-muted)]">
-              Start with the vendor type you need most, then refine by location,
-              culture, and trust markers inside the marketplace.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {VENDOR_CATEGORY_GROUPS.map((category) => (
-              <Link
-                key={category.category}
-                href={`/vendors?category=${encodeURIComponent(category.category)}`}
-                className="rounded-[1.65rem] border border-[rgba(106,62,124,0.09)] bg-white/92 p-5 shadow-[0_18px_44px_-38px_rgba(106,62,124,0.28)] transition hover:-translate-y-0.5 hover:border-[color:var(--color-brand-primary)] hover:shadow-[0_24px_54px_-34px_rgba(106,62,124,0.2)]"
-              >
-                <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
-                  Vendor category
-                </p>
-                <h3 className="font-display mt-3 line-clamp-2 break-words text-2xl text-[color:var(--color-ink)]">
-                  {category.category}
-                </h3>
-                <p className="mt-3 line-clamp-3 break-words text-sm leading-7 text-[color:var(--color-muted)]">
-                  {category.description}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </section>
-
+      <main className="mx-auto flex max-w-6xl flex-col gap-10 px-4 pb-12 sm:gap-12 sm:px-6 md:gap-18 md:px-10 lg:px-12 lg:pb-16">
         <section className="relative space-y-7 overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.08)] bg-[rgba(255,255,255,0.85)] p-5 shadow-[0_20px_55px_-44px_rgba(31,31,31,0.22)] backdrop-blur-sm md:p-6">
           <div
             className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-18"
@@ -170,27 +137,63 @@ export default async function Home() {
           </div>
         </section>
 
+        <section id="categories" className="space-y-6 sm:space-y-8">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
+              Browse categories
+            </p>
+            <h2 className="font-display mt-2 text-2xl leading-tight text-[color:var(--color-ink)] sm:text-4xl">
+              Explore trusted wedding vendors by category
+            </h2>
+            </div>
+            <p className="max-w-xl text-sm leading-7 text-[color:var(--color-muted)]">
+              Start with the vendor type you need most, then refine by location,
+              culture, and trust markers inside the marketplace.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {VENDOR_CATEGORY_GROUPS.map((category) => (
+              <Link
+                key={category.category}
+                href={`/vendors?category=${encodeURIComponent(category.category)}`}
+                className="rounded-[1.5rem] border border-[rgba(106,62,124,0.09)] bg-white/92 p-4 shadow-[0_18px_44px_-38px_rgba(106,62,124,0.28)] transition hover:-translate-y-0.5 hover:border-[color:var(--color-brand-primary)] hover:shadow-[0_24px_54px_-34px_rgba(106,62,124,0.2)] sm:rounded-[1.65rem] sm:p-5"
+              >
+                <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
+                  Vendor category
+                </p>
+                <h3 className="font-display mt-2.5 line-clamp-2 break-words text-xl text-[color:var(--color-ink)] sm:mt-3 sm:text-2xl">
+                  {category.category}
+                </h3>
+                <p className="mt-2.5 line-clamp-3 break-words text-sm leading-6 text-[color:var(--color-muted)] sm:mt-3 sm:leading-7">
+                  {category.description}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.92)] p-6 shadow-[0_22px_56px_-40px_rgba(31,31,31,0.22)] backdrop-blur-sm md:p-8">
           <div className="wedding-floral-texture absolute inset-0" />
           <div className="relative grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div className="space-y-4">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
-                Yoruba wedding culture
+                Nigerian wedding culture
               </p>
               <h2 className="font-display text-3xl text-[color:var(--color-ink)] sm:text-4xl">
-                Celebrate Yoruba elegance with vendors who understand tradition.
+                Celebrate elegance with vendors who understand tradition.
               </h2>
               <p className="text-base leading-8 text-[color:var(--color-muted)]">
-                From engagement ceremonies to the main wedding day, discover
-                planners, photographers, decor teams, and fashion vendors who
-                reflect Yoruba style, heritage, and modern luxury.
+                From engagement ceremonies to the wedding day, discover
+                planners, photographers, decorators, and fashion vendors who
+                reflect Nigerian wedding styles, heritage, and modern luxury.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href="/vendors?culture=Yoruba%20weddings"
+                  href="/vendors"
                   className="btn-primary"
                 >
-                  Explore Yoruba Vendors
+                  Explore Nigerian Vendors
                 </Link>
                 <Link href="/vendors" className="btn-secondary">
                   Browse all cultures
@@ -213,8 +216,6 @@ export default async function Home() {
             </div>
           </div>
         </section>
-
-        <TikTokSection latestTikToks={latestTikToks} topTikToks={topTikToks} />
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.92)] p-8 shadow-[0_18px_44px_-38px_rgba(31,31,31,0.2)] backdrop-blur-sm">
@@ -263,6 +264,8 @@ export default async function Home() {
           </div>
         </section>
 
+        <TikTokSection latestTikToks={latestTikToks} topTikToks={topTikToks} />
+
         <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.76)] p-8 shadow-[0_20px_55px_-42px_rgba(31,31,31,0.24)] backdrop-blur-sm">
           <div
             className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.9]"
@@ -302,13 +305,13 @@ function SearchField({
   allLabel: string;
 }) {
   return (
-    <label className="grid flex-1 gap-1.5 rounded-[1rem] border border-[rgba(106,62,124,0.05)] bg-[color:var(--color-surface)] p-2.5">
+    <label className="grid flex-1 gap-1 rounded-[0.9rem] border border-[rgba(106,62,124,0.05)] bg-[color:var(--color-surface)] p-1.5 sm:gap-1.5 sm:rounded-[1rem] sm:p-2.5">
       <p className="text-[0.63rem] uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
         {label}
       </p>
       <select
         name={name}
-        className="rounded-lg border border-[color:var(--color-brand-light)] bg-white px-3 py-2 text-sm text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-brand-primary)] focus:shadow-[0_0_0_4px_rgba(233,221,240,0.45)]"
+        className="rounded-lg border border-[color:var(--color-brand-light)] bg-white px-2.5 py-1.5 text-[0.88rem] text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-brand-primary)] focus:shadow-[0_0_0_4px_rgba(233,221,240,0.45)] sm:px-3 sm:py-2 sm:text-sm"
         defaultValue=""
       >
         <option value="">{allLabel}</option>

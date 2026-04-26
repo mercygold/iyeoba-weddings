@@ -66,7 +66,7 @@ export function PlannerConversationCenter({
   });
 
   return (
-    <article className="surface-card rounded-[2rem] p-5 sm:p-7">
+    <article className="surface-card rounded-[2rem] p-4 sm:p-7">
       <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
         Conversations
       </p>
@@ -79,11 +79,11 @@ export function PlannerConversationCenter({
           No conversations yet.
         </p>
       ) : (
-        <div className="mt-5 grid min-h-[480px] gap-4 lg:min-h-[560px] lg:grid-cols-[320px_1fr]">
+        <div className="mt-4 grid min-h-[360px] gap-3 sm:mt-5 sm:gap-4 lg:min-h-[560px] lg:grid-cols-[320px_1fr]">
           <div
             className={`min-h-0 ${selectedConversation ? "hidden lg:block" : "block"}`}
           >
-            <div className="h-full overflow-y-auto rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2">
+            <div className="h-full max-h-[360px] overflow-y-auto rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2 lg:max-h-none">
               {sortedConversations.map((conversation) => {
                 const lastMessage = getLastMessage(conversation.messages);
                 const isActive = selectedVendorId === conversation.vendor.id;
@@ -151,16 +151,16 @@ export function PlannerConversationCenter({
                   </button>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <div className="relative isolate min-h-0 flex-1 overflow-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
                   {selectedConversation.messages.length ? (
-                    <div className="space-y-3">
+                    <div className="relative z-10 space-y-3">
                       {selectedConversation.messages.map((item) => (
                         <div
                           key={item.id}
                           className={`flex ${item.senderRole === "planner" ? "justify-end" : "justify-start"}`}
                         >
                           <div
-                            className={`max-w-[92%] rounded-[1.25rem] px-4 py-3 ${
+                            className={`max-w-[94%] rounded-[1.25rem] px-3 py-2.5 sm:max-w-[92%] sm:px-4 sm:py-3 ${
                               item.senderRole === "planner"
                                 ? "bg-[color:var(--color-brand-primary)] text-white"
                                 : "bg-[rgba(106,62,124,0.08)] text-[color:var(--color-ink)]"
@@ -169,7 +169,7 @@ export function PlannerConversationCenter({
                             <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-80">
                               {item.senderLabel}
                             </p>
-                            <p className="mt-1 text-sm leading-6">{item.body}</p>
+                            <p className="mt-1 text-[0.84rem] leading-5 sm:text-sm sm:leading-6">{item.body}</p>
                             {formatDateTime(item.createdAt) ? (
                               <p className="mt-1 text-[11px] opacity-75">
                                 {formatDateTime(item.createdAt)}
@@ -180,14 +180,14 @@ export function PlannerConversationCenter({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-[color:var(--color-muted)]">
+                    <p className="relative z-10 text-sm text-[color:var(--color-muted)]">
                       Start the conversation.
                     </p>
                   )}
                 </div>
 
                 <div className="border-t border-[rgba(106,62,124,0.12)] px-4 py-4">
-                  <form action={createVendorInquiryAction} className="grid gap-3">
+                  <form action={createVendorInquiryAction} className="grid gap-2.5 sm:gap-3">
                     <input type="hidden" name="vendorId" value={selectedVendor.id} />
                     <input type="hidden" name="vendorSlug" value={selectedVendor.slug} />
                     <input type="hidden" name="contactMethod" value="planner_thread" />
@@ -196,7 +196,7 @@ export function PlannerConversationCenter({
                       name="message"
                       rows={3}
                       placeholder="Write your message to this vendor."
-                      className="field-input min-h-[92px] rounded-[1.1rem] text-sm"
+                      className="field-input min-h-[88px] rounded-[1.1rem] text-sm"
                     />
                     <div className="flex flex-wrap gap-2">
                       <button type="submit" className="btn-primary w-full px-4 py-2 sm:w-auto">

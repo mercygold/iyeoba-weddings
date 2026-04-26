@@ -153,9 +153,9 @@ export function VendorConversationCenter({
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <div className="relative isolate min-h-0 flex-1 overflow-hidden overflow-y-auto px-4 py-4 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
                 {selectedInquiry.messages.length ? (
-                  <div className="space-y-3">
+                  <div className="relative z-10 space-y-3">
                     {selectedInquiry.messages.map((message) => (
                       <div
                         key={message.id}
@@ -182,7 +182,7 @@ export function VendorConversationCenter({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-[color:var(--color-muted)]">
+                  <p className="relative z-10 text-sm text-[color:var(--color-muted)]">
                     Start the conversation.
                   </p>
                 )}

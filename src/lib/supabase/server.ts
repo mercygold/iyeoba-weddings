@@ -75,6 +75,12 @@ function nullSupabaseClient(
           error: new Error(message),
         };
       },
+      async verifyOtp() {
+        return {
+          data: { user: null, session: null },
+          error: new Error(message),
+        };
+      },
     },
     from() {
       return {

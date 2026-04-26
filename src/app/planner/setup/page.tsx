@@ -9,16 +9,17 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function PlannerSetupPage(props: { searchParams: SearchParams }) {
   const profile = await requirePlannerProfile("/planner/setup");
   const searchParams = await props.searchParams;
+  const supabase = await createSupabaseServerClient();
+  const ownerId = await resolvePlannerOwnerIdForSetup(supabase, profile.id);
   const message =
     typeof searchParams.message === "string" ? searchParams.message : undefined;
   const error =
     typeof searchParams.error === "string" ? searchParams.error : undefined;
 
-  const supabase = await createSupabaseServerClient();
   const { data: weddings } = await supabase
     .from("weddings")
     .select("culture, wedding_type, location, guest_count, budget_range")
-    .eq("user_id", profile.id)
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
   const weddingOverview = Array.isArray(weddings) ? weddings[0] ?? null : null;
 
@@ -206,4 +207,24 @@ function SelectField({
       </select>
     </label>
   );
+}
+
+async function resolvePlannerOwnerIdForSetup(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  fallbackId: string,
+) {
+  const { data, error } = await supabase.auth.getUser();
+  const authUserId = data.user?.id ?? null;
+
+  if (error) {
+    console.error("Planner setup auth owner resolution failed", {
+      fallbackId,
+      error: {
+        message: error.message ?? null,
+      },
+    });
+    return fallbackId;
+  }
+
+  return authUserId || fallbackId;
 }

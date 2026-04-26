@@ -23,11 +23,14 @@ export async function signUpAction(formData: FormData) {
   const role = String(formData.get("role") ?? "planner");
   const next = String(formData.get("next") ?? "");
   const source = String(formData.get("source") ?? "");
+  const requestOrigin = await getRequestOrigin();
+  const siteUrl = getAuthSiteUrl(requestOrigin);
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: `${siteUrl}/auth/callback`,
       data: {
         full_name: fullName,
         phone,
@@ -172,7 +175,8 @@ export async function requestPasswordResetAction(formData: FormData) {
 
   const supabase = await createSupabaseServerClient();
   const origin = await getRequestOrigin();
-  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/auth/update-password")}`;
+  const siteUrl = getAuthSiteUrl(origin);
+  const redirectTo = `${siteUrl}/auth/reset-password`;
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo,
@@ -184,7 +188,7 @@ export async function requestPasswordResetAction(formData: FormData) {
 
   redirect(
     `/auth/reset-password?message=${encodeURIComponent(
-      "Password reset instructions were sent to your email.",
+      "If an account exists for this email, we’ll send a reset link.",
     )}`,
   );
 }
@@ -241,4 +245,12 @@ async function getRequestOrigin() {
 
   const protocol = forwardedProto ?? (host.includes("localhost") ? "http" : "https");
   return `${protocol}://${host}`;
+}
+
+function getAuthSiteUrl(origin: string) {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/, "");
+  }
+  return origin.replace(/\/+$/, "");
 }

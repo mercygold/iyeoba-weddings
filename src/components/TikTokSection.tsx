@@ -81,7 +81,7 @@ export function TikTokSection({
             Wedding Inspiration from TikTok
           </p>
           <p className="mt-3 max-w-3xl text-base leading-8 text-[color:var(--color-muted)]">
-            Explore Nigerian wedding styles, vendor ideas, cultural moments, and planning inspiration from Iyeoba Weddings.
+            Real Nigerian wedding inspiration is coming soon.
           </p>
         </div>
         <Link
@@ -104,7 +104,7 @@ export function TikTokSection({
 
       {showFallback ? (
         <p className="mt-4 text-xs text-[color:var(--color-muted)]">
-          Showing curated inspiration cards while TikTok API access is unavailable.
+          Wedding inspiration from TikTok. Real Nigerian wedding inspiration is coming soon.
         </p>
       ) : null}
     </section>

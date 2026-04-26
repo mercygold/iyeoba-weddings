@@ -16,16 +16,16 @@ export async function MainNav() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-[rgba(91,44,131,0.1)] bg-white/98 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-1.5 sm:gap-3 sm:px-5 sm:py-[0.14rem] md:px-8 lg:px-10 lg:py-[0.24rem]">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-1.5 px-4 py-1 sm:gap-3 sm:px-5 sm:py-[0.14rem] md:px-8 lg:px-10 lg:py-[0.24rem]">
         <Link
           href="/"
           aria-label="Iyeoba home"
-          className="inline-flex items-center whitespace-nowrap rounded-[0.8rem] bg-white px-1 py-0 leading-none"
+          className="inline-flex items-center whitespace-nowrap rounded-[0.8rem] bg-white px-0.5 py-0 leading-none sm:px-1"
         >
           <IyeobaLogo priority className="gap-0" />
         </Link>
 
-        <nav className="flex flex-nowrap items-center gap-1 text-[0.82rem] font-medium leading-none text-[color:var(--color-muted)] sm:gap-1.5 sm:text-[0.95rem] md:gap-2.5 lg:gap-3.5">
+        <nav className="flex flex-nowrap items-center gap-1 text-[0.78rem] font-medium leading-none text-[color:var(--color-muted)] sm:gap-1.5 sm:text-[0.95rem] md:gap-2.5 lg:gap-3.5">
           <Link
             href="/"
             className="hidden whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268] lg:inline"
@@ -53,7 +53,7 @@ export async function MainNav() {
           {profile ? (
             <Link
               href={dashboardHref}
-              className="whitespace-nowrap rounded-full border border-[#5B2C83] bg-[#5B2C83] px-3 py-[0.38rem] text-sm font-semibold leading-none !text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:!text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)]"
+              className="whitespace-nowrap rounded-full border border-[#5B2C83] bg-[#5B2C83] px-2.5 py-[0.36rem] text-[0.78rem] font-semibold leading-none !text-[#FFFFFF] transition-all duration-200 ease-in-out hover:bg-white hover:!text-[#5B2C83] hover:shadow-[0_10px_22px_-14px_rgba(91,44,131,0.52)] sm:px-3 sm:text-sm"
             >
               Dashboard
             </Link>
@@ -75,7 +75,7 @@ export async function MainNav() {
               <form action={signOutAction}>
                 <button
                   type="submit"
-                  className="whitespace-nowrap rounded-full border border-[#5B2C83] bg-white px-3 py-[0.38rem] text-sm font-semibold leading-none text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[#5B2C83] hover:text-white"
+                  className="whitespace-nowrap rounded-full border border-[#5B2C83] bg-white px-2.5 py-[0.36rem] text-[0.78rem] font-semibold leading-none text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[#5B2C83] hover:text-white sm:px-3 sm:text-sm"
                 >
                   Sign out
                 </button>
