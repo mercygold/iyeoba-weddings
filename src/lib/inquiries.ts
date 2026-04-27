@@ -108,7 +108,7 @@ export async function getPlannerSavedVendors(userId: string) {
   noStore();
   const supabase = await createSupabaseServerClient();
   const admin = createSupabaseAdminClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("saved_vendors")
     .select(
       `
@@ -117,8 +117,24 @@ export async function getPlannerSavedVendors(userId: string) {
         vendor_id
       `,
     )
-    .eq("user_id", userId)
+    .or(`user_id.eq.${userId},planner_user_id.eq.${userId}`)
     .order("created_at", { ascending: false });
+
+  if (error && isSchemaDriftError(error)) {
+    const fallbackResult = await supabase
+      .from("saved_vendors")
+      .select(
+        `
+          id,
+          created_at,
+          vendor_id
+        `,
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
 
   if (error || !data) {
     console.error("Planner saved vendors query failed", {
@@ -702,10 +718,9 @@ export async function getVendorInquiries(userId: string) {
     ...row,
     vendor_user_id:
       row.vendor_user_id ?? vendorOwnerById.get(row.vendor_id ?? "") ?? null,
-    planner_display_name:
-      plannerLookup.get(row.planner_user_id ?? row.user_id ?? "")?.full_name ??
-      plannerLookup.get(row.planner_user_id ?? row.user_id ?? "")?.email ??
-      "Planner",
+    planner_display_name: buildPlannerDisplayName(
+      plannerLookup.get(row.planner_user_id ?? row.user_id ?? ""),
+    ),
     vendor_business_name:
       vendorResult.data.find((vendor) => vendor.id === row.vendor_id)?.business_name ??
       "Vendor",
@@ -734,7 +749,7 @@ export async function getVendorInquiries(userId: string) {
       const createdAt = toValidTimestamp(primaryLead.created_at);
       const threadMessages = buildMergedThreadMessages(
         leadGroup,
-        planner?.full_name || planner?.email || "Planner",
+        buildPlannerDisplayName(planner),
         messagesByLead,
       );
 
@@ -752,7 +767,7 @@ export async function getVendorInquiries(userId: string) {
           ? "archived"
           : normalizeThreadStatus(null, primaryLead.status),
         contactMethod: null,
-        plannerName: planner?.full_name ?? null,
+        plannerName: planner?.full_name?.trim() || emailPrefix(planner?.email) || null,
         plannerEmail: planner?.email ?? null,
         plannerPhone: planner?.phone ?? null,
         weddingSummary: wedding
@@ -1023,7 +1038,22 @@ async function getPlannerDisplayLabel(userId: string) {
     return "Planner";
   }
 
-  return data?.full_name?.trim() || data?.email?.trim() || "Planner";
+  return data?.full_name?.trim() || emailPrefix(data?.email) || "Planner";
+}
+
+function buildPlannerDisplayName(
+  planner:
+    | { full_name?: string | null; email?: string | null; phone?: string | null }
+    | undefined,
+) {
+  return planner?.full_name?.trim() || emailPrefix(planner?.email) || "Planner";
+}
+
+function emailPrefix(email: string | null | undefined) {
+  const value = email?.trim();
+  if (!value) return null;
+  const [prefix] = value.split("@");
+  return prefix?.trim() || null;
 }
 
 function pickPrimaryLeadForThread(leadGroup: LeadRow[]) {

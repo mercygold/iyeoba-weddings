@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MainNav } from "@/components/main-nav";
+import { SignUpCountryPhoneFields } from "@/components/sign-up-country-phone-fields";
 import { signUpAction } from "@/app/auth/actions";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 
@@ -61,17 +62,7 @@ export default async function SignUpPage(props: {
               />
             </div>
 
-            <div className="grid gap-2">
-              <label htmlFor="phone" className="text-sm font-medium text-[color:var(--color-ink)]">
-                Phone
-              </label>
-              <input
-                id="phone"
-                name="phone"
-                required
-                className="field-input rounded-2xl"
-              />
-            </div>
+            <SignUpCountryPhoneFields />
 
             <div className="grid gap-2">
               <label htmlFor="email" className="text-sm font-medium text-[color:var(--color-ink)]">
@@ -96,6 +87,23 @@ export default async function SignUpPage(props: {
               <input
                 id="password"
                 name="password"
+                type="password"
+                required
+                minLength={8}
+                className="field-input rounded-2xl"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="confirmPassword"
+                className="text-sm font-medium text-[color:var(--color-ink)]"
+              >
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
                 type="password"
                 required
                 minLength={8}

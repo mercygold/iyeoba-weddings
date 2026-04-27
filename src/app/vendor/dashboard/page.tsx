@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
+import { CommunicationRealtimeSync } from "@/components/communication-realtime-sync";
 import { VendorConversationCenter } from "@/components/vendor-conversation-center";
 import { VendorDashboardForm } from "@/components/vendor-dashboard-form";
 import {
@@ -59,6 +60,7 @@ export default async function VendorDashboardPage(props: {
       <div className="wedding-floral-accent-gold absolute -right-16 top-28 h-56 w-56 opacity-[0.12]" />
       <div className="wedding-floral-accent-gold absolute -left-20 bottom-10 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
+      <CommunicationRealtimeSync role="vendor" vendorId={vendor?.id ?? null} />
       <MainNav />
       <main className="relative mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">

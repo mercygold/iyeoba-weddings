@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { MainNav } from "@/components/main-nav";
 import { PageViewTracker } from "@/components/page-view-tracker";
+import { getCurrentProfile } from "@/lib/auth";
+import { getPlannerSavedVendors } from "@/lib/inquiries";
 import {
   getAllSubcategoryOptions,
   normalizeVendorCategory,
@@ -20,6 +22,7 @@ export default async function VendorsPage(props: {
   searchParams: SearchParams;
 }) {
   const searchParams = await props.searchParams;
+  const profile = await getCurrentProfile();
   const source = readSingle(searchParams.source);
   const rawCategory = readSingle(searchParams.category);
   const normalizedQueryCategory = rawCategory
@@ -33,7 +36,19 @@ export default async function VendorsPage(props: {
       : undefined);
   const culture = readSingle(searchParams.culture);
   const location = readSingle(searchParams.location);
+  const filterParams = new URLSearchParams();
+  if (category) filterParams.set("category", category);
+  if (subcategory) filterParams.set("subcategory", subcategory);
+  if (culture) filterParams.set("culture", culture);
+  if (location) filterParams.set("location", location);
+  const currentListingPath = filterParams.toString()
+    ? `/vendors?${filterParams.toString()}`
+    : "/vendors";
   const allVendors = await getVendorDirectory();
+  const savedVendorIds =
+    profile?.role === "planner"
+      ? new Set((await getPlannerSavedVendors(profile.id)).map((item) => item.vendor.id))
+      : new Set<string>();
   const vendors = allVendors.filter((vendor) => {
     const categoryMatch = category
       ? vendor.category.toLowerCase() === category.toLowerCase()
@@ -156,7 +171,12 @@ export default async function VendorsPage(props: {
 
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {vendors.map((vendor) => (
-            <VendorCard key={vendor.slug} vendor={vendor} />
+            <VendorCard
+              key={vendor.slug}
+              vendor={vendor}
+              nextPath={currentListingPath}
+              isSaved={vendor.id ? savedVendorIds.has(vendor.id) : false}
+            />
           ))}
         </section>
       </main>

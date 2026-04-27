@@ -18,13 +18,34 @@ export async function signUpAction(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
   const fullName = String(formData.get("fullName") ?? "");
-  const phone = String(formData.get("phone") ?? "");
+  const countryCode = String(formData.get("countryCode") ?? "").trim().toUpperCase();
+  const country = String(formData.get("country") ?? "").trim();
+  const phoneCountryCode = String(formData.get("phoneCountryCode") ?? "").trim();
+  const phoneNumber = String(formData.get("phoneNumber") ?? formData.get("phone") ?? "").trim();
+  const normalizedPhoneNumber = phoneNumber.replace(/[^\d]/g, "");
+  const phone = normalizedPhoneNumber;
+  const fullPhoneNumber = `${phoneCountryCode}${normalizedPhoneNumber}`;
   const role = String(formData.get("role") ?? "planner");
   const next = String(formData.get("next") ?? "");
   const source = String(formData.get("source") ?? "");
   const requestOrigin = await getRequestOrigin();
   const siteUrl = getAuthSiteUrl(requestOrigin);
+
+  if (password.length < 8) {
+    redirect(
+      "/auth/sign-up?error=Please choose a password with at least 8 characters.",
+    );
+  }
+
+  if (password !== confirmPassword) {
+    redirect("/auth/sign-up?error=Passwords do not match.");
+  }
+
+  if (!country || !countryCode || !phoneCountryCode || !normalizedPhoneNumber) {
+    redirect("/auth/sign-up?error=Please select your country and provide a valid phone number.");
+  }
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -34,14 +55,35 @@ export async function signUpAction(formData: FormData) {
       data: {
         full_name: fullName,
         phone,
+        phone_number: normalizedPhoneNumber,
+        phone_country_code: phoneCountryCode,
+        full_phone_number: fullPhoneNumber,
+        country,
+        country_code: countryCode,
         role,
       },
     },
   });
 
   if (error) {
-    redirect(`/auth/sign-up?error=${encodeURIComponent(error.message)}`);
+    logAuthIssue("signUp", {
+      email,
+      role,
+      siteUrl,
+      error,
+    });
+
+    const message = normalizeSignUpErrorMessage(error.message);
+    redirect(`/auth/sign-up?error=${encodeURIComponent(message)}`);
   }
+
+  logAuthIssue("signUpResult", {
+    email,
+    role,
+    userId: data.user?.id ?? null,
+    emailConfirmedAt: data.user?.email_confirmed_at ?? null,
+    hasSession: Boolean(data.session),
+  });
 
   const authUserId = data.user?.id;
   const adminClient = createSupabaseAdminClient();
@@ -53,6 +95,11 @@ export async function signUpAction(formData: FormData) {
       role,
       full_name: fullName || null,
       phone: phone || null,
+      country: country || null,
+      country_code: countryCode || null,
+      phone_country_code: phoneCountryCode || null,
+      phone_number: normalizedPhoneNumber || null,
+      full_phone_number: fullPhoneNumber || null,
     });
 
     if (userUpsertError) {
@@ -125,11 +172,18 @@ export async function signUpAction(formData: FormData) {
   });
 
   revalidatePath("/");
-  if (next) {
-    redirect(`${next}?message=${encodeURIComponent("Check your email to confirm your account.")}`);
+
+  const successMessage = "Check your email to confirm your account. Also check spam/promotions.";
+
+  if (!data.session) {
+    redirect(`/auth/sign-in?message=${encodeURIComponent(successMessage)}`);
   }
 
-  redirect("/dashboard?message=Check your email to confirm your account.");
+  if (next) {
+    redirect(`${next}?message=${encodeURIComponent(successMessage)}`);
+  }
+
+  redirect(`/dashboard?message=${encodeURIComponent(successMessage)}`);
 }
 
 export async function signInAction(formData: FormData) {
@@ -183,12 +237,22 @@ export async function requestPasswordResetAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/auth/reset-password?error=${encodeURIComponent(error.message)}`);
+    logAuthIssue("resetPasswordForEmail", {
+      email,
+      redirectTo,
+      error,
+    });
+
+    redirect(
+      `/auth/reset-password?message=${encodeURIComponent(
+        "If the account exists, a reset link has been sent. Check spam/promotions too.",
+      )}`,
+    );
   }
 
   redirect(
     `/auth/reset-password?message=${encodeURIComponent(
-      "If an account exists for this email, we’ll send a reset link.",
+      "If the account exists, a reset link has been sent. Check spam/promotions too.",
     )}`,
   );
 }
@@ -201,22 +265,23 @@ export async function updatePasswordAction(formData: FormData) {
 
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
+  const returnTo = normalizeReturnPath(String(formData.get("returnTo") ?? ""));
 
   if (password.length < 8) {
     redirect(
-      "/auth/update-password?error=Please choose a password with at least 8 characters.",
+      `${returnTo}?error=Please choose a password with at least 8 characters.`,
     );
   }
 
   if (password !== confirmPassword) {
-    redirect("/auth/update-password?error=Passwords do not match.");
+    redirect(`${returnTo}?error=Passwords do not match.`);
   }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.updateUser({ password });
 
   if (error) {
-    redirect(`/auth/update-password?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/");
@@ -250,7 +315,48 @@ async function getRequestOrigin() {
 function getAuthSiteUrl(origin: string) {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (configured) {
-    return configured.replace(/\/+$/, "");
+    const normalized = normalizeSiteUrl(configured);
+    if (normalized) {
+      return normalized;
+    }
   }
-  return origin.replace(/\/+$/, "");
+
+  if (process.env.NODE_ENV === "production") {
+    return "https://www.iyeobaweddings.com";
+  }
+
+  const normalizedOrigin = normalizeSiteUrl(origin);
+  return normalizedOrigin ?? "http://localhost:3000";
+}
+
+function normalizeSiteUrl(value: string) {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) return null;
+
+  const withProtocol = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeReturnPath(value: string) {
+  return value === "/auth/reset-password" ? value : "/auth/update-password";
+}
+
+function normalizeSignUpErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("already registered") || normalized.includes("already exists")) {
+    return "An account with this email already exists. Try signing in or resetting your password.";
+  }
+  return message;
+}
+
+function logAuthIssue(action: string, details: Record<string, unknown>) {
+  console.error(`[auth:${action}]`, details);
 }

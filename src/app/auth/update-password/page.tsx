@@ -43,6 +43,7 @@ export default async function UpdatePasswordPage(props: {
           ) : null}
 
           <form action={updatePasswordAction} className="grid gap-5">
+            <input type="hidden" name="returnTo" value="/auth/update-password" />
             <div className="grid gap-2">
               <label htmlFor="password" className="text-sm font-medium text-[color:var(--color-ink)]">
                 New password

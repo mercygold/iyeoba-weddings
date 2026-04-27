@@ -9,7 +9,21 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createSupabaseRouteHandlerClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error("[auth:callback] exchangeCodeForSession failed", {
+        error,
+        next,
+      });
+      return NextResponse.redirect(
+        new URL(
+          `/auth/sign-in?error=${encodeURIComponent(
+            "We could not verify your auth link. Please request a new email link.",
+          )}`,
+          requestUrl.origin,
+        ),
+      );
+    }
   }
 
   return NextResponse.redirect(new URL(next, requestUrl.origin));

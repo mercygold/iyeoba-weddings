@@ -8,6 +8,7 @@ import {
 } from "@/app/manage/actions";
 import { MainNav } from "@/components/main-nav";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type SearchParams = Promise<{
@@ -16,7 +17,7 @@ type SearchParams = Promise<{
   message?: string;
 }>;
 
-type ManageTab = "pending" | "approved" | "rejected" | "notes";
+type ManageTab = "pending" | "approved" | "rejected" | "notes" | "users";
 type ManageAdminNote = {
   id: string;
   note: string;
@@ -24,6 +25,16 @@ type ManageAdminNote = {
   vendorName: string | null;
   adminName: string | null;
   adminEmail: string | null;
+};
+type ManageUserSummary = {
+  id: string;
+  email: string;
+  fullName: string | null;
+  phone: string | null;
+  role: string;
+  createdAt: string | null;
+  emailConfirmedAt: string | null;
+  confirmationStatus: "confirmed" | "unconfirmed";
 };
 
 export const dynamic = "force-dynamic";
@@ -36,8 +47,10 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
   const tab = normalizeTab(searchParams.tab);
   const vendors = await getManageVendors();
   const expandedVendorId = typeof searchParams.vendor === "string" ? searchParams.vendor : null;
+  const manageNextPath = buildManageNextPath(tab, expandedVendorId);
   const message = typeof searchParams.message === "string" ? searchParams.message : "";
   const notes = await getAdminNotes();
+  const users = await getManageUsers();
 
   const pendingVendors = vendors.filter((vendor) => vendor.status === "pending_review");
   const approvedVendors = vendors.filter((vendor) => vendor.status === "approved");
@@ -66,7 +79,7 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
           ) : null}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-5">
           <TabCard
             href="/manage?tab=pending"
             label="Pending Vendors"
@@ -91,6 +104,12 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             count={notes.length}
             active={tab === "notes"}
           />
+          <TabCard
+            href="/manage?tab=users"
+            label="Users"
+            count={users.length}
+            active={tab === "users"}
+          />
         </section>
 
         {tab === "pending" ? (
@@ -99,6 +118,7 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             description="Profiles waiting for moderation and approval decisions."
             vendors={pendingVendors}
             expandedVendorId={expandedVendorId}
+            nextPath={manageNextPath}
           />
         ) : null}
 
@@ -108,6 +128,7 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             description="Profiles that are currently live and publicly visible."
             vendors={approvedVendors}
             expandedVendorId={expandedVendorId}
+            nextPath={manageNextPath}
           />
         ) : null}
 
@@ -117,6 +138,7 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             description="Profiles returned for changes or declined from the active review queue."
             vendors={rejectedVendors}
             expandedVendorId={expandedVendorId}
+            nextPath={manageNextPath}
           />
         ) : null}
 
@@ -157,6 +179,66 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             )}
           </section>
         ) : null}
+
+        {tab === "users" ? (
+          <section className="surface-card rounded-[2rem] p-6 sm:p-8">
+            <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+              User Accounts
+            </h2>
+            <p className="mt-2 text-sm text-[color:var(--color-muted)]">
+              Admin-only visibility for account confirmation and contact details.
+            </p>
+
+            {users.length ? (
+              <div className="mt-5 overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-2 text-left text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-[0.12em] text-[color:var(--color-muted)]">
+                      <th className="px-3 py-2">Email</th>
+                      <th className="px-3 py-2">Phone</th>
+                      <th className="px-3 py-2">Role</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => (
+                      <tr key={user.id} className="surface-soft align-top">
+                        <td className="rounded-l-[0.9rem] px-3 py-3">
+                          <p className="font-medium text-[color:var(--color-ink)]">{user.email}</p>
+                          <p className="text-xs text-[color:var(--color-muted)]">
+                            {user.fullName || "No name"}
+                          </p>
+                        </td>
+                        <td className="px-3 py-3 text-[color:var(--color-ink)]">{user.phone || "Not provided"}</td>
+                        <td className="px-3 py-3">
+                          <span className="rounded-full bg-[rgba(106,62,124,0.12)] px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--color-brand-primary)]">
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1">
+                            <ConfirmationBadge status={user.confirmationStatus} />
+                            <span className="text-xs text-[color:var(--color-muted)]">
+                              {user.emailConfirmedAt ? formatDate(user.emailConfirmedAt) : "No confirmation timestamp"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="rounded-r-[0.9rem] px-3 py-3 text-[color:var(--color-muted)]">
+                          {formatDate(user.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-[color:var(--color-muted)]">
+                No user records available.
+              </p>
+            )}
+          </section>
+        ) : null}
       </main>
     </div>
   );
@@ -193,11 +275,13 @@ function VendorSection({
   description,
   vendors,
   expandedVendorId,
+  nextPath,
 }: {
   title: string;
   description: string;
   vendors: AdminVendorSubmission[];
   expandedVendorId: string | null;
+  nextPath: string;
 }) {
   return (
     <section className="surface-card rounded-[2rem] p-6 sm:p-8">
@@ -231,14 +315,17 @@ function VendorSection({
                   </Link>
                   <form action={approveVendorAction}>
                     <input type="hidden" name="vendorId" value={vendor.id} />
+                    <input type="hidden" name="nextPath" value={nextPath} />
                     <button type="submit" className="btn-primary px-3 py-1.5 text-sm">Approve</button>
                   </form>
                   <form action={rejectVendorAction}>
                     <input type="hidden" name="vendorId" value={vendor.id} />
+                    <input type="hidden" name="nextPath" value={nextPath} />
                     <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">Reject</button>
                   </form>
                   <form action={setVendorPendingAction}>
                     <input type="hidden" name="vendorId" value={vendor.id} />
+                    <input type="hidden" name="nextPath" value={nextPath} />
                     <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">Mark Pending</button>
                   </form>
                 </div>
@@ -312,6 +399,7 @@ function VendorSection({
 
                     <form action={addManageVendorNoteAction} className="md:col-span-2 grid gap-3">
                       <input type="hidden" name="vendorId" value={vendor.id} />
+                      <input type="hidden" name="nextPath" value={nextPath} />
                       <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
                         Add internal note/message
                         <textarea
@@ -363,6 +451,18 @@ function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
+function ConfirmationBadge({ status }: { status: "confirmed" | "unconfirmed" }) {
+  const tone =
+    status === "confirmed"
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-amber-100 text-amber-700";
+  return (
+    <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${tone}`}>
+      {status}
+    </span>
+  );
+}
+
 function tabForStatus(status: string | null) {
   if (status === "approved") return "approved";
   if (status === "pending_review") return "pending";
@@ -370,8 +470,17 @@ function tabForStatus(status: string | null) {
 }
 
 function normalizeTab(tab: string | undefined): ManageTab {
-  if (tab === "approved" || tab === "rejected" || tab === "notes") return tab;
+  if (tab === "approved" || tab === "rejected" || tab === "notes" || tab === "users") return tab;
   return "pending";
+}
+
+function buildManageNextPath(tab: ManageTab, expandedVendorId: string | null) {
+  const params = new URLSearchParams();
+  params.set("tab", tab);
+  if (expandedVendorId) {
+    params.set("vendor", expandedVendorId);
+  }
+  return `/manage?${params.toString()}`;
 }
 
 type AdminVendorSubmission = {
@@ -486,6 +595,53 @@ async function getAdminNotes(): Promise<ManageAdminNote[]> {
       vendorName: vendor?.business_name ?? null,
       adminName: admin?.full_name ?? null,
       adminEmail: admin?.email ?? null,
+    };
+  });
+}
+
+async function getManageUsers(): Promise<ManageUserSummary[]> {
+  const adminClient = createSupabaseAdminClient();
+  if (!adminClient) {
+    console.error("[manage:getManageUsers] missing service-role admin client");
+    return [];
+  }
+
+  const [{ data: publicUsers, error: publicUsersError }, { data: authUsers, error: authUsersError }] =
+    await Promise.all([
+      adminClient
+        .from("users")
+        .select("id, email, full_name, phone, role, created_at")
+        .order("created_at", { ascending: false }),
+      adminClient
+        .schema("auth")
+        .from("users")
+        .select("id, email_confirmed_at"),
+    ]);
+
+  if (publicUsersError) {
+    console.error("[manage:getManageUsers] failed to fetch public.users", publicUsersError);
+    return [];
+  }
+
+  if (authUsersError) {
+    console.error("[manage:getManageUsers] failed to fetch auth.users", authUsersError);
+  }
+
+  const confirmationByUserId = new Map<string, string | null>(
+    (authUsers ?? []).map((row) => [row.id, row.email_confirmed_at ?? null]),
+  );
+
+  return (publicUsers ?? []).map((row) => {
+    const emailConfirmedAt = confirmationByUserId.get(row.id) ?? null;
+    return {
+      id: row.id,
+      email: row.email,
+      fullName: row.full_name ?? null,
+      phone: row.phone ?? null,
+      role: row.role,
+      createdAt: row.created_at ?? null,
+      emailConfirmedAt,
+      confirmationStatus: emailConfirmedAt ? "confirmed" : "unconfirmed",
     };
   });
 }

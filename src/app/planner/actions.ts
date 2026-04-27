@@ -289,11 +289,11 @@ export async function deleteWeddingEventAction(formData: FormData) {
 }
 
 export async function saveVendorForPlannerAction(formData: FormData) {
-  const profile = await requirePlannerProfile("/planner/dashboard");
-  const vendorId = String(formData.get("vendorId") ?? "").trim();
   const nextPath = normalizePlannerNextPath(
     String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
   );
+  const profile = await requirePlannerProfile(nextPath);
+  const vendorId = String(formData.get("vendorId") ?? "").trim();
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
   const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
@@ -312,10 +312,15 @@ export async function saveVendorForPlannerAction(formData: FormData) {
   });
 
   if (!vendorId) {
-    redirect(`${nextPath}?error=${encodeURIComponent("Vendor record was not found.")}`);
+    redirect(withPlannerQueryParam(nextPath, "error", "Vendor record was not found."));
   }
 
   const payload = {
+    user_id: ownerId,
+    planner_user_id: ownerId,
+    vendor_id: vendorId,
+  };
+  const fallbackPayload = {
     user_id: ownerId,
     vendor_id: vendorId,
   };
@@ -325,10 +330,17 @@ export async function saveVendorForPlannerAction(formData: FormData) {
     payload,
   });
 
-  const { error } = await supabase.from("saved_vendors").upsert(payload, {
+  let { error } = await supabase.from("saved_vendors").upsert(payload, {
     onConflict: "user_id,vendor_id",
     ignoreDuplicates: false,
   });
+  if (error && isSchemaDriftError(error)) {
+    const fallbackResult = await supabase.from("saved_vendors").upsert(fallbackPayload, {
+      onConflict: "user_id,vendor_id",
+      ignoreDuplicates: false,
+    });
+    error = fallbackResult.error;
+  }
   console.log("Planner save vendor upsert response", {
     table: "saved_vendors",
     plannerUserId: ownerId,
@@ -350,16 +362,25 @@ export async function saveVendorForPlannerAction(formData: FormData) {
     if (serializedError.code === "23505") {
       revalidatePath("/planner/dashboard");
       revalidatePath("/vendors");
-      redirect(
-        `${nextPath}?message=${encodeURIComponent("Vendor saved to your Planner.")}`,
-      );
+      redirect(withPlannerQueryParam(nextPath, "message", "Vendor saved to your Planner."));
     }
 
-    const existingResult = await supabase
+    let existingResult = await supabase
       .from("saved_vendors")
       .select("id")
       .eq("user_id", ownerId)
       .eq("vendor_id", vendorId);
+    if (
+      !existingResult.error &&
+      (!existingResult.data || existingResult.data.length === 0)
+    ) {
+      const plannerIdResult = await supabase
+        .from("saved_vendors")
+        .select("id")
+        .eq("planner_user_id", ownerId)
+        .eq("vendor_id", vendorId);
+      existingResult = plannerIdResult;
+    }
     console.log("Planner save vendor fallback lookup response", {
       table: "saved_vendors",
       plannerUserId: ownerId,
@@ -376,22 +397,23 @@ export async function saveVendorForPlannerAction(formData: FormData) {
         payload,
         error: serializeSupabaseError(existingResult.error),
       });
-      redirect(
-        `${nextPath}?error=${encodeURIComponent("We could not save this vendor right now.")}`,
-      );
+      redirect(withPlannerQueryParam(nextPath, "error", "We could not save this vendor right now."));
     }
 
     if (existingResult.data?.length) {
       revalidatePath("/planner/dashboard");
       revalidatePath("/vendors");
-      redirect(
-        `${nextPath}?message=${encodeURIComponent("Vendor saved to your Planner.")}`,
-      );
+      redirect(withPlannerQueryParam(nextPath, "message", "Vendor saved to your Planner."));
     }
 
-    const insertResult = await supabase
+    let insertResult = await supabase
       .from("saved_vendors")
       .insert(payload);
+    if (insertResult.error && isSchemaDriftError(insertResult.error)) {
+      insertResult = await supabase
+        .from("saved_vendors")
+        .insert(fallbackPayload);
+    }
     console.log("Planner save vendor fallback insert response", {
       table: "saved_vendors",
       plannerUserId: ownerId,
@@ -403,9 +425,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
     if (!insertResult.error) {
       revalidatePath("/planner/dashboard");
       revalidatePath("/vendors");
-      redirect(
-        `${nextPath}?message=${encodeURIComponent("Vendor saved to your Planner.")}`,
-      );
+      redirect(withPlannerQueryParam(nextPath, "message", "Vendor saved to your Planner."));
     }
 
     console.error("Planner save vendor failed", {
@@ -415,9 +435,7 @@ export async function saveVendorForPlannerAction(formData: FormData) {
       payload,
       error: serializeSupabaseError(insertResult.error ?? error),
     });
-    redirect(
-      `${nextPath}?error=${encodeURIComponent("We could not save this vendor right now.")}`,
-    );
+    redirect(withPlannerQueryParam(nextPath, "error", "We could not save this vendor right now."));
   }
 
   console.log("Planner save vendor revalidating routes", {
@@ -426,18 +444,16 @@ export async function saveVendorForPlannerAction(formData: FormData) {
   });
   revalidatePath("/planner/dashboard");
   revalidatePath("/vendors");
-  redirect(
-    `${nextPath}?message=${encodeURIComponent("Vendor saved to your Planner.")}`,
-  );
+  redirect(withPlannerQueryParam(nextPath, "message", "Vendor saved to your Planner."));
 }
 
 export async function createVendorInquiryAction(formData: FormData) {
-  const profile = await requirePlannerProfile("/planner/dashboard");
-  const vendorId = String(formData.get("vendorId") ?? "").trim();
-  const vendorSlug = String(formData.get("vendorSlug") ?? "").trim();
   const nextPath = normalizePlannerNextPath(
     String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
   );
+  const profile = await requirePlannerProfile(nextPath);
+  const vendorId = String(formData.get("vendorId") ?? "").trim();
+  const vendorSlug = String(formData.get("vendorSlug") ?? "").trim();
   const contactMethod = String(formData.get("contactMethod") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
   const supabase = await createSupabaseServerClient();
@@ -464,7 +480,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       vendorSlug,
       reason: "missing_vendor_reference",
     });
-    redirect(`${nextPath}?error=${encodeURIComponent("Vendor record was not found.")}`);
+    redirect(withPlannerQueryParam(nextPath, "error", "Vendor record was not found."));
   }
   if (!isUuid(vendorId)) {
     console.error("Planner inquiry validation failed", {
@@ -473,7 +489,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       vendorSlug,
       reason: "invalid_vendor_uuid",
     });
-    redirect(`${nextPath}?error=${encodeURIComponent("Vendor record was not found.")}`);
+    redirect(withPlannerQueryParam(nextPath, "error", "Vendor record was not found."));
   }
 
   const admin = createSupabaseAdminClient();
@@ -495,9 +511,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     client: admin ? "service_role" : "authenticated_server",
   });
   if (vendorExistsResult.error || !vendorExistsResult.data?.id) {
-    redirect(
-      `${nextPath}?error=${encodeURIComponent("We could not start this inquiry right now.")}`,
-    );
+    redirect(withPlannerQueryParam(nextPath, "error", "We could not start this inquiry right now."));
   }
 
   const weddingId = await getPlannerPrimaryWeddingId(ownerId);
@@ -532,9 +546,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       vendorSlug,
       error: serializeSupabaseError(existingLeadResult.error),
     });
-    redirect(
-      `${nextPath}?error=${encodeURIComponent("We could not start this inquiry right now.")}`,
-    );
+    redirect(withPlannerQueryParam(nextPath, "error", "We could not start this inquiry right now."));
   }
 
   const primaryRows = (existingLeadResult.data ?? []) as LeadThreadRow[];
@@ -571,9 +583,7 @@ export async function createVendorInquiryAction(formData: FormData) {
         vendorSlug,
         error: serializeSupabaseError(legacyLeadResult.error),
       });
-      redirect(
-        `${nextPath}?error=${encodeURIComponent("We could not start this inquiry right now.")}`,
-      );
+      redirect(withPlannerQueryParam(nextPath, "error", "We could not start this inquiry right now."));
     }
 
     const legacyRows = (legacyLeadResult.data ?? []) as LeadThreadRow[];
@@ -670,9 +680,7 @@ export async function createVendorInquiryAction(formData: FormData) {
         payload: payloadBase,
         error: insertError ? serializeSupabaseError(insertError) : null,
       });
-      redirect(
-        `${nextPath}?error=${encodeURIComponent("We could not start this inquiry right now.")}`,
-      );
+      redirect(withPlannerQueryParam(nextPath, "error", "We could not start this inquiry right now."));
     }
 
     leadId = insertedId;
@@ -747,9 +755,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       if (!fallbackResult.error) {
         revalidatePath("/planner/dashboard");
         revalidatePath("/vendor/dashboard");
-        redirect(
-          `${nextPath}?message=${encodeURIComponent("Inquiry created. You can now contact this vendor directly.")}`,
-        );
+        redirect(withPlannerQueryParam(nextPath, "message", "Inquiry created. You can now contact this vendor directly."));
       }
 
       const minimalPayload = {
@@ -770,9 +776,7 @@ export async function createVendorInquiryAction(formData: FormData) {
       if (!minimalResult.error) {
         revalidatePath("/planner/dashboard");
         revalidatePath("/vendor/dashboard");
-        redirect(
-          `${nextPath}?message=${encodeURIComponent("Inquiry created. You can now contact this vendor directly.")}`,
-        );
+        redirect(withPlannerQueryParam(nextPath, "message", "Inquiry created. You can now contact this vendor directly."));
       }
 
       console.error("Planner inquiry message create failed", {
@@ -783,9 +787,7 @@ export async function createVendorInquiryAction(formData: FormData) {
         payload: minimalPayload,
         error: serializeSupabaseError(minimalResult.error ?? fallbackResult.error ?? messageError),
       });
-      redirect(
-        `${nextPath}?error=${encodeURIComponent("We could not send your inquiry right now.")}`,
-      );
+      redirect(withPlannerQueryParam(nextPath, "error", "We could not send your inquiry right now."));
     }
   }
 
@@ -826,9 +828,7 @@ export async function createVendorInquiryAction(formData: FormData) {
   });
   revalidatePath("/planner/dashboard");
   revalidatePath("/vendor/dashboard");
-  redirect(
-    `${nextPath}?message=${encodeURIComponent("Inquiry created. You can now contact this vendor directly.")}`,
-  );
+  redirect(withPlannerQueryParam(nextPath, "message", "Inquiry created. You can now contact this vendor directly."));
 }
 
 export async function savePlannerProgressItemAction(formData: FormData) {
@@ -1101,20 +1101,18 @@ function normalizePlannerProgressStatus(value: unknown): "not_done" | "ongoing" 
 }
 
 export async function updatePlannerInquiryStatusAction(formData: FormData) {
-  const profile = await requirePlannerProfile("/planner/dashboard");
-  const inquiryId = String(formData.get("inquiryId") ?? "").trim();
-  const requestedStatus = String(formData.get("status") ?? "").trim();
   const nextPath = normalizePlannerNextPath(
     String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
   );
+  const profile = await requirePlannerProfile(nextPath);
+  const inquiryId = String(formData.get("inquiryId") ?? "").trim();
+  const requestedStatus = String(formData.get("status") ?? "").trim();
   const allowedStatuses = new Set(["open", "contacted", "closed", "archived"]);
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
 
   if (!inquiryId || !allowedStatuses.has(requestedStatus)) {
-    redirect(
-      `${nextPath}?error=${encodeURIComponent("We could not update this inquiry right now.")}`,
-    );
+    redirect(withPlannerQueryParam(nextPath, "error", "We could not update this inquiry right now."));
   }
 
   const { data: lead, error: leadError } = await supabase
@@ -1135,9 +1133,7 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
       requestedStatus,
       error: serializeSupabaseError(leadError ?? {}),
     });
-    redirect(
-      `${nextPath}?error=${encodeURIComponent("We could not update this inquiry right now.")}`,
-    );
+    redirect(withPlannerQueryParam(nextPath, "error", "We could not update this inquiry right now."));
   }
 
   const now = new Date().toISOString();
@@ -1194,16 +1190,12 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
       payload,
       error: serializeSupabaseError(error),
     });
-    redirect(
-      `${nextPath}?error=${encodeURIComponent("We could not update this inquiry right now.")}`,
-    );
+    redirect(withPlannerQueryParam(nextPath, "error", "We could not update this inquiry right now."));
   }
 
   revalidatePath("/planner/dashboard");
   revalidatePath("/vendor/dashboard");
-  redirect(
-    `${nextPath}?message=${encodeURIComponent("Inquiry status updated.")}`,
-  );
+  redirect(withPlannerQueryParam(nextPath, "message", "Inquiry status updated."));
 }
 
 function isSchemaDriftError(error: {
@@ -1287,16 +1279,24 @@ function normalizePlannerNextPath(path: string) {
     return "/planner/dashboard";
   }
 
-  const hashIndex = trimmed.indexOf("#");
-  const withoutHash = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
-  const queryIndex = withoutHash.indexOf("?");
-  const withoutQuery = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
-
-  if (!withoutQuery.startsWith("/")) {
+  if (trimmed.startsWith("//")) {
     return "/planner/dashboard";
   }
 
-  return withoutQuery || "/planner/dashboard";
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    try {
+      const parsed = new URL(trimmed);
+      return `${parsed.pathname}${parsed.search}${parsed.hash}` || "/planner/dashboard";
+    } catch {
+      return "/planner/dashboard";
+    }
+  }
+
+  if (!trimmed.startsWith("/")) {
+    return "/planner/dashboard";
+  }
+
+  return trimmed;
 }
 
 async function ensurePlannerUserRow(
@@ -1367,4 +1367,14 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function withPlannerQueryParam(path: string, key: "message" | "error", value: string) {
+  const [pathname, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  params.delete("error");
+  params.delete("message");
+  params.set(key, value);
+  const serialized = params.toString();
+  return serialized ? `${pathname}?${serialized}` : pathname;
 }

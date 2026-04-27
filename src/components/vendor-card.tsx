@@ -1,17 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { saveVendorForPlannerAction } from "@/app/planner/actions";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 import type { VendorDirectoryItem } from "@/lib/vendors";
 
 export function VendorCard({
   vendor,
   mode = "default",
+  nextPath,
+  isSaved = false,
 }: {
   vendor: VendorDirectoryItem;
   mode?: "default" | "homepage";
+  nextPath?: string;
+  isSaved?: boolean;
 }) {
   const isHomepage = mode === "homepage";
+  const resolvedNextPath = nextPath ?? (isHomepage ? "/" : "/vendors");
 
   const hero = (
     <div
@@ -98,12 +104,16 @@ export function VendorCard({
               sizeClassName="h-[72px] w-[72px]"
             />
           ) : null}
-          <Link
-            href={`/planner/dashboard?saved=${vendor.slug}`}
-            className={isHomepage ? "btn-secondary w-full px-3 py-1.5 text-sm leading-none sm:w-auto" : "btn-secondary"}
-          >
-            Save Vendor
-          </Link>
+          <form action={saveVendorForPlannerAction}>
+            <input type="hidden" name="vendorId" value={vendor.id} />
+            <input type="hidden" name="nextPath" value={resolvedNextPath} />
+            <button
+              type="submit"
+              className={isHomepage ? "btn-secondary w-full px-3 py-1.5 text-sm leading-none sm:w-auto" : "btn-secondary"}
+            >
+              {isSaved ? "Saved" : "Save Vendor"}
+            </button>
+          </form>
           <Link
             href={`/vendors/${vendor.slug}`}
             className={isHomepage ? "btn-secondary w-full px-3 py-1.5 text-sm leading-none sm:w-auto" : "btn-secondary"}

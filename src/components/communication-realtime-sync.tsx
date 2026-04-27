@@ -40,8 +40,15 @@ export function CommunicationRealtimeSync({
         channel.on("postgres_changes", {
           event: "*",
           schema: "public",
-          table: "inquiries",
+          table: "leads",
           filter: `planner_user_id=eq.${plannerUserId}`,
+        }, refreshSafely);
+
+        channel.on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "leads",
+          filter: `user_id=eq.${plannerUserId}`,
         }, refreshSafely);
       }
 
@@ -49,15 +56,15 @@ export function CommunicationRealtimeSync({
         channel.on("postgres_changes", {
           event: "*",
           schema: "public",
-          table: "inquiries",
-          filter: `vendor_profile_id=eq.${vendorId}`,
+          table: "leads",
+          filter: `vendor_id=eq.${vendorId}`,
         }, refreshSafely);
       }
 
       channel.on("postgres_changes", {
         event: "*",
         schema: "public",
-        table: "inquiry_messages",
+        table: "lead_messages",
       }, refreshSafely);
 
       channel.subscribe();

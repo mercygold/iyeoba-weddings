@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { MainNav } from "@/components/main-nav";
 import { TikTokSection } from "@/components/TikTokSection";
+import { getCurrentProfile } from "@/lib/auth";
+import { getPlannerSavedVendors } from "@/lib/inquiries";
 import { VENDOR_CATEGORY_GROUPS } from "@/lib/vendor-categories";
 import {
   getSharedCategoryOptions,
@@ -19,8 +21,13 @@ const trustPoints = [
 ];
 
 export default async function Home() {
+  const profile = await getCurrentProfile();
   const featuredVendors = await getFeaturedVendors();
   const vendorRailItems = ensureMinimumItems(featuredVendors, 10);
+  const savedVendorIds =
+    profile?.role === "planner"
+      ? new Set((await getPlannerSavedVendors(profile.id)).map((item) => item.vendor.id))
+      : new Set<string>();
   const { latestTikToks, topTikToks } = getHomepageTikTokSectionData();
 
   return (
@@ -130,7 +137,12 @@ export default async function Home() {
                 key={`${vendor.slug}-${index}`}
                 className="min-w-full snap-start sm:min-w-[48%] lg:min-w-[31%]"
               >
-                <VendorCard vendor={vendor} mode="homepage" />
+                <VendorCard
+                  vendor={vendor}
+                  mode="homepage"
+                  isSaved={vendor.id ? savedVendorIds.has(vendor.id) : false}
+                  nextPath="/"
+                />
               </div>
             ))}
           </div>

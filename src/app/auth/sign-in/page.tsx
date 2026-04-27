@@ -60,7 +60,7 @@ export default async function SignInPage(props: {
                   Password
                 </label>
                 <Link
-                  href="/auth/reset-password"
+                  href="/auth/forgot-password"
                   className="text-xs font-semibold text-[color:var(--color-brand-primary)] hover:text-[color:var(--color-brand-primary-dark)]"
                 >
                   Forgot password?

@@ -9,6 +9,7 @@ import {
   updatePlannerInquiryStatusAction,
 } from "@/app/planner/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { CommunicationRealtimeSync } from "@/components/communication-realtime-sync";
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
 import { PlannerConversationCenter } from "@/components/planner-conversation-center";
@@ -128,6 +129,7 @@ export default async function PlannerDashboardPage(props: {
       <div className="wedding-floral-accent-gold absolute -right-16 top-32 h-56 w-56 opacity-[0.12]" />
       <div className="wedding-floral-accent-gold absolute -left-20 bottom-16 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
+      <CommunicationRealtimeSync role="planner" plannerUserId={ownerId} />
       <MainNav />
       <main className="relative mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <section className="surface-card rounded-[2rem] p-5 sm:p-7">
@@ -472,7 +474,11 @@ export default async function PlannerDashboardPage(props: {
                             <input type="hidden" name="vendorId" value={saved.vendor.id} />
                             <input type="hidden" name="vendorSlug" value={saved.vendor.slug} />
                             <input type="hidden" name="contactMethod" value="planner_saved_vendor" />
-                            <input type="hidden" name="nextPath" value="/planner/dashboard" />
+                            <input
+                              type="hidden"
+                              name="nextPath"
+                              value={`/planner/dashboard?thread=${encodeURIComponent(saved.vendor.id)}`}
+                            />
                             <input type="hidden" name="message" value="" />
                             <button type="submit" className="btn-primary px-3 py-1.5 text-sm">
                               Start Inquiry

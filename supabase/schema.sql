@@ -32,8 +32,28 @@ create table if not exists public.users (
   role public.app_role not null default 'planner',
   full_name text,
   phone text,
+  country text,
+  country_code text,
+  phone_country_code text,
+  phone_number text,
+  full_phone_number text,
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.users
+  add column if not exists country text;
+
+alter table public.users
+  add column if not exists country_code text;
+
+alter table public.users
+  add column if not exists phone_country_code text;
+
+alter table public.users
+  add column if not exists phone_number text;
+
+alter table public.users
+  add column if not exists full_phone_number text;
 
 create table if not exists public.weddings (
   id uuid primary key default gen_random_uuid(),
@@ -184,10 +204,22 @@ create table if not exists public.vendor_portfolio (
 create table if not exists public.saved_vendors (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
+  planner_user_id uuid references public.users(id) on delete cascade,
   vendor_id uuid not null references public.vendors(id) on delete cascade,
   created_at timestamptz not null default timezone('utc', now()),
   unique (user_id, vendor_id)
 );
+
+alter table public.saved_vendors
+  add column if not exists planner_user_id uuid references public.users(id) on delete cascade;
+
+update public.saved_vendors
+set planner_user_id = user_id
+where planner_user_id is null;
+
+create unique index if not exists saved_vendors_planner_vendor_unique
+on public.saved_vendors(planner_user_id, vendor_id)
+where planner_user_id is not null;
 
 create table if not exists public.leads (
   id uuid primary key default gen_random_uuid(),
@@ -338,20 +370,30 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  insert into public.users (id, email, role, full_name, phone)
+  insert into public.users (id, email, role, full_name, phone, country, country_code, phone_country_code, phone_number, full_phone_number)
   values (
     new.id,
     new.email,
     public.safe_app_role(new.raw_user_meta_data ->> 'role'),
     new.raw_user_meta_data ->> 'full_name',
-    new.raw_user_meta_data ->> 'phone'
+    coalesce(new.raw_user_meta_data ->> 'phone_number', new.raw_user_meta_data ->> 'phone'),
+    new.raw_user_meta_data ->> 'country',
+    new.raw_user_meta_data ->> 'country_code',
+    new.raw_user_meta_data ->> 'phone_country_code',
+    new.raw_user_meta_data ->> 'phone_number',
+    new.raw_user_meta_data ->> 'full_phone_number'
   )
   on conflict (id) do update
   set
     email = excluded.email,
     role = excluded.role,
     full_name = excluded.full_name,
-    phone = excluded.phone;
+    phone = excluded.phone,
+    country = excluded.country,
+    country_code = excluded.country_code,
+    phone_country_code = excluded.phone_country_code,
+    phone_number = excluded.phone_number,
+    full_phone_number = excluded.full_phone_number;
 
   return new;
 end;
@@ -490,8 +532,8 @@ create policy "saved_vendors_all_own"
 on public.saved_vendors
 for all
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() = user_id or auth.uid() = planner_user_id)
+with check (auth.uid() = user_id or auth.uid() = planner_user_id);
 
 create policy "leads_all_own_side"
 on public.leads

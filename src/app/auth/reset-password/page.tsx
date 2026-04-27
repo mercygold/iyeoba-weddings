@@ -88,6 +88,7 @@ export default async function ResetPasswordPage(props: {
 
           {isRecoveryFlow && !recoveryError ? (
             <form action={updatePasswordAction} className="grid gap-5">
+              <input type="hidden" name="returnTo" value="/auth/reset-password" />
               <div className="grid gap-2">
                 <label htmlFor="password" className="text-sm font-medium text-[color:var(--color-ink)]">
                   New password
