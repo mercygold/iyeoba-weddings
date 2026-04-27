@@ -130,5 +130,17 @@ function nullSupabaseClient(
         },
       };
     },
+    storage: {
+      from() {
+        return {
+          async createSignedUrl() {
+            return {
+              data: null,
+              error: new Error(message),
+            };
+          },
+        };
+      },
+    },
   };
 }

@@ -157,17 +157,21 @@ export default async function Home() {
               <Link
                 key={category.category}
                 href={`/vendors?category=${encodeURIComponent(category.category)}`}
-                className="rounded-[1.5rem] border border-[rgba(106,62,124,0.09)] bg-white/92 p-4 shadow-[0_18px_44px_-38px_rgba(106,62,124,0.28)] transition hover:-translate-y-0.5 hover:border-[color:var(--color-brand-primary)] hover:shadow-[0_24px_54px_-34px_rgba(106,62,124,0.2)] sm:rounded-[1.65rem] sm:p-5"
+                className="group rounded-[1.5rem] border border-[rgba(106,62,124,0.09)] bg-white/92 p-4 shadow-[0_18px_44px_-38px_rgba(106,62,124,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(91,44,131,0.4)] hover:shadow-[0_24px_54px_-34px_rgba(106,62,124,0.2)] sm:rounded-[1.65rem] sm:p-5"
               >
-                <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
-                  Vendor category
-                </p>
-                <h3 className="font-display mt-2.5 line-clamp-2 break-words text-xl text-[color:var(--color-ink)] sm:mt-3 sm:text-2xl">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[rgba(106,62,124,0.08)] bg-[rgba(233,221,240,0.62)] text-[color:var(--color-brand-primary)] transition-colors duration-200 group-hover:bg-[rgba(208,183,224,0.74)]">
+                    <CategoryIcon category={category.category} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-display line-clamp-2 break-words text-xl text-[#5B2C83] transition-colors duration-200 group-hover:text-[#4A2268] sm:text-2xl">
                   {category.category}
-                </h3>
-                <p className="mt-2.5 line-clamp-3 break-words text-sm leading-6 text-[color:var(--color-muted)] sm:mt-3 sm:leading-7">
+                    </h3>
+                    <p className="mt-2 line-clamp-3 break-words text-sm leading-6 text-[color:var(--color-muted)] sm:leading-7">
                   {category.description}
-                </p>
+                    </p>
+                  </div>
+                </div>
               </Link>
             ))}
           </div>
@@ -336,6 +340,128 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
       </p>
     </div>
   );
+}
+
+function CategoryIcon({ category }: { category: string }) {
+  const baseClassName = "h-6 w-6";
+  const commonProps = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    viewBox: "0 0 24 24",
+    className: baseClassName,
+    "aria-hidden": true,
+  };
+
+  switch (category) {
+    case "Entertainment":
+      return (
+        <svg {...commonProps}>
+          <rect x="9" y="3" width="6" height="12" rx="3" />
+          <path d="M12 15v6" />
+          <path d="M8 21h8" />
+        </svg>
+      );
+    case "Photography & Video":
+      return (
+        <svg {...commonProps}>
+          <rect x="3" y="6" width="18" height="14" rx="3" />
+          <circle cx="12" cy="13" r="4" />
+          <path d="M8 6l1.2-2h5.6L16 6" />
+        </svg>
+      );
+    case "Beauty & Grooming":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 3l2.2 4.4L19 9.2l-3.6 3.5.8 4.8L12 15.4 7.8 17.5l.8-4.8L5 9.2l4.8-1.8L12 3z" />
+        </svg>
+      );
+    case "Fashion & Attire":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 7l3-3h8l3 3-2 3h-2v10H9V10H7L5 7z" />
+        </svg>
+      );
+    case "Catering & Desserts":
+      return (
+        <svg {...commonProps}>
+          <path d="M7 4v7" />
+          <path d="M9 4v7" />
+          <path d="M11 4v7" />
+          <path d="M9 11v9" />
+          <path d="M16 4c1.7 1.6 1.7 4.4 0 6v10" />
+        </svg>
+      );
+    case "Decor & Floral":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="12" r="2" />
+          <path d="M12 5c2.2 0 4 1.8 4 4-2.2 0-4-1.8-4-4z" />
+          <path d="M19 12c0 2.2-1.8 4-4 4 0-2.2 1.8-4 4-4z" />
+          <path d="M12 19c-2.2 0-4-1.8-4-4 2.2 0 4 1.8 4 4z" />
+          <path d="M5 12c0-2.2 1.8-4 4-4 0 2.2-1.8 4-4 4z" />
+        </svg>
+      );
+    case "Rentals & Setup":
+      return (
+        <svg {...commonProps}>
+          <rect x="4" y="6" width="16" height="10" rx="2" />
+          <path d="M7 16v3" />
+          <path d="M17 16v3" />
+          <path d="M8 10h8" />
+        </svg>
+      );
+    case "Souvenirs":
+      return (
+        <svg {...commonProps}>
+          <rect x="3.5" y="8" width="17" height="12" rx="2" />
+          <path d="M12 8v12" />
+          <path d="M3.5 12h17" />
+          <path d="M8 8V6a2 2 0 114 0v2" />
+          <path d="M12 8V6a2 2 0 114 0v2" />
+        </svg>
+      );
+    case "Drinks & Bar":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 5h14l-5 7v6l-4 2v-8L5 5z" />
+        </svg>
+      );
+    case "Printing & Branding":
+      return (
+        <svg {...commonProps}>
+          <path d="M4 20h6l10-10-6-6L4 14v6z" />
+          <path d="M13 5l6 6" />
+        </svg>
+      );
+    case "Logistics & Transport":
+      return (
+        <svg {...commonProps}>
+          <path d="M3 7h12v9H3z" />
+          <path d="M15 10h3l3 3v3h-6z" />
+          <circle cx="7" cy="18" r="1.8" />
+          <circle cx="18" cy="18" r="1.8" />
+        </svg>
+      );
+    case "Hospitality":
+      return (
+        <svg {...commonProps}>
+          <path d="M4 13h16v7H4z" />
+          <path d="M6 13V9a2 2 0 012-2h3a2 2 0 012 2v4" />
+          <path d="M14 13V8a2 2 0 012-2h2a2 2 0 012 2v5" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M9 12h6" />
+          <path d="M12 9v6" />
+        </svg>
+      );
+  }
 }
 
 function ensureMinimumItems<U extends readonly unknown[]>(

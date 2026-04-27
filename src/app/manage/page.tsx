@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { addManageVendorNoteAction, updateManageVendorStatusAction } from "@/app/manage/actions";
+import {
+  addManageVendorNoteAction,
+  approveVendorAction,
+  rejectVendorAction,
+  setVendorPendingAction,
+} from "@/app/manage/actions";
 import { MainNav } from "@/components/main-nav";
-import { getCurrentProfile } from "@/lib/auth";
-import { type AdminVendorSubmission, getAdminVendorSubmissions } from "@/lib/vendor-admin";
+import { requireAdmin } from "@/lib/requireAdmin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type SearchParams = Promise<{
@@ -27,19 +30,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ManagePage(props: { searchParams: SearchParams }) {
-  const profile = await getCurrentProfile();
-
-  if (!profile) {
-    redirect("/auth/sign-in?next=%2Fmanage");
-  }
-
-  if (profile.role !== "admin") {
-    redirect("/?error=Access%20denied");
-  }
+  await requireAdmin("/manage");
 
   const searchParams = await props.searchParams;
   const tab = normalizeTab(searchParams.tab);
-  const vendors = await getAdminVendorSubmissions();
+  const vendors = await getManageVendors();
   const expandedVendorId = typeof searchParams.vendor === "string" ? searchParams.vendor : null;
   const message = typeof searchParams.message === "string" ? searchParams.message : "";
   const notes = await getAdminNotes();
@@ -234,19 +229,16 @@ function VendorSection({
                   <Link href={`/manage?tab=${tabForStatus(vendor.status)}&vendor=${encodeURIComponent(vendor.id)}`} className="btn-secondary px-3 py-1.5 text-sm">
                     View Details
                   </Link>
-                  <form action={updateManageVendorStatusAction}>
+                  <form action={approveVendorAction}>
                     <input type="hidden" name="vendorId" value={vendor.id} />
-                    <input type="hidden" name="status" value="approved" />
                     <button type="submit" className="btn-primary px-3 py-1.5 text-sm">Approve</button>
                   </form>
-                  <form action={updateManageVendorStatusAction}>
+                  <form action={rejectVendorAction}>
                     <input type="hidden" name="vendorId" value={vendor.id} />
-                    <input type="hidden" name="status" value="rejected" />
                     <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">Reject</button>
                   </form>
-                  <form action={updateManageVendorStatusAction}>
+                  <form action={setVendorPendingAction}>
                     <input type="hidden" name="vendorId" value={vendor.id} />
-                    <input type="hidden" name="status" value="pending_review" />
                     <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">Mark Pending</button>
                   </form>
                 </div>
@@ -380,6 +372,97 @@ function tabForStatus(status: string | null) {
 function normalizeTab(tab: string | undefined): ManageTab {
   if (tab === "approved" || tab === "rejected" || tab === "notes") return tab;
   return "pending";
+}
+
+type AdminVendorSubmission = {
+  id: string;
+  userId: string | null;
+  businessName: string;
+  email: string | null;
+  phone: string | null;
+  category: string;
+  customCategory: string | null;
+  location: string;
+  priceRange: string | null;
+  status: string | null;
+  primarySocialLink: string | null;
+  website: string | null;
+  governmentIdSignedUrl: string | null;
+  cacCertificateSignedUrl: string | null;
+  portfolioImages: string[];
+  createdAt: string;
+};
+
+async function getManageVendors(): Promise<AdminVendorSubmission[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("vendors")
+    .select(`
+      id,
+      user_id,
+      business_name,
+      category,
+      custom_category,
+      location,
+      price_range,
+      status,
+      primary_social_link,
+      website,
+      government_id_url,
+      cac_certificate_url,
+      created_at,
+      users(email, phone),
+      vendor_portfolio(image_url, sort_order)
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return Promise.all(
+    data.map(async (item) => {
+      const relatedUser = Array.isArray(item.users) ? item.users[0] : item.users;
+      const portfolioImages =
+        item.vendor_portfolio
+          ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((entry) => entry.image_url) ?? [];
+
+      let governmentIdSignedUrl: string | null = null;
+      let cacCertificateSignedUrl: string | null = null;
+      if (item.government_id_url) {
+        const signed = await supabase.storage
+          .from("vendor-documents")
+          .createSignedUrl(item.government_id_url, 60 * 60);
+        governmentIdSignedUrl = signed.data?.signedUrl ?? null;
+      }
+      if (item.cac_certificate_url) {
+        const signed = await supabase.storage
+          .from("vendor-documents")
+          .createSignedUrl(item.cac_certificate_url, 60 * 60);
+        cacCertificateSignedUrl = signed.data?.signedUrl ?? null;
+      }
+
+      return {
+        id: item.id,
+        userId: item.user_id ?? null,
+        businessName: item.business_name,
+        email: relatedUser?.email ?? null,
+        phone: relatedUser?.phone ?? null,
+        category: item.category,
+        customCategory: item.custom_category ?? null,
+        location: item.location,
+        priceRange: item.price_range ?? null,
+        status: item.status ?? null,
+        primarySocialLink: item.primary_social_link ?? null,
+        website: item.website ?? null,
+        governmentIdSignedUrl,
+        cacCertificateSignedUrl,
+        portfolioImages,
+        createdAt: item.created_at,
+      } satisfies AdminVendorSubmission;
+    }),
+  );
 }
 
 async function getAdminNotes(): Promise<ManageAdminNote[]> {
