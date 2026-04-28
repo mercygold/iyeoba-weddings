@@ -1,6 +1,10 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
+import {
+  formatVendorStartingPrice,
+  supportedVendorCurrencies,
+} from "@/lib/currency";
 import { normalizeVendorCategory } from "@/lib/vendor-categories";
 import { getVendorDirectory } from "@/lib/vendors";
 import { getVendorPlaceholderImage } from "@/lib/vendor-placeholders";
@@ -117,8 +121,24 @@ export async function getPlannerSavedVendors(userId: string) {
         vendor_id
       `,
     )
-    .or(`user_id.eq.${userId},planner_user_id.eq.${userId}`)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
+
+  if (!error && (!data || data.length === 0)) {
+    const plannerScopedResult = await supabase
+      .from("saved_vendors")
+      .select(
+        `
+          id,
+          created_at,
+          vendor_id
+        `,
+      )
+      .eq("planner_user_id", userId)
+      .order("created_at", { ascending: false });
+    data = plannerScopedResult.data;
+    error = plannerScopedResult.error;
+  }
 
   if (error && isSchemaDriftError(error)) {
     const fallbackResult = await supabase
@@ -156,6 +176,11 @@ export async function getPlannerSavedVendors(userId: string) {
       custom_category?: string | null;
       location: string;
       whatsapp?: string | null;
+      currency_code?: string | null;
+      starting_price?: number | string | null;
+      price_label?: string | null;
+      price_currency?: string | null;
+      price_amount?: number | string | null;
       price_range?: string | null;
       portfolio_image_urls?: string[] | null;
       vendor_portfolio?: { image_url: string; sort_order: number | null }[] | null;
@@ -171,6 +196,11 @@ export async function getPlannerSavedVendors(userId: string) {
       custom_category,
       location,
       whatsapp,
+      currency_code,
+      starting_price,
+      price_label,
+      price_currency,
+      price_amount,
       price_range,
       portfolio_image_urls,
       vendor_portfolio(image_url, sort_order)
@@ -237,7 +267,29 @@ export async function getPlannerSavedVendors(userId: string) {
         businessName = vendor.business_name;
         category = normalizedCategory.category;
         location = vendor.location;
-        priceRange = vendor.price_range ?? null;
+        const currencyCode = [vendor.currency_code, vendor.price_currency]
+          .map((value) => (value ?? "").trim().toUpperCase())
+          .find((value) =>
+            supportedVendorCurrencies.includes(
+              value as (typeof supportedVendorCurrencies)[number],
+            ),
+          ) as (typeof supportedVendorCurrencies)[number] | undefined;
+        const startingPrice =
+          typeof vendor.starting_price === "number"
+            ? vendor.starting_price
+            : vendor.starting_price
+              ? Number(vendor.starting_price)
+              : typeof vendor.price_amount === "number"
+                ? vendor.price_amount
+                : vendor.price_amount
+                  ? Number(vendor.price_amount)
+                  : null;
+        priceRange = formatVendorStartingPrice({
+          currencyCode: currencyCode ?? null,
+          startingPrice: Number.isFinite(startingPrice) ? startingPrice : null,
+          priceLabel: vendor.price_label ?? null,
+          legacyPriceRange: vendor.price_range ?? null,
+        });
         whatsapp = vendor.whatsapp ?? null;
       } else if (directoryVendor) {
         normalizedCategory = normalizeVendorCategory(

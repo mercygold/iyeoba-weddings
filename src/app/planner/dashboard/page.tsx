@@ -12,6 +12,8 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { CommunicationRealtimeSync } from "@/components/communication-realtime-sync";
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
+import { PlannerBudgetFields } from "@/components/planner-budget-fields";
+import { PlannerInspirationFeed } from "@/components/planner-inspiration-feed";
 import { PlannerConversationCenter } from "@/components/planner-conversation-center";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 import { requirePlannerProfile } from "@/lib/auth";
@@ -21,8 +23,9 @@ import {
   getPlannerInquiries,
   getPlannerSavedVendors,
 } from "@/lib/inquiries";
-import { budgetRanges, cultures, locations, weddingTypes } from "@/lib/planner";
+import { cultures, weddingTypes } from "@/lib/planner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getHomepageTikTokSectionData } from "@/lib/tiktok";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -93,6 +96,8 @@ export default async function PlannerDashboardPage(props: {
   const compareVendors = savedVendors
     .map((item) => item.vendor)
     .filter((vendor) => compareIds.includes(vendor.id));
+  const { latestTikToks, topTikToks } = getHomepageTikTokSectionData();
+  const inspirationItems = [...latestTikToks, ...topTikToks].slice(0, 8);
 
   const availableProgressItems = progressCatalog.filter(
     (label) => !progressItems.some((item) => item.label.toLowerCase() === label.toLowerCase()),
@@ -201,11 +206,13 @@ export default async function PlannerDashboardPage(props: {
                           options={weddingTypes}
                           defaultValue={event.weddingType}
                         />
-                        <SelectInput
-                          name="location"
-                          label="Location"
-                          options={locations}
-                          defaultValue={event.location}
+                        <PlannerBudgetFields
+                          defaultLocation={event.location}
+                          defaultBudgetCurrency={event.budgetCurrency}
+                          defaultBudgetRange={event.budgetRange}
+                          locationFieldClassName="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
+                          currencyFieldClassName="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
+                          budgetFieldClassName="sm:col-span-2 grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
                         />
                         <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
                           Guest count
@@ -218,14 +225,6 @@ export default async function PlannerDashboardPage(props: {
                             className="field-input rounded-[1rem]"
                           />
                         </label>
-                        <div className="sm:col-span-2">
-                          <SelectInput
-                            name="budgetRange"
-                            label="Budget range"
-                            options={budgetRanges}
-                            defaultValue={event.budgetRange}
-                          />
-                        </div>
                         <div className="sm:col-span-2 flex flex-wrap gap-2">
                           <button type="submit" className="btn-primary px-4 py-2 text-sm">
                             Save
@@ -241,7 +240,10 @@ export default async function PlannerDashboardPage(props: {
                         <MetricCard label="Wedding type" value={event.weddingType} />
                         <MetricCard label="Location" value={event.location} />
                         <MetricCard label="Guest count" value={String(event.guestCount)} />
-                        <MetricCard label="Budget" value={event.budgetRange} />
+                        <MetricCard
+                          label="Budget"
+                          value={`${event.budgetCurrency} · ${event.budgetRange}`}
+                        />
                       </div>
                     )}
                   </article>
@@ -271,7 +273,11 @@ export default async function PlannerDashboardPage(props: {
               </label>
               <SelectInput name="culture" label="Culture" options={cultures} />
               <SelectInput name="weddingType" label="Wedding type" options={weddingTypes} />
-              <SelectInput name="location" label="Location" options={locations} />
+              <PlannerBudgetFields
+                locationFieldClassName="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
+                currencyFieldClassName="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
+                budgetFieldClassName="sm:col-span-2 grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
+              />
               <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
                 Guest count
                 <input
@@ -283,9 +289,6 @@ export default async function PlannerDashboardPage(props: {
                   className="field-input rounded-[1rem]"
                 />
               </label>
-              <div className="sm:col-span-2">
-                <SelectInput name="budgetRange" label="Budget range" options={budgetRanges} />
-              </div>
               <div className="sm:col-span-2 flex flex-wrap gap-2">
                 <button type="submit" className="btn-primary px-4 py-2 text-sm">
                   Save wedding event
@@ -308,6 +311,8 @@ export default async function PlannerDashboardPage(props: {
             {feedbackError}
           </p>
         ) : null}
+
+        <PlannerInspirationFeed items={inspirationItems} />
 
         <section className="surface-card rounded-[2rem] p-4 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -759,6 +764,7 @@ type WeddingEvent = {
   weddingType: string;
   location: string;
   guestCount: number;
+  budgetCurrency: string;
   budgetRange: string;
   createdAt: string | null;
 };
@@ -767,39 +773,73 @@ async function getWeddingEvents(
   userId: string,
 ): Promise<{ weddingEvents: WeddingEvent[]; loadError: boolean }> {
   const supabase = await createSupabaseServerClient();
-  const primaryResult = await supabase
-    .from("weddings")
-    .select("id, event_name, culture, wedding_type, location, guest_count, budget_range, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const selectAttempts = [
+    "id, event_name, culture, wedding_type, location, guest_count, budget_range, budget_currency, created_at",
+    "id, event_name, culture, wedding_type, location, guest_count, budget_range, created_at",
+    "id, title, culture, wedding_type, location, guest_count, budget_range, created_at",
+    "id, title, culture, wedding_type, location, guest_count, budget, created_at",
+    "id, culture, wedding_type, location, guest_count, budget_range, created_at",
+    "id, culture, wedding_type, location, guest_count, created_at",
+  ] as const;
 
-  const fallbackResult =
-    primaryResult.error && isWeddingSchemaDriftError(primaryResult.error)
-      ? await supabase
+  let weddings: Array<Record<string, unknown>> | null = null;
+  let usedSelect: string | null = null;
+  let finalError: {
+    code?: string | null;
+    message?: string | null;
+    details?: string | null;
+    hint?: string | null;
+  } | null = null;
+  const errors: Array<{
+    select: string;
+    error: {
+      code?: string | null;
+      message?: string | null;
+      details?: string | null;
+      hint?: string | null;
+    };
+  }> = [];
+
+  for (const select of selectAttempts) {
+    const result = await supabase
       .from("weddings")
-      .select("id, culture, wedding_type, location, guest_count, budget_range, created_at")
+      .select(select)
       .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      : null;
+      .order("created_at", { ascending: false });
 
-  const weddings = fallbackResult?.data ?? primaryResult.data;
-  const error = fallbackResult?.error ?? primaryResult.error;
+    if (!result.error) {
+      weddings = Array.isArray(result.data)
+        ? (result.data as Array<Record<string, unknown>>)
+        : [];
+      usedSelect = select;
+      finalError = null;
+      break;
+    }
+
+    const serialized = {
+      code: result.error.code ?? null,
+      message: result.error.message ?? null,
+      details: result.error.details ?? null,
+      hint: result.error.hint ?? null,
+    };
+    errors.push({ select, error: serialized });
+    finalError = serialized;
+
+    if (!isWeddingSchemaDriftError(result.error)) {
+      break;
+    }
+  }
 
   console.log("Planner wedding overview read", {
     table: "weddings",
     plannerUserId: userId,
     dataCount: weddings?.length ?? 0,
-    error: error
-      ? {
-          code: error.code ?? null,
-          message: error.message ?? null,
-          details: error.details ?? null,
-          hint: error.hint ?? null,
-        }
-      : null,
+    usedSelect,
+    errors,
+    error: finalError,
   });
 
-  if (error) {
+  if (finalError) {
     return {
       weddingEvents: [],
       loadError: true,
@@ -812,22 +852,38 @@ async function getWeddingEvents(
     loadError: false,
     weddingEvents: rows
     .filter((row) => Boolean(row?.id))
-    .map((row) => ({
+      .map((row) => ({
       id: String(row.id),
       eventName:
-        typeof (row as Record<string, unknown>)["event_name"] === "string"
-          ? String((row as Record<string, unknown>)["event_name"]).trim()
+        typeof row["event_name"] === "string"
+          ? String(row["event_name"]).trim()
+          : typeof row["title"] === "string"
+            ? String(row["title"]).trim()
           : "",
-      culture: typeof row.culture === "string" ? row.culture.trim() || "Not set" : "Not set",
+      culture: typeof row["culture"] === "string" ? String(row["culture"]).trim() || "Not set" : "Not set",
       weddingType:
-        typeof row.wedding_type === "string"
-          ? row.wedding_type.trim() || "Not set"
+        typeof row["wedding_type"] === "string"
+          ? String(row["wedding_type"]).trim() || "Not set"
           : "Not set",
-      location: typeof row.location === "string" ? row.location.trim() || "Not set" : "Not set",
-      guestCount: typeof row.guest_count === "number" ? row.guest_count : 0,
+      location: typeof row["location"] === "string" ? String(row["location"]).trim() || "Not set" : "Not set",
+      guestCount:
+        typeof row["guest_count"] === "number"
+          ? Number(row["guest_count"])
+          : typeof row["guest_count"] === "string"
+            ? Number(row["guest_count"]) || 0
+            : 0,
+      budgetCurrency:
+        typeof row["budget_currency"] === "string" &&
+        String(row["budget_currency"]).trim()
+          ? String(row["budget_currency"]).trim().toUpperCase()
+          : "NGN",
       budgetRange:
-        typeof row.budget_range === "string" ? row.budget_range.trim() || "Not set" : "Not set",
-      createdAt: typeof row.created_at === "string" ? row.created_at : null,
+        typeof row["budget_range"] === "string"
+          ? String(row["budget_range"]).trim() || "Not set"
+          : typeof row["budget"] === "string"
+            ? String(row["budget"]).trim() || "Not set"
+            : "Not set",
+      createdAt: typeof row["created_at"] === "string" ? String(row["created_at"]) : null,
     })),
   };
 }

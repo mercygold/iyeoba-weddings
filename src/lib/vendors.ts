@@ -1,6 +1,10 @@
 import { sampleVendors } from "@/lib/sample-vendors";
 import { getVendorPlaceholderImage } from "@/lib/vendor-placeholders";
 import { normalizeVendorCategory } from "@/lib/vendor-categories";
+import {
+  formatVendorStartingPrice,
+  toSupportedVendorCurrency,
+} from "@/lib/currency";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const vendorSelect = `
@@ -27,6 +31,9 @@ const vendorSelect = `
   price_currency,
   price_amount,
   price_range,
+  currency_code,
+  starting_price,
+  price_label,
   status,
   profile_status,
   onboarding_completed,
@@ -227,14 +234,38 @@ export async function getVendorDirectory(filters: Filters = {}) {
         instagram: item.instagram ?? "",
         website: item.website ?? "",
         whatsapp: item.whatsapp ?? "",
-        priceCurrency: item.price_currency ?? null,
+        priceCurrency:
+          toSupportedVendorCurrency(item.currency_code) ??
+          toSupportedVendorCurrency(item.price_currency) ??
+          null,
         priceAmount:
-          typeof item.price_amount === "number"
-            ? item.price_amount
-            : item.price_amount
-              ? Number(item.price_amount)
-              : null,
-        priceRange: item.price_range ?? "Contact vendor",
+          typeof item.starting_price === "number"
+            ? item.starting_price
+            : item.starting_price
+              ? Number(item.starting_price)
+              : typeof item.price_amount === "number"
+                ? item.price_amount
+                : item.price_amount
+                  ? Number(item.price_amount)
+                  : null,
+        priceRange: formatVendorStartingPrice({
+          currencyCode:
+            toSupportedVendorCurrency(item.currency_code) ??
+            toSupportedVendorCurrency(item.price_currency),
+          startingPrice:
+            typeof item.starting_price === "number"
+              ? item.starting_price
+              : item.starting_price
+                ? Number(item.starting_price)
+                : typeof item.price_amount === "number"
+                  ? item.price_amount
+                  : item.price_amount
+                    ? Number(item.price_amount)
+                    : null,
+          priceLabel:
+            typeof item.price_label === "string" ? item.price_label : null,
+          legacyPriceRange: item.price_range ?? null,
+        }),
         status,
         onboardingCompleted: item.onboarding_completed ?? false,
         approved: isApproved,
@@ -368,14 +399,31 @@ export async function getVendorByUserId(userId: string) {
     return null;
   }
 
-  let { data, error } = await supabase
+  console.log("[vendor-read] getVendorByUserId:start", {
+    authUserId: userId,
+    table: "vendors",
+    filter: { user_id: userId },
+  });
+
+  const initialQuery = await supabase
     .from("vendors")
     .select(vendorSelect)
     .eq("user_id", userId)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
+  let data: Record<string, any> | null = Array.isArray(initialQuery.data)
+    ? (initialQuery.data[0] as Record<string, any> | null) ?? null
+    : null;
+  let error: {
+    code?: string | null;
+    message?: string | null;
+    details?: string | null;
+    hint?: string | null;
+  } | null = initialQuery.error;
 
   console.log("Vendor dashboard lookup", {
     userId,
+    filter: { user_id: userId },
+    returnedRowCount: Array.isArray(initialQuery.data) ? initialQuery.data.length : 0,
     foundVendorId: data?.id ?? null,
     businessName: data?.business_name ?? null,
     status: data?.status ?? null,
@@ -396,10 +444,56 @@ export async function getVendorByUserId(userId: string) {
       .from("vendors")
       .select(legacyVendorSelect)
       .eq("user_id", userId)
-      .maybeSingle();
+      .order("created_at", { ascending: false });
 
-    data = fallback.data as typeof data;
+    data = Array.isArray(fallback.data)
+      ? ((fallback.data[0] as Record<string, any> | null) ?? null)
+      : null;
     error = fallback.error;
+    console.log("[vendor-read] fallback legacy", {
+      userId,
+      filter: { user_id: userId },
+      returnedRowCount: Array.isArray(fallback.data) ? fallback.data.length : 0,
+      error: error ? serializeSupabaseError(error) : null,
+    });
+  }
+
+  if (error && isSchemaDriftError(error)) {
+    const fallback = await supabase
+      .from("vendors")
+      .select(vendorSelect)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    data = Array.isArray(fallback.data)
+      ? ((fallback.data[0] as Record<string, any> | null) ?? null)
+      : null;
+    error = fallback.error;
+    console.log("[vendor-read] fallback full-select", {
+      userId,
+      filter: { user_id: userId },
+      returnedRowCount: Array.isArray(fallback.data) ? fallback.data.length : 0,
+      error: error ? serializeSupabaseError(error) : null,
+    });
+  }
+
+  if (error && isSchemaDriftError(error)) {
+    const fallback = await supabase
+      .from("vendors")
+      .select(legacyVendorSelect)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    data = Array.isArray(fallback.data)
+      ? ((fallback.data[0] as Record<string, any> | null) ?? null)
+      : null;
+    error = fallback.error;
+    console.log("[vendor-read] fallback legacy second", {
+      userId,
+      filter: { user_id: userId },
+      returnedRowCount: Array.isArray(fallback.data) ? fallback.data.length : 0,
+      error: error ? serializeSupabaseError(error) : null,
+    });
   }
 
   if (error || !data) {
@@ -423,8 +517,13 @@ export async function getVendorByUserId(userId: string) {
 
   const portfolioImages =
     data.vendor_portfolio
-      ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((entry) => entry.image_url) ?? [];
+      ?.sort(
+        (
+          a: { sort_order?: number | null; image_url: string },
+          b: { sort_order?: number | null; image_url: string },
+        ) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+      )
+      .map((entry: { image_url: string }) => entry.image_url) ?? [];
 
   return {
     id: data.id,
@@ -447,14 +546,37 @@ export async function getVendorByUserId(userId: string) {
     instagram: data.instagram ?? "",
     website: data.website ?? "",
     whatsapp: data.whatsapp ?? "",
-    priceCurrency: data.price_currency ?? null,
+    priceCurrency:
+      toSupportedVendorCurrency(data.currency_code) ??
+      toSupportedVendorCurrency(data.price_currency) ??
+      null,
     priceAmount:
-      typeof data.price_amount === "number"
-        ? data.price_amount
-        : data.price_amount
-          ? Number(data.price_amount)
-          : null,
-    priceRange: data.price_range ?? "Contact vendor",
+      typeof data.starting_price === "number"
+        ? data.starting_price
+        : data.starting_price
+          ? Number(data.starting_price)
+          : typeof data.price_amount === "number"
+            ? data.price_amount
+            : data.price_amount
+              ? Number(data.price_amount)
+              : null,
+    priceRange: formatVendorStartingPrice({
+      currencyCode:
+        toSupportedVendorCurrency(data.currency_code) ??
+        toSupportedVendorCurrency(data.price_currency),
+      startingPrice:
+        typeof data.starting_price === "number"
+          ? data.starting_price
+          : data.starting_price
+            ? Number(data.starting_price)
+            : typeof data.price_amount === "number"
+              ? data.price_amount
+              : data.price_amount
+                ? Number(data.price_amount)
+                : null,
+      priceLabel: typeof data.price_label === "string" ? data.price_label : null,
+      legacyPriceRange: data.price_range ?? null,
+    }),
     status,
     onboardingCompleted: data.onboarding_completed ?? false,
     approved: isApproved,

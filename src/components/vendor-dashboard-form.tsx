@@ -7,14 +7,8 @@ import {
   useState,
   type ChangeEvent,
   type ForwardedRef,
-  type ReactNode,
 } from "react";
-import { useFormStatus } from "react-dom";
 
-import {
-  saveVendorDraftAction,
-  submitVendorForReviewAction,
-} from "@/app/vendor/dashboard/actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   VENDOR_DOCUMENTS_BUCKET,
@@ -26,6 +20,8 @@ import {
   getSubcategoriesForCategory,
   normalizeVendorCategory,
 } from "@/lib/vendor-categories";
+import { supportedVendorCurrencies } from "@/lib/currency";
+import { COUNTRY_DIAL_CODES } from "@/lib/country-dial-codes";
 
 type VendorDashboardFormProps = {
   vendor: VendorDirectoryItem | null;
@@ -37,13 +33,7 @@ type VendorDashboardFormProps = {
   };
 };
 
-const regionOptions = [
-  { label: "Nigeria", phoneCode: "+234", currency: "NGN" },
-  { label: "USA", phoneCode: "+1", currency: "USD" },
-  { label: "Canada", phoneCode: "+1", currency: "CAD" },
-  { label: "UK", phoneCode: "+44", currency: "GBP" },
-  { label: "Europe / Other diaspora", phoneCode: "+44", currency: "GBP" },
-] as const;
+const regionOptions = COUNTRY_DIAL_CODES.map((country) => country.name);
 
 const nigeriaStates = [
   "Lagos",
@@ -75,14 +65,13 @@ export function VendorDashboardForm({
   vendor,
   profile,
 }: VendorDashboardFormProps) {
-  const approvedVendor = vendor?.status === "approved";
   const inferredRegion =
-    vendor?.countryRegion ||
+    normalizeRegionLabel(vendor?.countryRegion || "") ||
     inferRegionFromLocation(vendor?.location || "") ||
     "Nigeria";
-  const regionMeta =
-    regionOptions.find((option) => option.label === inferredRegion) ||
-    regionOptions[0];
+  const regionMeta = COUNTRY_DIAL_CODES.find(
+    (option) => option.name === inferredRegion,
+  );
 
   const [countryRegion, setCountryRegion] = useState(inferredRegion);
   const normalizedVendorCategory = normalizeVendorCategory(
@@ -101,13 +90,20 @@ export function VendorDashboardForm({
     vendor?.registeredBusiness ?? false,
   );
   const [phoneCode, setPhoneCode] = useState(
-    vendor?.phoneCode || regionMeta.phoneCode,
+    vendor?.phoneCode || regionMeta?.dialCode || "+234",
   );
+  const resolvedInitialPriceCurrency = supportedVendorCurrencies.includes(
+    String(vendor?.priceCurrency ?? "").trim().toUpperCase() as (typeof supportedVendorCurrencies)[number],
+  )
+    ? String(vendor?.priceCurrency ?? "").trim().toUpperCase()
+    : "NGN";
   const [priceCurrency, setPriceCurrency] = useState(
-    vendor?.priceCurrency || regionMeta.currency,
+    resolvedInitialPriceCurrency,
   );
   const [phoneLocal, setPhoneLocal] = useState(
-    stripPhonePrefix(vendor?.whatsapp || profile.phone || "", phoneCode),
+    sanitizePhoneLocal(
+      stripPhonePrefix(vendor?.whatsapp || profile.phone || "", phoneCode),
+    ),
   );
   const [portfolioImages, setPortfolioImages] = useState<string[]>(
     vendor?.portfolioImageUrls ? [...vendor.portfolioImageUrls] : [],
@@ -129,6 +125,7 @@ export function VendorDashboardForm({
     cacCertificate: false,
     error: null,
   });
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
   const portfolioInputRef = useRef<HTMLInputElement | null>(null);
   const governmentIdInputRef = useRef<HTMLInputElement | null>(null);
@@ -412,121 +409,113 @@ export function VendorDashboardForm({
   }
 
   function handleRegionChange(nextRegion: string) {
-    const meta =
-      regionOptions.find((option) => option.label === nextRegion) || regionOptions[0];
     setCountryRegion(nextRegion);
-    setPhoneCode(meta.phoneCode);
-    setPriceCurrency(meta.currency);
   }
 
   return (
-    <form className="mt-8 grid gap-8">
-      {approvedVendor ? (
-        <div className="rounded-[1.5rem] border border-[rgba(201,161,91,0.3)] bg-[rgba(201,161,91,0.12)] px-5 py-4 text-sm leading-7 text-[color:var(--color-ink)]">
-          For trust and verification purposes, business identity details require admin review. You can update portfolio, description, services, links, and other content fields here. Please contact support or admin to update identity-related details.
-        </div>
-      ) : null}
+    <form action="/vendor/dashboard/update" method="post" className="mt-8 grid gap-8">
+      <div className="rounded-[1.5rem] border border-[rgba(201,161,91,0.3)] bg-[rgba(201,161,91,0.12)] px-5 py-4 text-sm leading-7 text-[color:var(--color-ink)]">
+        Business identity fields require admin review after approval. Pricing,
+        portfolio, website, services, and social links update directly.
+      </div>
       <div className="grid gap-5 md:grid-cols-2">
-        {approvedVendor ? (
-          <>
-            <LockedField label="Business Name" value={formDefaults.businessName} />
-            <LockedField label="Owner Name" value={formDefaults.ownerName} />
-            <LockedField label="Email Address" value={profile.email || ""} />
-            <LockedField label="Phone Number" value={[phoneCode, phoneLocal].filter(Boolean).join(" ")} />
-            <LockedField label="Business Category" value={selectedCategory || formDefaults.category} />
-            <LockedField label="Country / Region" value={countryRegion} />
-            <LockedField
+        <>
+          <Field label="Business Name" name="businessName" defaultValue={formDefaults.businessName} required />
+          <Field label="Owner Name" name="ownerName" defaultValue={formDefaults.ownerName} required />
+          <Field
+            label="Email Address"
+            name="email"
+            type="email"
+            defaultValue={profile.email || ""}
+            required
+          />
+          <PhoneField
+            phoneCode={phoneCode}
+            onPhoneCodeChange={setPhoneCode}
+            phoneLocal={phoneLocal}
+            onPhoneLocalChange={setPhoneLocal}
+            required
+          />
+          <SelectField
+            label="Business Category"
+            name="category"
+            options={TOP_LEVEL_VENDOR_CATEGORIES}
+            defaultValue={selectedCategory}
+            required
+            onChangeValue={(value) => {
+              setSelectedCategory(value);
+              setSelectedSubcategory("");
+            }}
+          />
+          {selectedCategory !== "Others" && subcategoryOptions.length ? (
+            <SelectField
+              label="Subcategory"
+              name="subcategory"
+              options={subcategoryOptions}
+              defaultValue={selectedSubcategory}
+              optional
+              onChangeValue={setSelectedSubcategory}
+            />
+          ) : null}
+          {selectedCategory === "Others" ? (
+            <Field
+              label="Your Category"
+              name="customCategory"
+              defaultValue={formDefaults.customCategory}
+              placeholder="Tell us the type of business you run"
+              required
+            />
+          ) : null}
+          <SelectField
+            label="Country / Region"
+            name="countryRegion"
+            options={regionOptions}
+            defaultValue={countryRegion}
+            required
+            onChangeValue={handleRegionChange}
+          />
+          {showNigeriaState ? (
+            <SelectField
               label={locationLabel}
-              value={showNigeriaState ? formDefaults.nigeriaState : formDefaults.regionLabel}
-            />
-          </>
-        ) : (
-          <>
-            <Field label="Business Name" name="businessName" defaultValue={formDefaults.businessName} required />
-            <Field label="Owner Name" name="ownerName" defaultValue={formDefaults.ownerName} />
-            <Field label="Email Address" name="email" type="email" defaultValue={profile.email || ""} readOnly required />
-            <PhoneField
-              phoneCode={phoneCode}
-              onPhoneCodeChange={setPhoneCode}
-              phoneLocal={phoneLocal}
-              onPhoneLocalChange={setPhoneLocal}
-            />
-            <SelectField
-              label="Business Category"
-              name="category"
-              options={TOP_LEVEL_VENDOR_CATEGORIES}
-              defaultValue={selectedCategory}
+              name="nigeriaState"
+              options={nigeriaStates}
+              defaultValue={formDefaults.nigeriaState}
               required
-              onChangeValue={(value) => {
-                setSelectedCategory(value);
-                setSelectedSubcategory("");
-              }}
             />
-            {selectedCategory !== "Others" && subcategoryOptions.length ? (
-              <SelectField
-                label="Subcategory (optional)"
-                name="subcategory"
-                options={subcategoryOptions}
-                defaultValue={selectedSubcategory}
-                onChangeValue={setSelectedSubcategory}
-              />
-            ) : null}
-            {selectedCategory === "Others" ? (
-              <Field
-                label="Your Category"
-                name="customCategory"
-                defaultValue={formDefaults.customCategory}
-                placeholder="Tell us the type of business you run"
-                required
-              />
-            ) : null}
-            <SelectField
-              label="Country / Region"
-              name="countryRegion"
-              options={regionOptions.map((option) => option.label)}
-              defaultValue={countryRegion}
+          ) : (
+            <Field
+              label={locationLabel}
+              name="regionLabel"
+              defaultValue={formDefaults.regionLabel}
+              placeholder="City / region"
               required
-              onChangeValue={handleRegionChange}
             />
-            {showNigeriaState ? (
-              <SelectField
-                label={locationLabel}
-                name="nigeriaState"
-                options={nigeriaStates}
-                defaultValue={formDefaults.nigeriaState}
-                required
-              />
-            ) : (
-              <Field
-                label={locationLabel}
-                name="regionLabel"
-                defaultValue={formDefaults.regionLabel}
-                placeholder="City / region"
-                required
-              />
-            )}
-          </>
-        )}
+          )}
+        </>
         <Field
           label="Years of Experience"
           name="yearsExperience"
           defaultValue={formDefaults.yearsExperience}
+          optional
           placeholder="e.g. 5 years"
         />
         <PriceField
           priceCurrency={priceCurrency}
           priceAmount={formDefaults.priceAmount}
+          onPriceCurrencyChange={setPriceCurrency}
         />
         <Field
           label="Social Media / Portfolio Link"
           name="primarySocialLink"
           defaultValue={formDefaults.primarySocialLink}
+          optional
           placeholder="Instagram, TikTok, Behance, or another business portfolio link"
         />
         <Field
           label="Website"
           name="website"
           defaultValue={formDefaults.website}
+          optional
           placeholder="https://yourbusiness.com"
         />
         <SelectField
@@ -534,24 +523,19 @@ export function VendorDashboardForm({
           name="cultureSpecialization"
           options={cultureOptions}
           defaultValue={formDefaults.cultureSpecialization}
+          optional
         />
-        {approvedVendor ? (
-          <LockedField
-            label="Registered business"
-            value={registeredBusiness ? "Yes" : "No"}
-          />
-        ) : (
-          <RadioField
-            label="Are you a registered business?"
-            name="registeredBusiness"
-            value={registeredBusiness ? "yes" : "no"}
-            onChangeValue={(value) => setRegisteredBusiness(value === "yes")}
-            options={[
-              { label: "Yes", value: "yes" },
-              { label: "No", value: "no" },
-            ]}
-          />
-        )}
+        <RadioField
+          label="Are you a registered business?"
+          name="registeredBusiness"
+          value={registeredBusiness ? "yes" : "no"}
+          onChangeValue={(value) => setRegisteredBusiness(value === "yes")}
+          options={[
+            { label: "Yes", value: "yes" },
+            { label: "No", value: "no" },
+          ]}
+          optional
+        />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -620,14 +604,13 @@ export function VendorDashboardForm({
           helperText="Upload a valid government-issued ID for verification. This document is stored securely, kept private, and never displayed publicly. It is used only for identity verification and review."
           uploading={uploadState.governmentId}
           onChange={handleGovernmentIdUpload}
-          disabled={approvedVendor}
         />
         <div className="surface-soft rounded-[1.5rem] p-5 text-sm leading-7 text-[color:var(--color-muted)]">
           <p className="font-semibold text-[color:var(--color-ink)]">
             Review and publication
           </p>
           <p className="mt-2">
-            Save Draft stores your progress privately. Submit for Review sends your
+            Save Draft stores your progress privately. Submit sends your
             profile into the review queue so it can be approved for marketplace publication.
           </p>
           <p className="mt-3">
@@ -655,7 +638,6 @@ export function VendorDashboardForm({
             helperText="If your business is formally registered, you can upload the supporting certificate here for internal review. This document is optional."
             uploading={uploadState.cacCertificate}
             onChange={handleCacUpload}
-            disabled={approvedVendor}
           />
           <div className="surface-soft rounded-[1.5rem] p-5 text-sm leading-7 text-[color:var(--color-muted)]">
             <p className="font-semibold text-[color:var(--color-ink)]">
@@ -677,20 +659,6 @@ export function VendorDashboardForm({
       <input type="hidden" name="portfolioImageUrls" value={JSON.stringify(portfolioImages)} />
       <input type="hidden" name="governmentIdPath" value={governmentIdPath} />
       <input type="hidden" name="cacCertificatePath" value={cacCertificatePath} />
-      {approvedVendor ? (
-        <>
-          <input type="hidden" name="businessName" value={formDefaults.businessName} />
-          <input type="hidden" name="ownerName" value={formDefaults.ownerName} />
-          <input type="hidden" name="email" value={profile.email || ""} />
-          <input type="hidden" name="category" value={selectedCategory || formDefaults.category} />
-          <input type="hidden" name="customCategory" value={formDefaults.customCategory} />
-          <input type="hidden" name="subcategory" value={formDefaults.subcategory} />
-          <input type="hidden" name="countryRegion" value={countryRegion} />
-          <input type="hidden" name="nigeriaState" value={formDefaults.nigeriaState} />
-          <input type="hidden" name="regionLabel" value={formDefaults.regionLabel} />
-          <input type="hidden" name="registeredBusiness" value={registeredBusiness ? "yes" : "no"} />
-        </>
-      ) : null}
 
       <div className="flex flex-col gap-4 border-t border-[rgba(106,62,124,0.08)] pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-2xl text-sm leading-7 text-[color:var(--color-muted)]">
@@ -698,38 +666,49 @@ export function VendorDashboardForm({
           reviewed before they are published in the marketplace.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <ActionButton formAction={saveVendorDraftAction} variant="secondary">
+          <button
+            type="submit"
+            name="intent"
+            value="draft"
+            className="btn-secondary"
+            onClick={() => setActionFeedback("Draft saved only.")}
+          >
             Save Draft
-          </ActionButton>
-          <ActionButton formAction={submitVendorForReviewAction} variant="primary">
-            Submit for Review
-          </ActionButton>
+          </button>
+          <button
+            type="submit"
+            name="intent"
+            value="publish"
+            className="btn-secondary"
+            onClick={() => {
+              console.log("PUBLISH_BUTTON_CLICKED");
+              setActionFeedback("Your listing updates are now live.");
+            }}
+          >
+            Publish Updates
+          </button>
+          <button
+            type="submit"
+            name="intent"
+            value="submit"
+            className="btn-primary"
+            onClick={() => {
+              console.log("SUBMIT_BUTTON_CLICKED");
+              setActionFeedback(
+                "Your business identity changes have been sent to admin for review. You will receive a response within 3 business days.",
+              );
+            }}
+          >
+            Submit
+          </button>
         </div>
       </div>
+      {actionFeedback ? (
+        <p className="text-sm text-[color:var(--color-brand-primary)]">
+          {actionFeedback}
+        </p>
+      ) : null}
     </form>
-  );
-}
-
-function ActionButton({
-  children,
-  formAction,
-  variant,
-}: {
-  children: ReactNode;
-  formAction: (formData: FormData) => Promise<void>;
-  variant: "primary" | "secondary";
-}) {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      formAction={formAction}
-      type="submit"
-      className={variant === "primary" ? "btn-primary" : "btn-secondary"}
-      disabled={pending}
-    >
-      {pending ? "Saving..." : children}
-    </button>
   );
 }
 
@@ -739,6 +718,7 @@ function Field({
   defaultValue,
   placeholder,
   required = false,
+  optional = false,
   type = "text",
   readOnly = false,
 }: {
@@ -747,12 +727,13 @@ function Field({
   defaultValue?: string;
   placeholder?: string;
   required?: boolean;
+  optional?: boolean;
   type?: string;
   readOnly?: boolean;
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
-      {label}
+      <LabelText label={label} required={required} optional={optional} />
       <input
         name={name}
         type={type}
@@ -766,31 +747,22 @@ function Field({
   );
 }
 
-function LockedField({ label, value }: { label: string; value?: string }) {
-  return (
-    <div className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
-      <span>{label}</span>
-      <div className="field-input rounded-[1.25rem] bg-[rgba(106,62,124,0.05)] text-[color:var(--color-muted)]">
-        {value || "Not provided"}
-      </div>
-    </div>
-  );
-}
-
 function TextAreaField({
   label,
   name,
   defaultValue,
   placeholder,
+  optional = true,
 }: {
   label: string;
   name: string;
   defaultValue?: string;
   placeholder?: string;
+  optional?: boolean;
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
-      {label}
+      <LabelText label={label} optional={optional} />
       <textarea
         name={name}
         defaultValue={defaultValue}
@@ -808,6 +780,7 @@ function SelectField({
   options,
   defaultValue,
   required = false,
+  optional = false,
   onChangeValue,
 }: {
   label: string;
@@ -815,11 +788,12 @@ function SelectField({
   options: readonly string[];
   defaultValue?: string;
   required?: boolean;
+  optional?: boolean;
   onChangeValue?: (value: string) => void;
 }) {
   return (
     <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
-      {label}
+      <LabelText label={label} required={required} optional={optional} />
       <select
         name={name}
         defaultValue={defaultValue || ""}
@@ -844,16 +818,20 @@ function RadioField({
   value,
   options,
   onChangeValue,
+  optional = false,
 }: {
   label: string;
   name: string;
   value: string;
   options: { label: string; value: string }[];
   onChangeValue: (value: string) => void;
+  optional?: boolean;
 }) {
   return (
     <fieldset className="grid gap-3 text-sm font-medium text-[color:var(--color-ink)]">
-      <legend>{label}</legend>
+      <legend>
+        <LabelText label={label} optional={optional} />
+      </legend>
       <div className="flex flex-wrap gap-3">
         {options.map((option) => (
           <label
@@ -880,29 +858,36 @@ function PhoneField({
   onPhoneCodeChange,
   phoneLocal,
   onPhoneLocalChange,
+  required = false,
 }: {
   phoneCode: string;
   onPhoneCodeChange: (value: string) => void;
   phoneLocal: string;
   onPhoneLocalChange: (value: string) => void;
+  required?: boolean;
 }) {
   return (
     <div className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
-      <span>Phone Number</span>
+      <LabelText label="Phone Number" required={required} />
       <div className="grid grid-cols-[120px_1fr] gap-3">
         <select
           value={phoneCode}
           onChange={(event) => onPhoneCodeChange(event.target.value)}
           className="field-input rounded-[1.25rem]"
         >
-          <option value="+234">+234</option>
-          <option value="+1">+1</option>
-          <option value="+44">+44</option>
+          {COUNTRY_DIAL_CODES.map((country) => (
+            <option key={`${country.countryCode}-${country.dialCode}`} value={country.dialCode}>
+              {country.name} ({country.dialCode})
+            </option>
+          ))}
         </select>
         <input
           value={phoneLocal}
-          onChange={(event) => onPhoneLocalChange(event.target.value)}
+          onChange={(event) => onPhoneLocalChange(sanitizePhoneLocal(event.target.value))}
           placeholder="801 234 5678"
+          inputMode="tel"
+          pattern="[0-9\\s\\-\\(\\)]{6,20}"
+          required={required}
           className="field-input rounded-[1.25rem]"
         />
       </div>
@@ -913,19 +898,27 @@ function PhoneField({
 function PriceField({
   priceCurrency,
   priceAmount,
+  onPriceCurrencyChange,
 }: {
   priceCurrency: string;
   priceAmount: string;
+  onPriceCurrencyChange: (value: string) => void;
 }) {
   return (
     <div className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
-      <span>Starting Price</span>
+      <LabelText label="Starting Price" optional />
       <div className="grid grid-cols-[110px_1fr] gap-3">
-        <input
+        <select
           value={priceCurrency}
-          readOnly
+          onChange={(event) => onPriceCurrencyChange(event.target.value)}
           className="field-input rounded-[1.25rem]"
-        />
+        >
+          {supportedVendorCurrencies.map((currency) => (
+            <option key={currency} value={currency}>
+              {currency}
+            </option>
+          ))}
+        </select>
         <input
           name="priceAmount"
           type="number"
@@ -937,6 +930,32 @@ function PriceField({
       </div>
     </div>
   );
+}
+
+function LabelText({
+  label,
+  required = false,
+  optional = false,
+}: {
+  label: string;
+  required?: boolean;
+  optional?: boolean;
+}) {
+  if (required) {
+    return (
+      <span>
+        {label} <span className="text-[#b42318]">*</span>
+      </span>
+    );
+  }
+  if (optional) {
+    return (
+      <span>
+        {label} <span className="text-xs font-normal text-[color:var(--color-muted)]">(optional)</span>
+      </span>
+    );
+  }
+  return <span>{label}</span>;
 }
 
 function UploadFieldImpl(
@@ -990,13 +1009,13 @@ function inferRegionFromLocation(location: string) {
     return "Nigeria";
   }
   if (normalized.includes("texas") || normalized.includes("usa")) {
-    return "USA";
+    return "United States";
   }
   if (normalized.includes("canada")) {
     return "Canada";
   }
   if (normalized.includes("united kingdom") || normalized.includes("london")) {
-    return "UK";
+    return "United Kingdom";
   }
   return "";
 }
@@ -1010,6 +1029,24 @@ function extractRegionLabel(location: string, countryRegion: string) {
 
 function stripPhonePrefix(phone: string, code: string) {
   return phone.replace(code, "").trim();
+}
+
+function normalizeRegionLabel(value: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized === "USA") {
+    return "United States";
+  }
+  if (normalized === "UK") {
+    return "United Kingdom";
+  }
+  return normalized;
+}
+
+function sanitizePhoneLocal(value: string) {
+  return value.replace(/[^\d\s\-()]/g, "");
 }
 
 function humanizeUploadError(message: string, label: string) {

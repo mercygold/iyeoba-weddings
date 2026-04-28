@@ -280,7 +280,12 @@ export default async function Home() {
           </div>
         </section>
 
-        <TikTokSection latestTikToks={latestTikToks} topTikToks={topTikToks} />
+        <TikTokSection
+          latestTikToks={latestTikToks}
+          topTikToks={topTikToks}
+          title="Trending on TikTok"
+          subtitle="Explore real Nigerian wedding ideas, styles, vendors, and cultural inspiration from Iyeoba Weddings."
+        />
 
         <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.76)] p-8 shadow-[0_20px_55px_-42px_rgba(31,31,31,0.24)] backdrop-blur-sm">
           <div

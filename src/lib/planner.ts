@@ -22,9 +22,18 @@ export const locations = [
   "Lagos",
   "Abuja",
   "Port Harcourt",
+  "United States",
+  "New York",
+  "Atlanta",
   "London",
+  "United Kingdom",
   "Houston",
+  "Canada",
   "Toronto",
+  "Australia",
+  "Sydney",
+  "Melbourne",
+  "Europe",
   "Hybrid Nigeria + diaspora",
 ];
 
@@ -35,10 +44,81 @@ export const budgetRanges = [
   "NGN 20M+",
 ];
 
+export const budgetCurrencies = ["NGN", "USD", "CAD", "GBP", "EUR", "AUD"] as const;
+
+export type BudgetCurrency = (typeof budgetCurrencies)[number];
+
+export function isBudgetCurrency(value: string): value is BudgetCurrency {
+  return budgetCurrencies.includes(value as BudgetCurrency);
+}
+
+export function suggestBudgetCurrency(location: string): BudgetCurrency {
+  const normalized = location.trim().toLowerCase();
+  if (!normalized) {
+    return "USD";
+  }
+
+  if (
+    normalized.includes("nigeria") ||
+    normalized.includes("lagos") ||
+    normalized.includes("abuja") ||
+    normalized.includes("port harcourt")
+  ) {
+    return "NGN";
+  }
+
+  if (
+    normalized.includes("united states") ||
+    normalized.includes("usa") ||
+    normalized.includes("us") ||
+    normalized.includes("houston") ||
+    normalized.includes("new york") ||
+    normalized.includes("atlanta")
+  ) {
+    return "USD";
+  }
+
+  if (normalized.includes("canada") || normalized.includes("toronto")) {
+    return "CAD";
+  }
+
+  if (
+    normalized.includes("united kingdom") ||
+    normalized.includes("uk") ||
+    normalized.includes("london")
+  ) {
+    return "GBP";
+  }
+
+  if (
+    normalized.includes("australia") ||
+    normalized.includes("sydney") ||
+    normalized.includes("melbourne")
+  ) {
+    return "AUD";
+  }
+
+  return "USD";
+}
+
+export function getBudgetRangesForCurrency(currency: BudgetCurrency): string[] {
+  if (currency === "NGN") {
+    return ["Under NGN 5M", "NGN 5M to NGN 10M", "NGN 10M to NGN 20M", "NGN 20M+"];
+  }
+  if (currency === "GBP") {
+    return ["Under £5,000", "£5,000 to £10,000", "£10,000 to £20,000", "£20,000+"];
+  }
+  if (currency === "EUR") {
+    return ["Under €5,000", "€5,000 to €10,000", "€10,000 to €20,000", "€20,000+"];
+  }
+  return ["Under $5,000", "$5,000 to $10,000", "$10,000 to $20,000", "$20,000+"];
+}
+
 export type PlannerInput = {
   culture: string;
   weddingType: string;
   location: string;
+  budgetCurrency: BudgetCurrency;
   guestCount: number;
   budgetRange: string;
 };
@@ -51,6 +131,7 @@ export function getPlannerInputFromSearchParams(
     weddingType:
       readSingle(searchParams.weddingType) ?? "Traditional + white wedding",
     location: readSingle(searchParams.location) ?? "Lagos",
+    budgetCurrency: "NGN",
     guestCount: Number(readSingle(searchParams.guestCount) ?? "250"),
     budgetRange: readSingle(searchParams.budgetRange) ?? "NGN 10M to NGN 20M",
   };

@@ -15,9 +15,12 @@ type SearchParams = Promise<{
   tab?: string;
   vendor?: string;
   message?: string;
+  q?: string;
+  sort?: string;
 }>;
 
-type ManageTab = "pending" | "approved" | "rejected" | "notes" | "users";
+type ManageTab = "all" | "pending" | "approved" | "rejected" | "notes" | "users";
+type VendorSort = "newest" | "oldest" | "updated";
 type ManageAdminNote = {
   id: string;
   note: string;
@@ -45,18 +48,22 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
 
   const searchParams = await props.searchParams;
   const tab = normalizeTab(searchParams.tab);
+  const query = String(searchParams.q ?? "").trim();
+  const sort = normalizeSort(searchParams.sort);
   const vendors = await getManageVendors();
+  const filteredVendors = filterAndSortVendors(vendors, { query, sort });
   const expandedVendorId = typeof searchParams.vendor === "string" ? searchParams.vendor : null;
-  const manageNextPath = buildManageNextPath(tab, expandedVendorId);
+  const manageNextPath = buildManageNextPath(tab, expandedVendorId, query, sort);
   const message = typeof searchParams.message === "string" ? searchParams.message : "";
   const notes = await getAdminNotes();
   const users = await getManageUsers();
 
-  const pendingVendors = vendors.filter((vendor) => vendor.status === "pending_review");
-  const approvedVendors = vendors.filter((vendor) => vendor.status === "approved");
-  const rejectedVendors = vendors.filter((vendor) =>
+  const pendingVendors = filteredVendors.filter((vendor) => vendor.status === "pending_review");
+  const approvedVendors = filteredVendors.filter((vendor) => vendor.status === "approved");
+  const rejectedVendors = filteredVendors.filter((vendor) =>
     ["needs_changes", "rejected", "suspended", "archived"].includes(vendor.status ?? ""),
   );
+  const allVendors = filteredVendors;
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fdfbfd_0%,#ffffff_52%,#ffffff_100%)]">
@@ -81,36 +88,85 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
 
         <section className="grid gap-4 md:grid-cols-5">
           <TabCard
-            href="/manage?tab=pending"
+            href={buildManageTabHref("all", query, sort)}
+            label="All Vendors"
+            count={allVendors.length}
+            active={tab === "all"}
+          />
+          <TabCard
+            href={buildManageTabHref("pending", query, sort)}
             label="Pending Vendors"
             count={pendingVendors.length}
             active={tab === "pending"}
           />
           <TabCard
-            href="/manage?tab=approved"
+            href={buildManageTabHref("approved", query, sort)}
             label="Approved Vendors"
             count={approvedVendors.length}
             active={tab === "approved"}
           />
           <TabCard
-            href="/manage?tab=rejected"
+            href={buildManageTabHref("rejected", query, sort)}
             label="Rejected Vendors"
             count={rejectedVendors.length}
             active={tab === "rejected"}
           />
           <TabCard
-            href="/manage?tab=notes"
+            href={buildManageTabHref("notes", query, sort)}
             label="Admin Notes"
             count={notes.length}
             active={tab === "notes"}
           />
+        </section>
+        <section className="grid gap-4 md:grid-cols-5">
           <TabCard
-            href="/manage?tab=users"
+            href={buildManageTabHref("users", query, sort)}
             label="Users"
             count={users.length}
             active={tab === "users"}
           />
+          <div className="md:col-span-4 surface-card rounded-[1.4rem] p-4">
+            <form className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+              <input type="hidden" name="tab" value={tab} />
+              {expandedVendorId ? (
+                <input type="hidden" name="vendor" value={expandedVendorId} />
+              ) : null}
+              <label className="grid gap-1 text-sm font-medium text-[color:var(--color-ink)]">
+                Search vendor business name
+                <input
+                  name="q"
+                  defaultValue={query}
+                  placeholder="Search by business name"
+                  className="field-input rounded-[1rem]"
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium text-[color:var(--color-ink)]">
+                Sort
+                <select name="sort" defaultValue={sort} className="field-input rounded-[1rem]">
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="updated">Recently updated</option>
+                </select>
+              </label>
+              <button type="submit" className="btn-primary whitespace-nowrap">
+                Apply
+              </button>
+            </form>
+          </div>
         </section>
+
+        {tab === "all" ? (
+          <VendorSection
+            title="All Vendors"
+            description="Full vendor operations queue across all statuses."
+            vendors={allVendors}
+            expandedVendorId={expandedVendorId}
+            nextPath={manageNextPath}
+            query={query}
+            sort={sort}
+            activeTab={tab}
+          />
+        ) : null}
 
         {tab === "pending" ? (
           <VendorSection
@@ -119,6 +175,9 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             vendors={pendingVendors}
             expandedVendorId={expandedVendorId}
             nextPath={manageNextPath}
+            query={query}
+            sort={sort}
+            activeTab={tab}
           />
         ) : null}
 
@@ -129,6 +188,9 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             vendors={approvedVendors}
             expandedVendorId={expandedVendorId}
             nextPath={manageNextPath}
+            query={query}
+            sort={sort}
+            activeTab={tab}
           />
         ) : null}
 
@@ -139,6 +201,9 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             vendors={rejectedVendors}
             expandedVendorId={expandedVendorId}
             nextPath={manageNextPath}
+            query={query}
+            sort={sort}
+            activeTab={tab}
           />
         ) : null}
 
@@ -276,12 +341,18 @@ function VendorSection({
   vendors,
   expandedVendorId,
   nextPath,
+  query,
+  sort,
+  activeTab,
 }: {
   title: string;
   description: string;
   vendors: AdminVendorSubmission[];
   expandedVendorId: string | null;
   nextPath: string;
+  query: string;
+  sort: VendorSort;
+  activeTab: ManageTab;
 }) {
   return (
     <section className="surface-card rounded-[2rem] p-6 sm:p-8">
@@ -305,12 +376,28 @@ function VendorSection({
                     <p className="mt-1 text-sm text-[color:var(--color-muted)]">
                       {vendor.location} · submitted {formatDate(vendor.createdAt)}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--color-muted)]">
+                      <span className="rounded-full bg-[rgba(106,62,124,0.08)] px-2.5 py-1">
+                        Owner: {vendor.ownerName || "Not provided"}
+                      </span>
+                      <span className="rounded-full bg-[rgba(106,62,124,0.08)] px-2.5 py-1">
+                        Updated: {formatDate(vendor.updatedAt)}
+                      </span>
+                    </div>
                   </div>
                   <StatusBadge status={vendor.status} />
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Link href={`/manage?tab=${tabForStatus(vendor.status)}&vendor=${encodeURIComponent(vendor.id)}`} className="btn-secondary px-3 py-1.5 text-sm">
+                  <Link
+                    href={buildManageVendorHref({
+                      tab: activeTab,
+                      vendorId: vendor.id,
+                      query,
+                      sort,
+                    })}
+                    className="btn-secondary px-3 py-1.5 text-sm"
+                  >
                     View Details
                   </Link>
                   <form action={approveVendorAction}>
@@ -334,6 +421,7 @@ function VendorSection({
                   <div className="mt-5 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
                     <div className="grid gap-4 md:grid-cols-2">
                       <Info label="Business name" value={vendor.businessName} />
+                      <Info label="Owner name" value={vendor.ownerName || "Not provided"} />
                       <Info label="Category" value={vendor.customCategory || vendor.category} />
                       <Info label="Location" value={vendor.location} />
                       <Info label="Pricing" value={vendor.priceRange || "Not provided"} />
@@ -341,6 +429,8 @@ function VendorSection({
                       <Info label="Phone" value={vendor.phone || "Not provided"} />
                       <Info label="Social" value={vendor.primarySocialLink || "Not provided"} />
                       <Info label="Website" value={vendor.website || "Not provided"} />
+                      <Info label="Last updated" value={formatDate(vendor.updatedAt)} />
+                      <Info label="Notes" value={vendor.adminNotes || "No notes added"} />
                     </div>
 
                     <div className="surface-card rounded-[1.35rem] p-4">
@@ -437,11 +527,16 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function StatusBadge({ status }: { status: string | null }) {
   const normalized = status ?? "pending_review";
-  const label = normalized === "needs_changes" ? "rejected" : normalized;
+  const label =
+    normalized === "approved"
+      ? "Approved"
+      : normalized === "pending_review"
+        ? "Pending"
+        : "Rejected";
   const tone =
-    label === "approved"
+    label === "Approved"
       ? "bg-emerald-100 text-emerald-700"
-      : label === "pending_review"
+      : label === "Pending"
         ? "bg-amber-100 text-amber-700"
         : "bg-rose-100 text-rose-700";
   return (
@@ -463,30 +558,103 @@ function ConfirmationBadge({ status }: { status: "confirmed" | "unconfirmed" }) 
   );
 }
 
-function tabForStatus(status: string | null) {
-  if (status === "approved") return "approved";
-  if (status === "pending_review") return "pending";
-  return "rejected";
-}
-
 function normalizeTab(tab: string | undefined): ManageTab {
-  if (tab === "approved" || tab === "rejected" || tab === "notes" || tab === "users") return tab;
-  return "pending";
+  if (tab === "all" || tab === "pending" || tab === "approved" || tab === "rejected" || tab === "notes" || tab === "users") return tab;
+  return "all";
 }
 
-function buildManageNextPath(tab: ManageTab, expandedVendorId: string | null) {
+function normalizeSort(value: string | undefined): VendorSort {
+  if (value === "oldest" || value === "updated") {
+    return value;
+  }
+  return "newest";
+}
+
+function buildManageNextPath(
+  tab: ManageTab,
+  expandedVendorId: string | null,
+  query: string,
+  sort: VendorSort,
+) {
   const params = new URLSearchParams();
   params.set("tab", tab);
+  if (query) {
+    params.set("q", query);
+  }
+  params.set("sort", sort);
   if (expandedVendorId) {
     params.set("vendor", expandedVendorId);
   }
   return `/manage?${params.toString()}`;
 }
 
+function buildManageTabHref(tab: ManageTab, query: string, sort: VendorSort) {
+  const params = new URLSearchParams();
+  params.set("tab", tab);
+  if (query) {
+    params.set("q", query);
+  }
+  params.set("sort", sort);
+  return `/manage?${params.toString()}`;
+}
+
+function buildManageVendorHref({
+  tab,
+  vendorId,
+  query,
+  sort,
+}: {
+  tab: ManageTab;
+  vendorId: string;
+  query: string;
+  sort: VendorSort;
+}) {
+  const params = new URLSearchParams();
+  params.set("tab", tab);
+  params.set("vendor", vendorId);
+  if (query) {
+    params.set("q", query);
+  }
+  params.set("sort", sort);
+  return `/manage?${params.toString()}`;
+}
+
+function filterAndSortVendors(
+  vendors: AdminVendorSubmission[],
+  options: { query: string; sort: VendorSort },
+) {
+  const query = options.query.toLowerCase();
+  const filtered = query
+    ? vendors.filter((vendor) =>
+        vendor.businessName.toLowerCase().includes(query),
+      )
+    : vendors;
+
+  return [...filtered].sort((left, right) => {
+    if (options.sort === "oldest") {
+      return toMs(left.createdAt) - toMs(right.createdAt);
+    }
+    if (options.sort === "updated") {
+      return (
+        toMs(right.updatedAt ?? right.createdAt) -
+        toMs(left.updatedAt ?? left.createdAt)
+      );
+    }
+    return toMs(right.createdAt) - toMs(left.createdAt);
+  });
+}
+
+function toMs(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 type AdminVendorSubmission = {
   id: string;
   userId: string | null;
   businessName: string;
+  ownerName: string | null;
   email: string | null;
   phone: string | null;
   category: string;
@@ -496,10 +664,12 @@ type AdminVendorSubmission = {
   status: string | null;
   primarySocialLink: string | null;
   website: string | null;
+  adminNotes: string | null;
   governmentIdSignedUrl: string | null;
   cacCertificateSignedUrl: string | null;
   portfolioImages: string[];
   createdAt: string;
+  updatedAt: string | null;
 };
 
 async function getManageVendors(): Promise<AdminVendorSubmission[]> {
@@ -510,6 +680,7 @@ async function getManageVendors(): Promise<AdminVendorSubmission[]> {
       id,
       user_id,
       business_name,
+      owner_name,
       category,
       custom_category,
       location,
@@ -517,9 +688,11 @@ async function getManageVendors(): Promise<AdminVendorSubmission[]> {
       status,
       primary_social_link,
       website,
+      admin_notes,
       government_id_url,
       cac_certificate_url,
       created_at,
+      updated_at,
       users(email, phone),
       vendor_portfolio(image_url, sort_order)
     `)
@@ -556,6 +729,7 @@ async function getManageVendors(): Promise<AdminVendorSubmission[]> {
         id: item.id,
         userId: item.user_id ?? null,
         businessName: item.business_name,
+        ownerName: item.owner_name ?? null,
         email: relatedUser?.email ?? null,
         phone: relatedUser?.phone ?? null,
         category: item.category,
@@ -565,10 +739,12 @@ async function getManageVendors(): Promise<AdminVendorSubmission[]> {
         status: item.status ?? null,
         primarySocialLink: item.primary_social_link ?? null,
         website: item.website ?? null,
+        adminNotes: item.admin_notes ?? null,
         governmentIdSignedUrl,
         cacCertificateSignedUrl,
         portfolioImages,
         createdAt: item.created_at,
+        updatedAt: item.updated_at ?? null,
       } satisfies AdminVendorSubmission;
     }),
   );

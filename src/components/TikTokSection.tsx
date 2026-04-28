@@ -9,9 +9,13 @@ import type { HomepageTikTokItem } from "@/lib/tiktok";
 export function TikTokSection({
   latestTikToks,
   topTikToks,
+  title = "Wedding Inspiration from TikTok",
+  subtitle = "Real Nigerian wedding inspiration is coming soon.",
 }: {
   latestTikToks: HomepageTikTokItem[];
   topTikToks: HomepageTikTokItem[];
+  title?: string;
+  subtitle?: string;
 }) {
   const [apiVideos, setApiVideos] = useState<TikTokApiVideo[] | null>(null);
   const [apiFailed, setApiFailed] = useState(false);
@@ -78,10 +82,10 @@ export function TikTokSection({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
-            Wedding Inspiration from TikTok
+            {title}
           </p>
           <p className="mt-3 max-w-3xl text-base leading-8 text-[color:var(--color-muted)]">
-            Real Nigerian wedding inspiration is coming soon.
+            {subtitle}
           </p>
         </div>
         <Link
@@ -104,7 +108,7 @@ export function TikTokSection({
 
       {showFallback ? (
         <p className="mt-4 text-xs text-[color:var(--color-muted)]">
-          Wedding inspiration from TikTok. Real Nigerian wedding inspiration is coming soon.
+          {subtitle}
         </p>
       ) : null}
     </section>

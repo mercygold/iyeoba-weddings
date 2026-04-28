@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requirePlannerProfile } from "@/lib/auth";
 import { getPlannerPrimaryWeddingId } from "@/lib/inquiries";
+import { isBudgetCurrency, suggestBudgetCurrency } from "@/lib/planner";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -21,7 +22,11 @@ export async function savePlannerOverviewAction(formData: FormData) {
   const weddingType = String(formData.get("weddingType") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const guestCount = Number(String(formData.get("guestCount") ?? "").trim());
+  const budgetCurrencyInput = String(formData.get("budgetCurrency") ?? "").trim().toUpperCase();
   const budgetRange = String(formData.get("budgetRange") ?? "").trim();
+  const budgetCurrency = isBudgetCurrency(budgetCurrencyInput)
+    ? budgetCurrencyInput
+    : suggestBudgetCurrency(location);
 
   if (!culture || !weddingType || !location || !Number.isFinite(guestCount) || guestCount <= 0 || !budgetRange) {
     redirect(
@@ -30,6 +35,15 @@ export async function savePlannerOverviewAction(formData: FormData) {
   }
 
   const payload = {
+    user_id: ownerId,
+    culture,
+    wedding_type: weddingType,
+    location,
+    guest_count: Math.round(guestCount),
+    budget_currency: budgetCurrency,
+    budget_range: budgetRange,
+  };
+  const legacyPayload = {
     user_id: ownerId,
     culture,
     wedding_type: weddingType,
@@ -66,14 +80,23 @@ export async function savePlannerOverviewAction(formData: FormData) {
 
   const existingId = existingResult.data?.[0]?.id ?? null;
   if (existingId) {
-    const updateResult = await supabase
+    let updateResult = await supabase
       .from("weddings")
       .update(payload)
       .eq("id", existingId)
       .eq("user_id", ownerId);
+    if (updateResult.error && isSchemaDriftError(updateResult.error)) {
+      updateResult = await supabase
+        .from("weddings")
+        .update(legacyPayload)
+        .eq("id", existingId)
+        .eq("user_id", ownerId);
+    }
     const persistedResult = await supabase
       .from("weddings")
-      .select("id, user_id, culture, wedding_type, location, guest_count, budget_range")
+      .select(
+        "id, user_id, culture, wedding_type, location, guest_count, budget_currency, budget_range",
+      )
       .eq("id", existingId)
       .eq("user_id", ownerId)
       .maybeSingle();
@@ -93,12 +116,19 @@ export async function savePlannerOverviewAction(formData: FormData) {
       );
     }
   } else {
-    const insertResult = await supabase
+    let insertResult = await supabase
       .from("weddings")
       .insert(payload);
+    if (insertResult.error && isSchemaDriftError(insertResult.error)) {
+      insertResult = await supabase
+        .from("weddings")
+        .insert(legacyPayload);
+    }
     const persistedResult = await supabase
       .from("weddings")
-      .select("id, user_id, culture, wedding_type, location, guest_count, budget_range")
+      .select(
+        "id, user_id, culture, wedding_type, location, guest_count, budget_currency, budget_range",
+      )
       .eq("user_id", ownerId)
       .order("created_at", { ascending: false });
     console.log("Planner overview insert response", {
@@ -136,7 +166,11 @@ export async function saveWeddingEventAction(formData: FormData) {
   const weddingType = String(formData.get("weddingType") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const guestCount = Number(String(formData.get("guestCount") ?? "").trim());
+  const budgetCurrencyInput = String(formData.get("budgetCurrency") ?? "").trim().toUpperCase();
   const budgetRange = String(formData.get("budgetRange") ?? "").trim();
+  const budgetCurrency = isBudgetCurrency(budgetCurrencyInput)
+    ? budgetCurrencyInput
+    : suggestBudgetCurrency(location);
 
   if (
     !culture ||
@@ -158,9 +192,10 @@ export async function saveWeddingEventAction(formData: FormData) {
     wedding_type: weddingType,
     location,
     guest_count: Math.round(guestCount),
+    budget_currency: budgetCurrency,
     budget_range: budgetRange,
   };
-  const payloadWithoutTitle = {
+  const payloadLegacy = {
     user_id: ownerId,
     culture,
     wedding_type: weddingType,
@@ -187,13 +222,15 @@ export async function saveWeddingEventAction(formData: FormData) {
     if (updateResult.error && isSchemaDriftError(updateResult.error)) {
       updateResult = await supabase
         .from("weddings")
-        .update(payloadWithoutTitle)
+        .update(payloadLegacy)
         .eq("id", weddingId)
         .eq("user_id", ownerId);
     }
     const persistedResult = await supabase
       .from("weddings")
-      .select("id, user_id, event_name, culture, wedding_type, location, guest_count, budget_range")
+      .select(
+        "id, user_id, event_name, culture, wedding_type, location, guest_count, budget_currency, budget_range",
+      )
       .eq("id", weddingId)
       .eq("user_id", ownerId)
       .maybeSingle();
@@ -219,11 +256,13 @@ export async function saveWeddingEventAction(formData: FormData) {
     if (insertResult.error && isSchemaDriftError(insertResult.error)) {
       insertResult = await supabase
         .from("weddings")
-        .insert(payloadWithoutTitle);
+        .insert(payloadLegacy);
     }
     const persistedResult = await supabase
       .from("weddings")
-      .select("id, user_id, event_name, culture, wedding_type, location, guest_count, budget_range")
+      .select(
+        "id, user_id, event_name, culture, wedding_type, location, guest_count, budget_currency, budget_range",
+      )
       .eq("user_id", ownerId)
       .order("created_at", { ascending: false });
 

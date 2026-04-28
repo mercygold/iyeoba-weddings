@@ -4,16 +4,51 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireVendorProfile } from "@/lib/auth";
+import {
+  formatVendorStartingPrice,
+  supportedVendorCurrencies,
+} from "@/lib/currency";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureVendorStorageBuckets } from "@/lib/supabase/storage";
 
 export async function saveVendorDraftAction(formData: FormData) {
+  console.log("SAVE_DRAFT_ONLY_RUNNING");
+  console.log("SAVE_DRAFT_ACTION_RUNNING");
   await persistVendorProfile(formData, "draft");
 }
 
+export async function publishVendorListingUpdatesAction(formData: FormData) {
+  console.log("PUBLISH_UPDATES_ONLY_RUNNING");
+  await persistVendorProfile(formData, "publish");
+}
+
 export async function submitVendorForReviewAction(formData: FormData) {
+  console.log("SUBMIT_REVIEW_ONLY_RUNNING");
+  await persistVendorProfile(formData, "pending_review");
+}
+
+export async function saveOrSubmitVendorProfileAction(formData: FormData) {
+  const intent = String(formData.get("intent") ?? "").trim().toLowerCase();
+  console.log("ACTION_STARTED", {
+    intent,
+    formKeys: [...formData.keys()],
+  });
+  if (intent === "draft") {
+    console.log("VENDOR_FORM_INTENT_DRAFT");
+    console.log("SAVE_DRAFT_ONLY_RUNNING");
+    await persistVendorProfile(formData, "draft");
+    return;
+  }
+  if (intent === "publish") {
+    console.log("VENDOR_FORM_INTENT_PUBLISH");
+    console.log("PUBLISH_UPDATES_ONLY_RUNNING");
+    await persistVendorProfile(formData, "publish");
+    return;
+  }
+  console.log("VENDOR_FORM_INTENT_SUBMIT");
+  console.log("SUBMIT_REVIEW_ONLY_RUNNING");
   await persistVendorProfile(formData, "pending_review");
 }
 
@@ -379,7 +414,7 @@ function withQueryParam(path: string, key: string, value: string) {
 
 async function persistVendorProfile(
   formData: FormData,
-  intent: "draft" | "pending_review",
+  intent: "draft" | "publish" | "pending_review",
 ) {
   const config = getSupabaseConfigStatus();
   if (config.adminMessage) {
@@ -387,7 +422,7 @@ async function persistVendorProfile(
       adminMessage: config.adminMessage,
     });
     redirect(
-      "/vendor/dashboard?error=We%20could%20not%20save%20your%20profile%20right%20now.%20Please%20try%20again%20shortly.",
+      "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20profile%20right%20now.%20Please%20try%20again%20shortly.",
     );
   }
 
@@ -401,13 +436,18 @@ async function persistVendorProfile(
     redirect("/auth/sign-in?next=/vendor/dashboard");
   }
 
+  console.log("VENDOR_PERSIST_STARTED", {
+    intent,
+    userId: user.id,
+  });
+
   const storageSetup = await ensureVendorStorageBuckets();
   if (!storageSetup.ok) {
     console.error("Vendor profile save blocked by storage setup", {
       storageError: storageSetup.error,
     });
     redirect(
-      "/vendor/dashboard?error=We%20could%20not%20save%20your%20profile%20right%20now.%20Please%20try%20again%20shortly.",
+      "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20profile%20right%20now.%20Please%20try%20again%20shortly.",
     );
   }
 
@@ -415,6 +455,7 @@ async function persistVendorProfile(
   const ownerName = String(formData.get("ownerName") ?? "").trim();
   const phoneCode = String(formData.get("phoneCode") ?? "").trim();
   const phoneLocal = String(formData.get("phoneLocal") ?? "").trim();
+  const normalizedPhoneLocal = normalizePhoneLocal(phoneLocal);
   const category = String(formData.get("category") ?? "").trim();
   const subcategory = String(formData.get("subcategory") ?? "").trim();
   const customCategory = String(formData.get("customCategory") ?? "").trim();
@@ -424,7 +465,7 @@ async function persistVendorProfile(
   const nigeriaState = String(formData.get("nigeriaState") ?? "").trim();
   const regionLabel = String(formData.get("regionLabel") ?? "").trim();
   const yearsExperience = String(formData.get("yearsExperience") ?? "").trim();
-  const priceCurrency = String(formData.get("priceCurrency") ?? "").trim();
+  const priceCurrencyInput = String(formData.get("priceCurrency") ?? "").trim().toUpperCase();
   const priceAmount = String(formData.get("priceAmount") ?? "").trim();
   const primarySocialLink = String(formData.get("primarySocialLink") ?? "").trim();
   const contactEmail = String(formData.get("email") ?? "").trim();
@@ -450,24 +491,252 @@ async function persistVendorProfile(
         ? `${regionLabel}, ${countryRegion}`
         : countryRegion;
 
-  const fullPhone = [phoneCode, phoneLocal].filter(Boolean).join(" ").trim();
+  const fullPhone = `${normalizePhoneCode(phoneCode)}${normalizedPhoneLocal}`;
+  const effectiveEmail = contactEmail || user.email || "";
   const numericPrice = priceAmount ? Number(priceAmount) : null;
-  const formattedPrice =
-    priceCurrency && numericPrice
-      ? `${priceCurrency} ${new Intl.NumberFormat("en-US").format(numericPrice)}+`
-      : null;
+  const priceCurrency = supportedVendorCurrencies.includes(
+    priceCurrencyInput as (typeof supportedVendorCurrencies)[number],
+  )
+    ? (priceCurrencyInput as (typeof supportedVendorCurrencies)[number])
+    : "NGN";
+  const formattedPrice = formatVendorStartingPrice({
+    currencyCode: priceCurrency,
+    startingPrice: Number.isFinite(numericPrice) ? numericPrice : null,
+    priceLabel: null,
+    legacyPriceRange: null,
+  });
 
-  if (!businessName || !resolvedCategory || !countryRegion || !location || !phoneLocal) {
+  if (intent === "publish") {
+    console.log("PUBLISH_UPDATES_ONLY_RUNNING", { authUserId: user.id });
+    const publishLookup = await queryVendorForAction(admin, user.id, {
+      select:
+        "id,user_id,approved,status,currency_code,starting_price,price_currency,price_amount,price_last_updated_at,created_at",
+      context: "publish",
+    });
+
+    console.log("Publish vendor lookup", {
+      authUserId: user.id,
+      filter: { user_id: user.id },
+      returnedRowCount: Array.isArray(publishLookup.data)
+        ? publishLookup.data.length
+        : 0,
+      error: publishLookup.error ? serializeSupabaseError(publishLookup.error) : null,
+    });
+
+    if (publishLookup.error) {
+      console.error("Publish lookup failed", {
+        authUserId: user.id,
+        error: serializeSupabaseError(publishLookup.error),
+      });
+      redirect(
+        "/vendor/dashboard?edit=1&error=We%20could%20not%20load%20your%20business%20record%20right%20now.",
+      );
+    }
+
+    const vendorRow =
+      Array.isArray(publishLookup.data) && publishLookup.data.length
+        ? publishLookup.data[0]
+        : null;
+
+    console.log("Publish vendor chosen row", {
+      authUserId: user.id,
+      vendorId: vendorRow?.id ?? null,
+      vendorUserId: vendorRow?.user_id ?? null,
+      approved: vendorRow?.approved ?? null,
+      status: vendorRow?.status ?? null,
+    });
+
+    if (!vendorRow?.id) {
+      redirect(
+        "/vendor/dashboard?edit=1&error=No%20vendor%20profile%20found%20for%20this%20account.",
+      );
+    }
+
+    const existingCurrencyCode = normalizeCurrencyCode(
+      vendorRow.currency_code,
+      vendorRow.price_currency,
+    );
+    const existingStartingPrice = readNumericValue(
+      vendorRow.starting_price,
+      vendorRow.price_amount,
+    );
+    const existingPriceLastUpdatedAt = readIsoTimestamp(
+      vendorRow.price_last_updated_at,
+    );
+    const nextStartingPrice = Number.isFinite(numericPrice) ? numericPrice : null;
+    const priceChanged =
+      existingCurrencyCode !== priceCurrency ||
+      !areNumbersEqual(existingStartingPrice, nextStartingPrice);
+    let canPublishPriceFields = true;
+    let pricingCooldownBlocked = false;
+
+    if (priceChanged) {
+      const lastUpdatedMs = toMs(existingPriceLastUpdatedAt);
+      const nowMs = Date.now();
+      const cooldownMs = 24 * 60 * 60 * 1000;
+      if (lastUpdatedMs && nowMs - lastUpdatedMs < cooldownMs) {
+        canPublishPriceFields = false;
+        pricingCooldownBlocked = true;
+        console.warn("Publish pricing cooldown active; skipping price field update", {
+          authUserId: user.id,
+          vendorId: vendorRow.id,
+          existingPriceLastUpdatedAt,
+        });
+      }
+    }
+
+    const safeUpdatePayload = {
+      years_experience: yearsExperience || null,
+      primary_social_link: primarySocialLink || null,
+      instagram: primarySocialLink || null,
+      website: website || null,
+      culture: cultureSpecialization || null,
+      culture_specialization: cultureSpecialization || null,
+      description: description || null,
+      services_offered: servicesOffered,
+      portfolio_image_urls: portfolioImageUrls,
+      ...(canPublishPriceFields
+        ? {
+            currency_code: priceCurrency,
+            starting_price: Number.isFinite(numericPrice) ? numericPrice : null,
+            price_currency: priceCurrency,
+            price_amount: Number.isFinite(numericPrice) ? numericPrice : null,
+            price_range: formattedPrice,
+            price_label: formattedPrice,
+            price_last_updated_at: priceChanged
+              ? new Date().toISOString()
+              : existingPriceLastUpdatedAt,
+          }
+        : {}),
+    };
+
+    console.log("Publish safe update payload", {
+      authUserId: user.id,
+      vendorId: vendorRow.id,
+      payload: safeUpdatePayload,
+    });
+
+    const publishUpdateResult = await admin
+      .from("vendors")
+      .update(safeUpdatePayload)
+      .eq("id", vendorRow.id)
+      .eq("user_id", user.id);
+
+    if (publishUpdateResult.error) {
+      console.error("Publish safe update failed", {
+        authUserId: user.id,
+        vendorId: vendorRow.id,
+        error: serializeSupabaseError(publishUpdateResult.error),
+      });
+      redirect(
+        "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20listing%20updates%20right%20now.",
+      );
+    }
+
+    if (priceChanged && canPublishPriceFields) {
+      const historyPayload = {
+        vendor_id: vendorRow.id,
+        changed_by: user.id,
+        old_currency_code: existingCurrencyCode,
+        old_starting_price:
+          existingStartingPrice === null ? null : String(existingStartingPrice),
+        new_currency_code: priceCurrency,
+        new_starting_price:
+          nextStartingPrice === null ? null : String(nextStartingPrice),
+      };
+
+      const historyResult = await admin
+        .from("vendor_price_history")
+        .insert(historyPayload);
+
+      if (historyResult.error) {
+        console.error("Publish price history insert failed", {
+          authUserId: user.id,
+          vendorId: vendorRow.id,
+          payload: historyPayload,
+          error: serializeSupabaseError(historyResult.error),
+        });
+      }
+    }
+
+    const deletePortfolioResult = await admin
+      .from("vendor_portfolio")
+      .delete()
+      .eq("vendor_id", vendorRow.id);
+
+    if (deletePortfolioResult.error) {
+      console.error("Publish portfolio refresh delete failed", {
+        authUserId: user.id,
+        vendorId: vendorRow.id,
+        error: serializeSupabaseError(deletePortfolioResult.error),
+      });
+      redirect(
+        "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20portfolio%20images%20right%20now.",
+      );
+    }
+
+    if (portfolioImageUrls.length) {
+      const insertPortfolioResult = await admin.from("vendor_portfolio").insert(
+        portfolioImageUrls.map((imageUrl, index) => ({
+          vendor_id: vendorRow.id,
+          image_url: imageUrl,
+          sort_order: index,
+        })),
+      );
+
+      if (insertPortfolioResult.error) {
+        console.error("Publish portfolio refresh insert failed", {
+          authUserId: user.id,
+          vendorId: vendorRow.id,
+          error: serializeSupabaseError(insertPortfolioResult.error),
+        });
+        redirect(
+          "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20portfolio%20images%20right%20now.",
+        );
+      }
+    }
+
+    revalidatePath("/vendor/dashboard");
+    revalidatePath("/admin/vendors");
+    revalidatePath("/vendors");
+    if (pricingCooldownBlocked) {
+      redirect(
+        "/vendor/dashboard?edit=1&message=Your%20listing%20updates%20are%20now%20live.%20You%20can%20update%20pricing%20once%20every%2024%20hours.",
+      );
+    }
+    redirect("/vendor/dashboard?edit=1&message=Your%20listing%20updates%20are%20now%20live");
+  }
+
+  if (
+    !businessName ||
+    !ownerName ||
+    !effectiveEmail ||
+    !resolvedCategory ||
+    !countryRegion ||
+    !location ||
+    !phoneCode ||
+    !normalizedPhoneLocal
+  ) {
     redirect(
-      "/vendor/dashboard?error=Add%20your%20business%20name,%20category,%20country%20or%20region,%20location,%20and%20phone%20number%20before%20saving%20your%20profile.",
+      "/vendor/dashboard?edit=1&error=Business%20name,%20owner%20name,%20email,%20phone,%20country%20or%20region,%20and%20location%20are%20required%20before%20saving.",
+    );
+  }
+
+  if (!isValidEmail(effectiveEmail)) {
+    redirect(
+      "/vendor/dashboard?edit=1&error=Please%20enter%20a%20valid%20email%20address.",
+    );
+  }
+
+  if (!isValidPhoneLocal(normalizedPhoneLocal)) {
+    redirect(
+      "/vendor/dashboard?edit=1&error=Please%20enter%20a%20valid%20phone%20number.",
     );
   }
 
   if (intent === "pending_review") {
     const requiredChecks = [
       primarySocialLink,
-      priceCurrency,
-      priceAmount,
       description,
       servicesOffered.length ? "services" : "",
       governmentIdPath,
@@ -475,7 +744,7 @@ async function persistVendorProfile(
 
     if (requiredChecks.some((value) => !value) || portfolioImageUrls.length < 4) {
       redirect(
-        "/vendor/dashboard?error=Complete%20the%20required%20business%20details,%20upload%20your%20government-issued%20ID,%20and%20add%20at%20least%204%20portfolio%20images%20before%20submitting%20for%20review.",
+        "/vendor/dashboard?edit=1&error=Complete%20the%20required%20business%20details,%20upload%20your%20government-issued%20ID,%20and%20add%20at%20least%204%20portfolio%20images%20before%20submitting%20for%20review.",
       );
     }
   }
@@ -496,60 +765,103 @@ async function persistVendorProfile(
       error: userUpsertError,
     });
     redirect(
-      "/vendor/dashboard?error=We%20could%20not%20save%20your%20account%20details%20right%20now.",
+      "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20account%20details%20right%20now.",
     );
   }
 
-  const { data: existingVendor, error: existingVendorError } = await admin
-    .from("vendors")
-    .select(
-      `
-        id,
-        slug,
-        status,
-        approved,
-        verified,
-        business_name,
-        owner_name,
-        category,
-        location,
-        country_region,
-        nigeria_state,
-        phone_code,
-        whatsapp,
-        contact_email,
-        government_id_url,
-        cac_certificate_url
-      `,
-    )
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const existingVendorLookup = await queryVendorForAction(admin, user.id, {
+    select: "id,user_id,status,approved,verified,created_at",
+    context: "draft_or_submit",
+  });
 
-  if (existingVendorError) {
+  console.log("Vendor lookup for draft/submit", {
+    intent,
+    authUserId: user.id,
+    filter: { user_id: user.id },
+    returnedRowCount: Array.isArray(existingVendorLookup.data)
+      ? existingVendorLookup.data.length
+      : 0,
+    error: existingVendorLookup.error
+      ? serializeSupabaseError(existingVendorLookup.error)
+      : null,
+  });
+
+  if (existingVendorLookup.error) {
     console.error("Vendor profile save failed while loading vendor record", {
+      intent,
       userId: user.id,
-      error: existingVendorError,
+      error: serializeSupabaseError(existingVendorLookup.error),
     });
     redirect(
-      "/vendor/dashboard?error=We%20could%20not%20load%20your%20business%20record%20right%20now.",
+      "/vendor/dashboard?edit=1&error=We%20could%20not%20load%20your%20business%20record%20right%20now.",
     );
   }
 
-  let vendorId = existingVendor?.id ?? null;
-  const slug = await resolveVendorSlug(admin, businessName, existingVendor?.id ?? null);
+  const existingVendor = Array.isArray(existingVendorLookup.data)
+    ? existingVendorLookup.data[0] ?? null
+    : null;
+
+  const existingVendorId =
+    typeof (existingVendor as Record<string, unknown> | null)?.["id"] === "string"
+      ? String((existingVendor as Record<string, unknown>)["id"])
+      : null;
+  let vendorId = existingVendorId;
+  const slug = await resolveVendorSlug(admin, businessName, existingVendorId);
 
   if (!vendorId) {
-    const { data: inserted, error: insertError } = await admin
+    const basePayload = {
+      user_id: user.id,
+      slug,
+      business_name: businessName,
+      category: resolvedCategory || "Others",
+      location: location || countryRegion || "Location pending",
+    };
+
+    let inserted:
+      | {
+          id: string;
+        }
+      | null = null;
+    let insertError:
+      | {
+          code?: string | null;
+          message?: string | null;
+          details?: string | null;
+          hint?: string | null;
+        }
+      | null = null;
+
+    const upsertResult = await admin
       .from("vendors")
-      .insert({
-        user_id: user.id,
-        slug,
-        business_name: businessName,
-        category: resolvedCategory || "Others",
-        location: location || countryRegion || "Location pending",
+      .upsert(basePayload, {
+        onConflict: "user_id",
+        ignoreDuplicates: false,
       })
       .select("id")
       .single();
+
+    inserted = upsertResult.data;
+    insertError = upsertResult.error;
+
+    if (
+      insertError &&
+      (insertError.code === "42P10" ||
+        (insertError.message ?? "")
+          .toLowerCase()
+          .includes("there is no unique or exclusion constraint"))
+    ) {
+      console.warn("Vendor upsert fallback to insert because unique constraint is missing", {
+        userId: user.id,
+        error: serializeSupabaseError(insertError),
+      });
+      const fallbackInsert = await admin
+        .from("vendors")
+        .insert(basePayload)
+        .select("id")
+        .single();
+      inserted = fallbackInsert.data;
+      insertError = fallbackInsert.error;
+    }
 
     if (insertError || !inserted) {
       console.error("Vendor profile save failed while creating vendor record", {
@@ -558,17 +870,17 @@ async function persistVendorProfile(
         businessName,
         category: resolvedCategory || "Others",
         location: location || countryRegion || "Location pending",
-        error: insertError,
+        error: serializeSupabaseError(insertError ?? {}),
       });
       redirect(
-        "/vendor/dashboard?error=We%20could%20not%20save%20your%20business%20details%20right%20now.",
+        "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20business%20details%20right%20now.",
       );
     }
 
     vendorId = inserted.id;
   }
 
-  const status = intent === "draft" ? "draft" : "pending_review";
+  const status = intent === "pending_review" ? "pending_review" : "draft";
   const existingStatus =
     existingVendor?.status === "approved" || existingVendor?.approved
       ? "approved"
@@ -577,7 +889,7 @@ async function persistVendorProfile(
 
   const hasMajorChanges =
     approvedVendorIsEditing &&
-    hasApprovedVendorMajorChanges(existingVendor, {
+    hasApprovedVendorMajorChanges((existingVendor as Record<string, unknown> | null), {
       businessName,
       ownerName,
       category: resolvedCategory,
@@ -586,16 +898,15 @@ async function persistVendorProfile(
       nigeriaState,
       phoneCode,
       fullPhone,
-      contactEmail: contactEmail || user.email || "",
+      contactEmail: effectiveEmail,
       governmentIdPath,
       cacCertificatePath,
     });
 
-  if (hasMajorChanges) {
-    redirect(
-      "/vendor/dashboard?error=For%20security,%20business%20identity%20details%20cannot%20be%20changed%20directly%20from%20your%20live%20profile.%20Please%20contact%20admin%20to%20update%20these%20details.",
-    );
-  }
+  const shouldSubmitIdentityReview =
+    approvedVendorIsEditing && intent === "pending_review" && hasMajorChanges;
+  const shouldPreserveRestrictedFields = approvedVendorIsEditing && hasMajorChanges;
+  const shouldPublishDirectChanges = !approvedVendorIsEditing && intent !== "draft";
 
   const nextStatus = approvedVendorIsEditing ? "approved" : status;
   const nextApproved = approvedVendorIsEditing ? true : false;
@@ -610,35 +921,143 @@ async function persistVendorProfile(
     : intent === "pending_review"
       ? "Submitted for review"
       : "Draft profile";
+  const existingVendorRecord = existingVendor as Record<string, unknown> | null;
+  const existingCurrencyCode = normalizeCurrencyCode(
+    existingVendorRecord?.["currency_code"],
+    existingVendorRecord?.["price_currency"],
+  );
+  const existingStartingPrice = readNumericValue(
+    existingVendorRecord?.["starting_price"],
+    existingVendorRecord?.["price_amount"],
+  );
+  const existingPriceLastUpdatedAt = readIsoTimestamp(
+    existingVendorRecord?.["price_last_updated_at"],
+  );
+  const nextStartingPrice = Number.isFinite(numericPrice) ? numericPrice : null;
+  const priceChanged = Boolean(existingVendor?.id) && (
+    existingCurrencyCode !== priceCurrency || !areNumbersEqual(existingStartingPrice, nextStartingPrice)
+  );
+  if (priceChanged) {
+    const lastUpdatedMs = toMs(existingPriceLastUpdatedAt);
+    const nowMs = Date.now();
+    const cooldownMs = 24 * 60 * 60 * 1000;
+    if (lastUpdatedMs && nowMs - lastUpdatedMs < cooldownMs) {
+      redirect(
+        "/vendor/dashboard?edit=1&error=You%20can%20update%20your%20pricing%20once%20every%2024%20hours.%20Please%20try%20again%20later.",
+      );
+    }
+  }
+  const nextPriceLastUpdatedAt = priceChanged
+    ? new Date().toISOString()
+    : existingPriceLastUpdatedAt;
+  const restrictedFieldFallback = {
+    business_name:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "business_name")) || businessName
+        : businessName,
+    owner_name:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "owner_name")) || ownerName || null
+        : ownerName || null,
+    category:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "category")) || (resolvedCategory || "Others")
+        : resolvedCategory || "Others",
+    country_region:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "country_region")) || null
+        : countryRegion || null,
+    nigeria_state:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "nigeria_state")) || null
+        : countryRegion === "Nigeria"
+          ? nigeriaState || null
+          : null,
+    phone_code:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "phone_code")) || null
+        : phoneCode || null,
+    location:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "location")) || (location || countryRegion || "Location pending")
+        : location || countryRegion || "Location pending",
+    whatsapp:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "whatsapp")) || null
+        : fullPhone || null,
+    contact_email:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "contact_email")) || (user.email ?? null)
+        : effectiveEmail || null,
+    government_id_url:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "government_id_url")) || null
+        : governmentIdPath || null,
+    cac_certificate_url:
+      shouldPreserveRestrictedFields
+        ? normalizeString(readStringField(existingVendorRecord, "cac_certificate_url")) || null
+        : registeredBusiness
+          ? cacCertificatePath || null
+          : null,
+  };
+
+  const existingAdminNotes = normalizeString(
+    readStringField(existingVendorRecord, "admin_notes"),
+  );
+  const nextAdminNotes =
+    shouldSubmitIdentityReview
+      ? appendIdentityReviewNote(existingAdminNotes, {
+          businessName,
+          ownerName,
+          category: resolvedCategory,
+          countryRegion,
+          nigeriaState,
+          phoneCode,
+          fullPhone,
+          location,
+          contactEmail: effectiveEmail,
+          governmentIdPath,
+          cacCertificatePath: registeredBusiness ? cacCertificatePath : "",
+        })
+      : existingAdminNotes || null;
+
   const vendorPayload = {
     slug,
-    business_name: businessName,
-    owner_name: ownerName || null,
-    category: resolvedCategory || "Others",
+    business_name: restrictedFieldFallback.business_name,
+    owner_name: restrictedFieldFallback.owner_name,
+    category: restrictedFieldFallback.category,
     custom_category: isOthersCategory
       ? customCategory || null
       : subcategory || null,
-    registered_business: registeredBusiness,
-    country_region: countryRegion || null,
-    nigeria_state: countryRegion === "Nigeria" ? nigeriaState || null : null,
-    phone_code: phoneCode || null,
+    registered_business:
+      shouldPreserveRestrictedFields
+        ? Boolean((existingVendor as Record<string, unknown> | null)?.["registered_business"])
+        : registeredBusiness,
+    country_region: restrictedFieldFallback.country_region,
+    nigeria_state: restrictedFieldFallback.nigeria_state,
+    phone_code: restrictedFieldFallback.phone_code,
     culture: cultureSpecialization || null,
     culture_specialization: cultureSpecialization || null,
-    location: location || countryRegion || "Location pending",
+    location: restrictedFieldFallback.location,
     years_experience: yearsExperience || null,
     primary_social_link: primarySocialLink || null,
-    contact_email: contactEmail || user.email || null,
+    contact_email: restrictedFieldFallback.contact_email,
     instagram: primarySocialLink || null,
     website: website || null,
-    whatsapp: fullPhone || null,
+    whatsapp: restrictedFieldFallback.whatsapp,
     description: description || null,
     services_offered: servicesOffered,
     price_currency: priceCurrency || null,
     price_amount: numericPrice,
     price_range: formattedPrice,
+    currency_code: priceCurrency,
+    starting_price: numericPrice,
+    price_label: formattedPrice,
+    price_last_updated_at: nextPriceLastUpdatedAt,
     portfolio_image_urls: portfolioImageUrls,
-    government_id_url: governmentIdPath || null,
-    cac_certificate_url: registeredBusiness ? cacCertificatePath || null : null,
+    government_id_url: restrictedFieldFallback.government_id_url,
+    cac_certificate_url: restrictedFieldFallback.cac_certificate_url,
+    admin_notes: nextAdminNotes,
     status: nextStatus,
     profile_status: nextStatus,
     onboarding_completed: nextOnboardingCompleted,
@@ -649,20 +1068,36 @@ async function persistVendorProfile(
     verified: nextVerified,
   };
 
-  console.log("Vendor profile write attempt", {
-    table: "vendors",
-    authUserId: user.id,
-    vendorId,
-    intent,
-    payload: vendorPayload,
-  });
+  let error: {
+    code?: string | null;
+    message?: string | null;
+    details?: string | null;
+    hint?: string | null;
+  } | null = null;
 
-  let { error } = await admin
-    .from("vendors")
-    .update(vendorPayload)
-    .eq("id", vendorId);
+  if (shouldPublishDirectChanges) {
+    console.log("VENDOR_UPDATE_DIRECT_FIELDS_RUNNING", {
+      vendorId,
+      intent,
+      approvedVendorIsEditing,
+      priceChanged,
+    });
+    console.log("Vendor profile write attempt", {
+      table: "vendors",
+      authUserId: user.id,
+      vendorId,
+      intent,
+      payload: vendorPayload,
+    });
 
-  if (error && isSchemaDriftError(error)) {
+    const result = await admin
+      .from("vendors")
+      .update(vendorPayload)
+      .eq("id", vendorId);
+    error = result.error;
+  }
+
+  if (shouldPublishDirectChanges && error && isSchemaDriftError(error)) {
     const fallbackPayload = {
       slug: vendorPayload.slug,
       business_name: vendorPayload.business_name,
@@ -684,8 +1119,10 @@ async function persistVendorProfile(
       price_currency: vendorPayload.price_currency,
       price_amount: vendorPayload.price_amount,
       price_range: vendorPayload.price_range,
+      price_last_updated_at: vendorPayload.price_last_updated_at,
       portfolio_image_urls: vendorPayload.portfolio_image_urls,
       government_id_url: vendorPayload.government_id_url,
+      admin_notes: vendorPayload.admin_notes,
       status: vendorPayload.status,
       profile_status: vendorPayload.profile_status,
       onboarding_completed: vendorPayload.onboarding_completed,
@@ -710,7 +1147,43 @@ async function persistVendorProfile(
     error = fallbackResult.error;
   }
 
-  if (error) {
+  if (shouldPublishDirectChanges && error && isSchemaDriftError(error)) {
+    const minimalPayload = {
+      slug: vendorPayload.slug,
+      business_name: vendorPayload.business_name,
+      category: vendorPayload.category,
+      location: vendorPayload.location,
+      whatsapp: vendorPayload.whatsapp,
+      description: vendorPayload.description,
+      services_offered: vendorPayload.services_offered,
+      price_currency: vendorPayload.price_currency,
+      price_amount: vendorPayload.price_amount,
+      price_range: vendorPayload.price_range,
+      price_last_updated_at: vendorPayload.price_last_updated_at,
+      admin_notes: vendorPayload.admin_notes,
+      status: vendorPayload.status,
+      profile_status: vendorPayload.profile_status,
+      onboarding_completed: vendorPayload.onboarding_completed,
+      approved: vendorPayload.approved,
+      verified: vendorPayload.verified,
+    };
+
+    console.warn("Vendor profile write retrying with minimal payload", {
+      table: "vendors",
+      authUserId: user.id,
+      vendorId,
+      error: serializeSupabaseError(error),
+      payload: minimalPayload,
+    });
+
+    const minimalResult = await admin
+      .from("vendors")
+      .update(minimalPayload)
+      .eq("id", vendorId);
+    error = minimalResult.error;
+  }
+
+  if (shouldPublishDirectChanges && error) {
     console.error("Vendor profile save failed while updating vendor record", {
       table: "vendors",
       vendorId,
@@ -721,42 +1194,175 @@ async function persistVendorProfile(
       error: serializeSupabaseError(error),
     });
     redirect(
-      "/vendor/dashboard?error=We%20could%20not%20save%20your%20vendor%20profile%20right%20now.",
+      "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20vendor%20profile%20right%20now.",
     );
   }
 
-  const { error: deletePortfolioError } = await admin
-    .from("vendor_portfolio")
-    .delete()
-    .eq("vendor_id", vendorId);
+  const draftPayload = {
+    business_name: businessName,
+    owner_name: ownerName,
+    email: effectiveEmail,
+    phone_code: phoneCode,
+    phone_local: normalizedPhoneLocal,
+    full_phone: fullPhone,
+    category: resolvedCategory,
+    subcategory,
+    custom_category: customCategory,
+    country_region: countryRegion,
+    nigeria_state: nigeriaState,
+    region_label: regionLabel,
+    location,
+    years_experience: yearsExperience,
+    currency_code: priceCurrency,
+    starting_price: nextStartingPrice,
+    primary_social_link: primarySocialLink,
+    website,
+    culture_specialization: cultureSpecialization,
+    description,
+    services_offered: servicesOffered,
+    portfolio_image_urls: portfolioImageUrls,
+    government_id_url: governmentIdPath,
+    cac_certificate_url: registeredBusiness ? cacCertificatePath : null,
+    registered_business: registeredBusiness,
+    updated_at: new Date().toISOString(),
+  };
 
-  if (deletePortfolioError) {
-    console.error("Vendor profile save failed while refreshing portfolio rows", {
+  const draftResult = await admin.from("vendor_profile_drafts").upsert(
+    {
+      vendor_id: vendorId,
+      user_id: user.id,
+      draft_data: draftPayload,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "vendor_id,user_id", ignoreDuplicates: false },
+  );
+
+  if (draftResult.error && isSchemaDriftError(draftResult.error)) {
+    console.warn("Vendor draft table not available yet", {
       vendorId,
-      error: deletePortfolioError,
+      userId: user.id,
+      error: serializeSupabaseError(draftResult.error),
+    });
+  } else if (draftResult.error) {
+    console.error("Vendor draft save failed", {
+      vendorId,
+      userId: user.id,
+      error: serializeSupabaseError(draftResult.error),
     });
     redirect(
-      "/vendor/dashboard?error=We%20could%20not%20save%20your%20portfolio%20images%20right%20now.",
+      "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20draft%20right%20now.",
     );
   }
 
-  if (portfolioImageUrls.length) {
-    const { error: insertPortfolioError } = await admin.from("vendor_portfolio").insert(
-      portfolioImageUrls.map((imageUrl, index) => ({
-        vendor_id: vendorId,
-        image_url: imageUrl,
-        sort_order: index,
-      })),
-    );
+  if (shouldSubmitIdentityReview) {
+    console.log("VENDOR_CHANGE_REQUEST_RUNNING", {
+      vendorId,
+      intent,
+      approvedVendorIsEditing,
+    });
+    const changeRequestPayload = {
+      business_name: businessName,
+      owner_name: ownerName,
+      email: effectiveEmail,
+      phone_code: phoneCode,
+      phone_local: normalizedPhoneLocal,
+      full_phone: fullPhone,
+      country_region: countryRegion,
+      nigeria_state: nigeriaState,
+      location,
+      government_id_url: governmentIdPath,
+      cac_certificate_url: registeredBusiness ? cacCertificatePath : null,
+      registered_business: registeredBusiness,
+    };
 
-    if (insertPortfolioError) {
-      console.error("Vendor profile save failed while writing portfolio rows", {
+    const changeRequestResult = await admin.from("vendor_change_requests").insert({
+      vendor_id: vendorId,
+      user_id: user.id,
+      requested_changes: changeRequestPayload,
+      status: "pending",
+    });
+
+    if (changeRequestResult.error && isSchemaDriftError(changeRequestResult.error)) {
+      console.warn("Vendor change request table not available yet", {
         vendorId,
-        error: insertPortfolioError,
+        userId: user.id,
+        error: serializeSupabaseError(changeRequestResult.error),
+      });
+    } else if (changeRequestResult.error) {
+      console.error("Vendor change request insert failed", {
+        vendorId,
+        userId: user.id,
+        error: serializeSupabaseError(changeRequestResult.error),
       });
       redirect(
-        "/vendor/dashboard?error=We%20could%20not%20save%20your%20portfolio%20images%20right%20now.",
+        "/vendor/dashboard?edit=1&error=We%20could%20not%20submit%20your%20identity%20changes%20for%20review%20right%20now.",
       );
+    }
+  }
+
+  if (shouldPublishDirectChanges && priceChanged) {
+    const historyPayload = {
+      vendor_id: vendorId,
+      changed_by: user.id,
+      old_currency_code: existingCurrencyCode,
+      old_starting_price:
+        existingStartingPrice === null ? null : String(existingStartingPrice),
+      new_currency_code: priceCurrency,
+      new_starting_price:
+        nextStartingPrice === null ? null : String(nextStartingPrice),
+    };
+    const historyResult = await admin.from("vendor_price_history").insert(historyPayload);
+    if (historyResult.error && isSchemaDriftError(historyResult.error)) {
+      console.warn("Vendor price history table not available yet", {
+        vendorId,
+        userId: user.id,
+        payload: historyPayload,
+        error: serializeSupabaseError(historyResult.error),
+      });
+    } else if (historyResult.error) {
+      console.error("Vendor price history insert failed", {
+        vendorId,
+        userId: user.id,
+        payload: historyPayload,
+        error: serializeSupabaseError(historyResult.error),
+      });
+    }
+  }
+
+  if (shouldPublishDirectChanges) {
+    const { error: deletePortfolioError } = await admin
+      .from("vendor_portfolio")
+      .delete()
+      .eq("vendor_id", vendorId);
+
+    if (deletePortfolioError) {
+      console.error("Vendor profile save failed while refreshing portfolio rows", {
+        vendorId,
+        error: deletePortfolioError,
+      });
+      redirect(
+        "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20portfolio%20images%20right%20now.",
+      );
+    }
+
+    if (portfolioImageUrls.length) {
+      const { error: insertPortfolioError } = await admin.from("vendor_portfolio").insert(
+        portfolioImageUrls.map((imageUrl, index) => ({
+          vendor_id: vendorId,
+          image_url: imageUrl,
+          sort_order: index,
+        })),
+      );
+
+      if (insertPortfolioError) {
+        console.error("Vendor profile save failed while writing portfolio rows", {
+          vendorId,
+          error: insertPortfolioError,
+        });
+        redirect(
+          "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20portfolio%20images%20right%20now.",
+        );
+      }
     }
   }
 
@@ -764,13 +1370,175 @@ async function persistVendorProfile(
   revalidatePath("/admin/vendors");
   revalidatePath("/vendors");
 
-  redirect(
-    approvedVendorIsEditing
-      ? "/vendor/dashboard?message=Your%20changes%20have%20been%20saved%20and%20your%20listing%20remains%20live."
-      : intent === "draft"
-        ? "/vendor/dashboard?message=Your%20draft%20has%20been%20saved."
-        : "/vendor/dashboard?message=Your%20profile%20has%20been%20submitted%20for%20review.",
-  );
+  if (intent === "draft") {
+    redirect(
+      "/vendor/dashboard?edit=1&message=Draft%20saved.%20You%20can%20continue%20editing%20later.",
+    );
+  }
+
+  if (approvedVendorIsEditing && shouldSubmitIdentityReview) {
+    redirect(
+      "/vendor/dashboard?edit=1&message=Your%20business%20identity%20changes%20have%20been%20sent%20to%20admin%20for%20review.%20You%20will%20receive%20a%20response%20within%203%20business%20days.",
+    );
+  }
+
+  if (approvedVendorIsEditing) {
+    redirect(
+      "/vendor/dashboard?edit=1&message=Your%20changes%20have%20been%20saved%20and%20your%20listing%20remains%20live.",
+    );
+  }
+
+  redirect("/vendor/dashboard?edit=1&message=Your%20profile%20has%20been%20submitted%20for%20review.");
+}
+
+async function queryVendorForAction(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  userId: string,
+  options: {
+    select: string;
+    context: "publish" | "draft_or_submit";
+  },
+) {
+  const ordered = (await admin
+    .from("vendors")
+    .select(options.select)
+    .eq("user_id", userId)
+    .order("approved", { ascending: false })
+    .order("created_at", { ascending: false })) as unknown as {
+    data: Array<Record<string, unknown>> | null;
+    error: {
+      code?: string | null;
+      message?: string | null;
+      details?: string | null;
+      hint?: string | null;
+    } | null;
+  };
+
+  if (!ordered.error) {
+    return ordered;
+  }
+
+  console.warn("Vendor lookup ordered query failed; retrying without ordering", {
+    context: options.context,
+    authUserId: userId,
+    error: serializeSupabaseError(ordered.error),
+  });
+
+  const unordered = (await admin
+    .from("vendors")
+    .select(options.select)
+    .eq("user_id", userId)) as unknown as {
+    data: Array<Record<string, unknown>> | null;
+    error: {
+      code?: string | null;
+      message?: string | null;
+      details?: string | null;
+      hint?: string | null;
+    } | null;
+  };
+
+  if (!unordered.error) {
+    const rows = Array.isArray(unordered.data) ? unordered.data : [];
+    rows.sort((a, b) => {
+      const aApproved = a.approved === true ? 1 : 0;
+      const bApproved = b.approved === true ? 1 : 0;
+      if (aApproved !== bApproved) {
+        return bApproved - aApproved;
+      }
+      const aCreated = Date.parse(String(a.created_at ?? "")) || 0;
+      const bCreated = Date.parse(String(b.created_at ?? "")) || 0;
+      return bCreated - aCreated;
+    });
+    return { data: rows, error: null };
+  }
+
+  return unordered;
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isValidPhoneLocal(value: string) {
+  return /^[0-9]{6,15}$/.test(value);
+}
+
+async function queryLatestVendorForUser(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  userId: string,
+  select: string,
+) {
+  console.log("[vendor-read] queryLatestVendorForUser:start", {
+    authUserId: userId,
+    table: "vendors",
+    filter: { user_id: userId },
+    orderBy: "created_at desc",
+  });
+
+  const withCreatedAt = (await admin
+    .from("vendors")
+    .select(select)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)) as unknown as {
+    data: Array<Record<string, unknown>> | null;
+    error: {
+      code?: string | null;
+      message?: string | null;
+      details?: string | null;
+      hint?: string | null;
+    } | null;
+  };
+
+  console.log("[vendor-read] queryLatestVendorForUser:created_at", {
+    authUserId: userId,
+    filter: { user_id: userId },
+    returnedRowCount: Array.isArray(withCreatedAt.data)
+      ? withCreatedAt.data.length
+      : 0,
+    error: withCreatedAt.error
+      ? serializeSupabaseError(withCreatedAt.error)
+      : null,
+  });
+
+  if (!withCreatedAt.error || !isSchemaDriftError(withCreatedAt.error)) {
+    return withCreatedAt;
+  }
+
+  const unordered = (await admin
+    .from("vendors")
+    .select(select)
+    .eq("user_id", userId)
+    .limit(1)) as unknown as {
+    data: Array<Record<string, unknown>> | null;
+    error: {
+      code?: string | null;
+      message?: string | null;
+      details?: string | null;
+      hint?: string | null;
+    } | null;
+  };
+
+  console.log("[vendor-read] queryLatestVendorForUser:unordered", {
+    authUserId: userId,
+    filter: { user_id: userId },
+    returnedRowCount: Array.isArray(unordered.data) ? unordered.data.length : 0,
+    error: unordered.error ? serializeSupabaseError(unordered.error) : null,
+  });
+
+  return unordered;
+}
+
+function normalizePhoneLocal(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function normalizePhoneCode(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "+";
+  }
+  return trimmed.startsWith("+") ? trimmed : `+${trimmed.replace(/\D/g, "")}`;
 }
 
 function isSchemaDriftError(error: {
@@ -918,6 +1686,118 @@ function hasApprovedVendorMajorChanges(
 
 function normalizeString(value: string | null | undefined) {
   return (value ?? "").trim();
+}
+
+function readStringField(
+  record: Record<string, unknown> | null,
+  key: string,
+) {
+  const value = record?.[key];
+  return typeof value === "string" ? value : null;
+}
+
+function readIsoTimestamp(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function toMs(value: string | null) {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function appendIdentityReviewNote(
+  existingNotes: string,
+  values: {
+    businessName: string;
+    ownerName: string;
+    category: string;
+    countryRegion: string;
+    nigeriaState: string;
+    phoneCode: string;
+    fullPhone: string;
+    location: string;
+    contactEmail: string;
+    governmentIdPath: string;
+    cacCertificatePath: string;
+  },
+) {
+  const submittedAt = new Date().toISOString();
+  const note = [
+    `[Identity review request] ${submittedAt}`,
+    `business_name=${values.businessName}`,
+    `owner_name=${values.ownerName}`,
+    `category=${values.category}`,
+    `country_region=${values.countryRegion}`,
+    `nigeria_state=${values.nigeriaState}`,
+    `phone_code=${values.phoneCode}`,
+    `whatsapp=${values.fullPhone}`,
+    `location=${values.location}`,
+    `contact_email=${values.contactEmail}`,
+    `government_id_url=${values.governmentIdPath}`,
+    `cac_certificate_url=${values.cacCertificatePath}`,
+  ].join(" | ");
+
+  const combined = existingNotes ? `${existingNotes}\n${note}` : note;
+  return combined.slice(0, 8000);
+}
+
+function normalizeCurrencyCode(
+  primary: unknown,
+  fallback?: unknown,
+) {
+  const first =
+    typeof primary === "string" && primary.trim()
+      ? primary.trim().toUpperCase()
+      : null;
+  if (first) {
+    return first;
+  }
+  const second =
+    typeof fallback === "string" && fallback.trim()
+      ? fallback.trim().toUpperCase()
+      : null;
+  return second ?? "NGN";
+}
+
+function readNumericValue(primary: unknown, fallback?: unknown) {
+  const primaryNumber =
+    typeof primary === "number"
+      ? primary
+      : typeof primary === "string" && primary.trim()
+        ? Number(primary)
+        : null;
+  if (Number.isFinite(primaryNumber)) {
+    return primaryNumber as number;
+  }
+
+  const fallbackNumber =
+    typeof fallback === "number"
+      ? fallback
+      : typeof fallback === "string" && fallback.trim()
+        ? Number(fallback)
+        : null;
+  if (Number.isFinite(fallbackNumber)) {
+    return fallbackNumber as number;
+  }
+
+  return null;
+}
+
+function areNumbersEqual(left: number | null, right: number | null) {
+  if (left === null && right === null) {
+    return true;
+  }
+  if (left === null || right === null) {
+    return false;
+  }
+  return Math.abs(left - right) < 0.0000001;
 }
 
 async function resolveVendorSlug(

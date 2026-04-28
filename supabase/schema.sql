@@ -71,6 +71,9 @@ create table if not exists public.weddings (
 alter table public.weddings
   add column if not exists event_name text;
 
+alter table public.weddings
+  add column if not exists budget_currency text default 'NGN';
+
 create table if not exists public.vendors (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.users(id) on delete set null,
@@ -95,6 +98,10 @@ create table if not exists public.vendors (
   price_currency text,
   price_amount numeric,
   price_range text,
+  currency_code text default 'NGN',
+  starting_price numeric,
+  price_label text,
+  price_last_updated_at timestamptz,
   status text not null default 'draft',
   portfolio_image_urls text[] not null default '{}'::text[],
   government_id_url text,
@@ -142,6 +149,30 @@ alter table public.vendors
 
 alter table public.vendors
   add column if not exists price_amount numeric;
+
+alter table public.vendors
+  add column if not exists currency_code text default 'NGN';
+
+alter table public.vendors
+  add column if not exists starting_price numeric;
+
+alter table public.vendors
+  add column if not exists price_label text;
+
+alter table public.vendors
+  add column if not exists price_last_updated_at timestamptz;
+
+update public.vendors
+set currency_code = coalesce(currency_code, price_currency, 'NGN')
+where currency_code is null;
+
+update public.vendors
+set starting_price = coalesce(starting_price, price_amount)
+where starting_price is null;
+
+update public.vendors
+set price_label = coalesce(price_label, price_range)
+where price_label is null;
 
 alter table public.vendors
   add column if not exists status text not null default 'draft';
@@ -199,6 +230,38 @@ create table if not exists public.vendor_portfolio (
   vendor_id uuid not null references public.vendors(id) on delete cascade,
   image_url text not null,
   sort_order integer not null default 0
+);
+
+create table if not exists public.vendor_price_history (
+  id uuid primary key default gen_random_uuid(),
+  vendor_id uuid not null references public.vendors(id) on delete cascade,
+  changed_by uuid references public.users(id) on delete set null,
+  old_currency_code text,
+  old_starting_price text,
+  new_currency_code text,
+  new_starting_price text,
+  changed_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.vendor_profile_drafts (
+  id uuid primary key default gen_random_uuid(),
+  vendor_id uuid not null references public.vendors(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  draft_data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (vendor_id, user_id)
+);
+
+create table if not exists public.vendor_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  vendor_id uuid not null references public.vendors(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  requested_changes jsonb not null default '{}'::jsonb,
+  status text not null default 'pending',
+  admin_note text,
+  created_at timestamptz not null default timezone('utc', now()),
+  reviewed_at timestamptz,
+  reviewed_by uuid references public.users(id) on delete set null
 );
 
 create table if not exists public.saved_vendors (
@@ -411,6 +474,9 @@ alter table public.users enable row level security;
 alter table public.weddings enable row level security;
 alter table public.vendors enable row level security;
 alter table public.vendor_portfolio enable row level security;
+alter table public.vendor_price_history enable row level security;
+alter table public.vendor_profile_drafts enable row level security;
+alter table public.vendor_change_requests enable row level security;
 alter table public.saved_vendors enable row level security;
 alter table public.leads enable row level security;
 alter table public.lead_messages enable row level security;
@@ -440,6 +506,15 @@ drop policy if exists "vendors_insert_own" on public.vendors;
 drop policy if exists "vendors_update_own" on public.vendors;
 drop policy if exists "vendor_portfolio_public_read" on public.vendor_portfolio;
 drop policy if exists "vendor_portfolio_modify_own" on public.vendor_portfolio;
+drop policy if exists "vendor_price_history_vendor_read_own" on public.vendor_price_history;
+drop policy if exists "vendor_price_history_vendor_insert_own" on public.vendor_price_history;
+drop policy if exists "vendor_price_history_admin_read" on public.vendor_price_history;
+drop policy if exists "vendor_price_history_admin_manage" on public.vendor_price_history;
+drop policy if exists "vendor_profile_drafts_vendor_all_own" on public.vendor_profile_drafts;
+drop policy if exists "vendor_profile_drafts_admin_read" on public.vendor_profile_drafts;
+drop policy if exists "vendor_change_requests_vendor_all_own" on public.vendor_change_requests;
+drop policy if exists "vendor_change_requests_admin_read" on public.vendor_change_requests;
+drop policy if exists "vendor_change_requests_admin_manage" on public.vendor_change_requests;
 drop policy if exists "saved_vendors_all_own" on public.saved_vendors;
 drop policy if exists "leads_all_own_side" on public.leads;
 drop policy if exists "lead_messages_all_own_side" on public.lead_messages;
@@ -525,6 +600,144 @@ with check (
     from public.vendors
     where public.vendors.id = vendor_id
       and public.vendors.user_id = auth.uid()
+  )
+);
+
+create policy "vendor_price_history_vendor_read_own"
+on public.vendor_price_history
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.vendors
+    where public.vendors.id = vendor_id
+      and public.vendors.user_id = auth.uid()
+  )
+);
+
+create policy "vendor_price_history_vendor_insert_own"
+on public.vendor_price_history
+for insert
+to authenticated
+with check (
+  changed_by = auth.uid()
+  and exists (
+    select 1
+    from public.vendors
+    where public.vendors.id = vendor_id
+      and public.vendors.user_id = auth.uid()
+  )
+);
+
+create policy "vendor_price_history_admin_read"
+on public.vendor_price_history
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.users
+    where public.users.id = auth.uid()
+      and public.users.role = 'admin'
+  )
+);
+
+create policy "vendor_price_history_admin_manage"
+on public.vendor_price_history
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.users
+    where public.users.id = auth.uid()
+      and public.users.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.users
+    where public.users.id = auth.uid()
+      and public.users.role = 'admin'
+  )
+);
+
+create policy "vendor_profile_drafts_vendor_all_own"
+on public.vendor_profile_drafts
+for all
+to authenticated
+using (auth.uid() = user_id)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.vendors
+    where public.vendors.id = vendor_id
+      and public.vendors.user_id = auth.uid()
+  )
+);
+
+create policy "vendor_profile_drafts_admin_read"
+on public.vendor_profile_drafts
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.users
+    where public.users.id = auth.uid()
+      and public.users.role = 'admin'
+  )
+);
+
+create policy "vendor_change_requests_vendor_all_own"
+on public.vendor_change_requests
+for all
+to authenticated
+using (auth.uid() = user_id)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.vendors
+    where public.vendors.id = vendor_id
+      and public.vendors.user_id = auth.uid()
+  )
+);
+
+create policy "vendor_change_requests_admin_read"
+on public.vendor_change_requests
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.users
+    where public.users.id = auth.uid()
+      and public.users.role = 'admin'
+  )
+);
+
+create policy "vendor_change_requests_admin_manage"
+on public.vendor_change_requests
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.users
+    where public.users.id = auth.uid()
+      and public.users.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.users
+    where public.users.id = auth.uid()
+      and public.users.role = 'admin'
   )
 );
 

@@ -1,7 +1,8 @@
 import { MainNav } from "@/components/main-nav";
+import { PlannerBudgetFields } from "@/components/planner-budget-fields";
 import { savePlannerOverviewAction } from "@/app/planner/actions";
 import { requirePlannerProfile } from "@/lib/auth";
-import { budgetRanges, cultures, locations, weddingTypes } from "@/lib/planner";
+import { cultures, weddingTypes } from "@/lib/planner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -16,12 +17,26 @@ export default async function PlannerSetupPage(props: { searchParams: SearchPara
   const error =
     typeof searchParams.error === "string" ? searchParams.error : undefined;
 
-  const { data: weddings } = await supabase
+  const primaryWeddingsResult = await supabase
     .from("weddings")
-    .select("culture, wedding_type, location, guest_count, budget_range")
+    .select("culture, wedding_type, location, guest_count, budget_range, budget_currency")
     .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
-  const weddingOverview = Array.isArray(weddings) ? weddings[0] ?? null : null;
+  const fallbackWeddingsResult =
+    primaryWeddingsResult.error && isPlannerSetupSchemaDriftError(primaryWeddingsResult.error)
+      ? await supabase
+        .from("weddings")
+        .select("culture, wedding_type, location, guest_count, budget_range")
+        .eq("user_id", ownerId)
+        .order("created_at", { ascending: false })
+      : null;
+
+  const weddingRows = Array.isArray(primaryWeddingsResult.data)
+    ? primaryWeddingsResult.data
+    : Array.isArray(fallbackWeddingsResult?.data)
+      ? fallbackWeddingsResult.data
+      : [];
+  const weddingOverview = weddingRows[0] ?? null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(106,62,124,0.12),_transparent_38%),linear-gradient(180deg,#ffffff_0%,#fdfbfd_45%,#ffffff_100%)]">
@@ -85,13 +100,6 @@ export default async function PlannerSetupPage(props: { searchParams: SearchPara
               placeholder="Select wedding type"
               defaultValue={weddingOverview?.wedding_type ?? ""}
             />
-            <SelectField
-              name="location"
-              label="Location"
-              options={locations}
-              placeholder="Select location"
-              defaultValue={weddingOverview?.location ?? ""}
-            />
             <Field
               name="guestCount"
               label="Guest count"
@@ -103,15 +111,14 @@ export default async function PlannerSetupPage(props: { searchParams: SearchPara
                   : ""
               }
             />
-            <div className="md:col-span-2">
-              <SelectField
-                name="budgetRange"
-                label="Budget range"
-                options={budgetRanges}
-                placeholder="Select budget range"
-                defaultValue={weddingOverview?.budget_range ?? ""}
+              <PlannerBudgetFields
+                defaultLocation={weddingOverview?.location ?? ""}
+                defaultBudgetCurrency={readBudgetCurrency(weddingOverview)}
+                defaultBudgetRange={weddingOverview?.budget_range ?? ""}
+                locationFieldClassName="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
+                currencyFieldClassName="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
+                budgetFieldClassName="md:col-span-2 grid gap-2 text-sm font-medium text-[color:var(--color-ink)]"
               />
-            </div>
 
             <div className="md:col-span-2 flex flex-col gap-3 pt-2 sm:flex-row">
               <button
@@ -227,4 +234,31 @@ async function resolvePlannerOwnerIdForSetup(
   }
 
   return authUserId || fallbackId;
+}
+
+function isPlannerSetupSchemaDriftError(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "PGRST204" ||
+    (message.includes("budget_currency") &&
+      (message.includes("does not exist") || message.includes("could not find")))
+  );
+}
+
+function readBudgetCurrency(
+  weddingOverview:
+    | {
+        culture?: string | null;
+        wedding_type?: string | null;
+        location?: string | null;
+        guest_count?: number | null;
+        budget_range?: string | null;
+      }
+    | null,
+) {
+  const value = (weddingOverview as Record<string, unknown> | null)?.["budget_currency"];
+  return typeof value === "string" ? value : "";
 }

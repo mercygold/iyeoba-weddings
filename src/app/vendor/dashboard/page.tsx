@@ -62,6 +62,16 @@ export default async function VendorDashboardPage(props: {
       <FlashQueryCleaner />
       <CommunicationRealtimeSync role="vendor" vendorId={vendor?.id ?? null} />
       <MainNav />
+      {feedbackMessage ? (
+        <div className="fixed right-4 top-24 z-50 max-w-sm rounded-2xl border border-[rgba(91,44,131,0.2)] bg-white px-4 py-3 text-sm text-[color:var(--color-brand-primary)] shadow-[0_18px_40px_-30px_rgba(31,31,31,0.45)]">
+          {feedbackMessage}
+        </div>
+      ) : null}
+      {feedbackError ? (
+        <div className="fixed right-4 top-24 z-50 max-w-sm rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-[0_18px_40px_-30px_rgba(31,31,31,0.45)]">
+          {feedbackError}
+        </div>
+      ) : null}
       <main className="relative mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="surface-card rounded-[2rem] p-5 sm:p-8">
@@ -153,6 +163,7 @@ export default async function VendorDashboardPage(props: {
             />
           </section>
         ) : (
+          <>
           <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="surface-card rounded-[2rem] p-5 sm:p-8">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
@@ -204,6 +215,26 @@ export default async function VendorDashboardPage(props: {
               </div>
             </div>
           </section>
+          <section className="surface-card rounded-[2rem] p-5 sm:p-7">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
+              Grow with TikTok Exposure
+            </p>
+            <h3 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+              Submit your best reel or event clip for feature placement.
+            </h3>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-[color:var(--color-muted)]">
+              We feature standout vendor moments across Iyeoba touchpoints to help couples discover premium services faster.
+            </p>
+            <div className="mt-5">
+              <Link
+                href="mailto:hello@iyeobaweddings.com?subject=Request%20Feature%20-%20TikTok%20Exposure"
+                className="btn-primary"
+              >
+                Request Feature
+              </Link>
+            </div>
+          </section>
+          </>
         )}
 
         {!showOnboarding ? (
