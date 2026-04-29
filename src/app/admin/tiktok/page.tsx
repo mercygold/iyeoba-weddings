@@ -2,6 +2,7 @@ import { MainNav } from "@/components/main-nav";
 import {
   addTikTokVideoAction,
   removeTikTokVideoAction,
+  syncTikTokNowAction,
 } from "@/app/admin/tiktok/actions";
 import { requireAdminProfile } from "@/lib/auth";
 import { getTikTokVideos } from "@/lib/tiktok";
@@ -30,6 +31,22 @@ export default async function AdminTikTokPage(props: {
             Add or remove TikTok video links, tag content by category, and mark
             featured videos for homepage or the TikTok landing page.
           </p>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <a
+              href="/api/tiktok/connect"
+              className="btn-secondary px-5 py-2.5"
+            >
+              Connect TikTok Account
+            </a>
+            <form action={syncTikTokNowAction}>
+              <button
+                type="submit"
+                className="btn-primary px-5 py-2.5"
+              >
+                Sync TikTok Now
+              </button>
+            </form>
+          </div>
           {searchParams.message ? (
             <p className="surface-soft mt-4 rounded-[1.25rem] px-4 py-3 text-sm text-[color:var(--color-brand-primary)]">
               {searchParams.message}

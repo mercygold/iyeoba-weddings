@@ -11,6 +11,8 @@ export function PlannerInspirationFeed({ items }: PlannerInspirationFeedProps) {
     "Bridal looks",
     "Decor",
     "Entry dances",
+    "Asoebi inspiration",
+    "Traditional wedding moments",
     "Nigerian wedding moments",
   ];
   const feedItems = items.length
@@ -34,7 +36,7 @@ export function PlannerInspirationFeed({ items }: PlannerInspirationFeedProps) {
             Wedding Ideas For You
           </p>
           <p className="mt-2 text-sm leading-7 text-[color:var(--color-muted)]">
-            Bridal looks, decor, entry dances, and real Nigerian wedding moments.
+            Bridal looks, decor, entrance dances, asoebi inspiration, and traditional wedding moments.
           </p>
         </div>
         <Link

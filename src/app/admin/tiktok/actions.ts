@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requireAdminProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { syncTikTokVideos } from "@/lib/tiktok-sync";
 
 export async function addTikTokVideoAction(formData: FormData) {
   await requireAdminProfile("/admin/tiktok");
@@ -56,4 +57,22 @@ export async function removeTikTokVideoAction(formData: FormData) {
 
   revalidatePath("/admin/tiktok");
   redirect("/admin/tiktok?message=TikTok video removed.");
+}
+
+export async function syncTikTokNowAction() {
+  await requireAdminProfile("/admin/tiktok");
+
+  try {
+    const { synced } = await syncTikTokVideos(10);
+    revalidatePath("/");
+    revalidatePath("/admin/tiktok");
+    redirect(`/admin/tiktok?message=Synced%20${synced}%20TikTok%20videos.`);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "TikTok sync failed. Check environment variables and token setup.";
+    revalidatePath("/admin/tiktok");
+    redirect(`/admin/tiktok?message=${encodeURIComponent(message)}`);
+  }
 }

@@ -230,7 +230,7 @@ export default async function VendorDashboardPage(props: {
                 href="mailto:hello@iyeobaweddings.com?subject=Request%20Feature%20-%20TikTok%20Exposure"
                 className="btn-primary"
               >
-                Request Feature
+                Request TikTok Feature
               </Link>
             </div>
           </section>

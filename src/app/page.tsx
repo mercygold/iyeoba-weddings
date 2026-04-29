@@ -10,7 +10,6 @@ import {
   getSharedCultureOptions,
   getSharedLocationOptions,
 } from "@/lib/vendor-filter-options";
-import { getHomepageTikTokSectionData } from "@/lib/tiktok";
 import { VendorCard } from "@/components/vendor-card";
 import { getFeaturedVendors } from "@/lib/vendors";
 
@@ -28,7 +27,6 @@ export default async function Home() {
     profile?.role === "planner"
       ? new Set((await getPlannerSavedVendors(profile.id)).map((item) => item.vendor.id))
       : new Set<string>();
-  const { latestTikToks, topTikToks } = getHomepageTikTokSectionData();
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(91,44,131,0.08),_transparent_34%),linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
@@ -281,10 +279,8 @@ export default async function Home() {
         </section>
 
         <TikTokSection
-          latestTikToks={latestTikToks}
-          topTikToks={topTikToks}
-          title="Trending on TikTok"
-          subtitle="Explore real Nigerian wedding ideas, styles, vendors, and cultural inspiration from Iyeoba Weddings."
+          title="From TikTok"
+          subtitle="Latest wedding inspiration and vendor features from Iyeoba Weddings."
         />
 
         <section className="relative overflow-hidden rounded-[2rem] border border-[rgba(91,44,131,0.09)] bg-[rgba(255,255,255,0.76)] p-8 shadow-[0_20px_55px_-42px_rgba(31,31,31,0.24)] backdrop-blur-sm">

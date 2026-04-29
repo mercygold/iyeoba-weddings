@@ -1,36 +1,58 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export async function GET() {
+type TikTokVideoRow = {
+  post_id: string | null;
+  share_url: string | null;
+  title: string | null;
+  caption: string | null;
+  thumbnail_url: string | null;
+  views: number | string | null;
+  likes: number | string | null;
+  created_at: string | null;
+};
+
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const typeParam = String(searchParams.get("type") ?? "latest").toLowerCase();
+    const limitParam = Number(searchParams.get("limit") ?? "5");
+    const limit = Number.isFinite(limitParam)
+      ? Math.min(Math.max(limitParam, 1), 20)
+      : 5;
+    const isTop = typeParam === "top";
+
     const supabase = await createSupabaseServerClient();
     const baseSelect =
       "post_id, share_url, title, caption, thumbnail_url, views, likes, created_at, active";
 
-    let { data, error } = await supabase
-      .from("tiktok_videos")
-      .select(baseSelect)
-      .eq("active", true)
-      .eq("status", "approved")
-      .order("created_at", { ascending: false });
+    let { data, error } = await runTikTokQuery({
+      supabase,
+      baseSelect,
+      limit,
+      isTop,
+      approvalColumn: "status",
+    });
 
     if (error && isColumnMissingError(error)) {
-      const fallback = await supabase
-        .from("tiktok_videos")
-        .select(baseSelect)
-        .eq("active", true)
-        .eq("moderation_status", "approved")
-        .order("created_at", { ascending: false });
+      const fallback = await runTikTokQuery({
+        supabase,
+        baseSelect,
+        limit,
+        isTop,
+        approvalColumn: "moderation_status",
+      });
       data = fallback.data;
       error = fallback.error;
     }
 
     if (error && isColumnMissingError(error)) {
-      const fallback = await supabase
-        .from("tiktok_videos")
-        .select(baseSelect)
-        .eq("active", true)
-        .order("created_at", { ascending: false });
+      const fallback = await runTikTokQuery({
+        supabase,
+        baseSelect,
+        limit,
+        isTop,
+      });
       data = fallback.data;
       error = fallback.error;
     }
@@ -46,7 +68,8 @@ export async function GET() {
       );
     }
 
-    const videos = (data ?? []).slice(0, 12).map((row) => ({
+    const rows = (data ?? []) as TikTokVideoRow[];
+    const videos = rows.slice(0, limit).map((row) => ({
       id: String(row.post_id ?? ""),
       title: String(row.title ?? row.caption ?? "Wedding inspiration"),
       url: String(row.share_url ?? "https://www.tiktok.com/@iyeobaweddings"),
@@ -66,6 +89,7 @@ export async function GET() {
 
     return NextResponse.json({
       videos,
+      type: isTop ? "top" : "latest",
       message: videos.length
         ? "Latest approved TikTok videos loaded."
         : "No approved TikTok videos found yet.",
@@ -80,6 +104,33 @@ export async function GET() {
       { status: 200 },
     );
   }
+}
+
+async function runTikTokQuery({
+  supabase,
+  baseSelect,
+  limit,
+  isTop,
+  approvalColumn,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  baseSelect: string;
+  limit: number;
+  isTop: boolean;
+  approvalColumn?: "status" | "moderation_status";
+}) {
+  let query = supabase.from("tiktok_videos").select(baseSelect).eq("active", true) as any;
+  if (approvalColumn) {
+    query = query.eq(approvalColumn, "approved");
+  }
+  if (isTop) {
+    query = query.order("views", { ascending: false, nullsFirst: false });
+    query = query.order("likes", { ascending: false, nullsFirst: false });
+    query = query.order("created_at", { ascending: false });
+  } else {
+    query = query.order("created_at", { ascending: false });
+  }
+  return query.limit(limit);
 }
 
 function isColumnMissingError(error: { code?: string | null; message?: string | null }) {

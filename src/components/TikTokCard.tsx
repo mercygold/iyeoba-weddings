@@ -6,7 +6,7 @@ export function TikTokCard({ item }: { item: HomepageTikTokItem }) {
   return (
     <article className="min-w-[250px] snap-start rounded-2xl border border-[rgba(91,44,131,0.1)] bg-white/90 p-3 shadow-[0_18px_42px_-34px_rgba(106,62,124,0.24)] sm:min-w-[270px]">
       <div className="h-1.5 w-8 rounded-full bg-[color:var(--color-brand-gold)]" />
-      <div className="mt-2.5 aspect-[4/5] overflow-hidden rounded-xl bg-[color:var(--color-brand-soft)]">
+      <div className="relative mt-2.5 aspect-[4/5] overflow-hidden rounded-xl bg-[color:var(--color-brand-soft)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={item.thumbnail}
@@ -14,11 +14,12 @@ export function TikTokCard({ item }: { item: HomepageTikTokItem }) {
           loading="lazy"
           className="h-full w-full object-cover"
         />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 via-black/35 to-transparent p-2.5">
+          <h3 className="line-clamp-2 text-xs font-semibold text-white">
+            {item.title}
+          </h3>
+        </div>
       </div>
-
-      <h3 className="mt-2.5 line-clamp-1 text-sm font-semibold text-[color:var(--color-brand-primary)]">
-        {item.title}
-      </h3>
       <p className="mt-1 text-[11px] text-[color:var(--color-muted)]">
         {formatCompact(item.views)} views · {formatCompact(item.likes)} likes
       </p>
@@ -29,7 +30,7 @@ export function TikTokCard({ item }: { item: HomepageTikTokItem }) {
         rel="noreferrer"
         className="mt-2 inline-flex whitespace-nowrap rounded-full border border-[#5B2C83] bg-white px-3 py-1 text-[11px] font-semibold text-[#5B2C83] transition-all duration-200 ease-in-out hover:border-[#5B2C83] hover:bg-[#5B2C83] hover:!text-white"
       >
-        View on TikTok
+        Watch on TikTok
       </Link>
     </article>
   );

@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { storeTikTokTokens } from "@/lib/tiktok-sync";
 
 const TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 
@@ -17,9 +19,18 @@ type TikTokTokenResponse = {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
   if (!code) {
     return NextResponse.json(
       { error: "Missing TikTok authorization code." },
+      { status: 400 },
+    );
+  }
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get("tiktok_oauth_state")?.value ?? null;
+  if (!state || !expectedState || state !== expectedState) {
+    return NextResponse.json(
+      { error: "Invalid TikTok OAuth state." },
       { status: 400 },
     );
   }
@@ -73,20 +84,18 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
+  try {
+    await storeTikTokTokens(tokenPayload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown token storage error";
+    return NextResponse.json(
+      { error: "TikTok connected, but token storage failed.", details: message },
+      { status: 500 },
+    );
+  }
 
-  // TEMP SETUP RESPONSE ONLY: remove token display after setup is complete.
-  const responseText = [
-    "TikTok connected successfully.",
-    `ACCESS_TOKEN=${tokenPayload.access_token ?? ""}`,
-    `REFRESH_TOKEN=${tokenPayload.refresh_token ?? ""}`,
-    `expires_in=${tokenPayload.expires_in ?? ""}`,
-  ].join("\n");
-
-  return new NextResponse(responseText, {
-    status: 200,
-    headers: {
-      "content-type": "text/plain; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
+  cookieStore.delete("tiktok_oauth_state");
+  return NextResponse.redirect(
+    new URL("/admin/tiktok?message=TikTok%20account%20connected.", url.origin),
+  );
 }
