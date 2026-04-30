@@ -10,6 +10,10 @@ import { MainNav } from "@/components/main-nav";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getAdminVendorSubmissions,
+  type AdminVendorSubmission,
+} from "@/lib/vendor-admin";
 
 type SearchParams = Promise<{
   tab?: string;
@@ -50,7 +54,7 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
   const tab = normalizeTab(searchParams.tab);
   const query = String(searchParams.q ?? "").trim();
   const sort = normalizeSort(searchParams.sort);
-  const vendors = await getManageVendors();
+  const vendors = await getAdminVendorSubmissions();
   const filteredVendors = filterAndSortVendors(vendors, { query, sort });
   const expandedVendorId = typeof searchParams.vendor === "string" ? searchParams.vendor : null;
   const manageNextPath = buildManageNextPath(tab, expandedVendorId, query, sort);
@@ -648,106 +652,6 @@ function toMs(value: string | null | undefined) {
   if (!value) return 0;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-type AdminVendorSubmission = {
-  id: string;
-  userId: string | null;
-  businessName: string;
-  ownerName: string | null;
-  email: string | null;
-  phone: string | null;
-  category: string;
-  customCategory: string | null;
-  location: string;
-  priceRange: string | null;
-  status: string | null;
-  primarySocialLink: string | null;
-  website: string | null;
-  adminNotes: string | null;
-  governmentIdSignedUrl: string | null;
-  cacCertificateSignedUrl: string | null;
-  portfolioImages: string[];
-  createdAt: string;
-  updatedAt: string | null;
-};
-
-async function getManageVendors(): Promise<AdminVendorSubmission[]> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("vendors")
-    .select(`
-      id,
-      user_id,
-      business_name,
-      owner_name,
-      category,
-      custom_category,
-      location,
-      price_range,
-      status,
-      primary_social_link,
-      website,
-      admin_notes,
-      government_id_url,
-      cac_certificate_url,
-      created_at,
-      updated_at,
-      users(email, phone),
-      vendor_portfolio(image_url, sort_order)
-    `)
-    .order("created_at", { ascending: false });
-
-  if (error || !data) {
-    return [];
-  }
-
-  return Promise.all(
-    data.map(async (item) => {
-      const relatedUser = Array.isArray(item.users) ? item.users[0] : item.users;
-      const portfolioImages =
-        item.vendor_portfolio
-          ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-          .map((entry) => entry.image_url) ?? [];
-
-      let governmentIdSignedUrl: string | null = null;
-      let cacCertificateSignedUrl: string | null = null;
-      if (item.government_id_url) {
-        const signed = await supabase.storage
-          .from("vendor-documents")
-          .createSignedUrl(item.government_id_url, 60 * 60);
-        governmentIdSignedUrl = signed.data?.signedUrl ?? null;
-      }
-      if (item.cac_certificate_url) {
-        const signed = await supabase.storage
-          .from("vendor-documents")
-          .createSignedUrl(item.cac_certificate_url, 60 * 60);
-        cacCertificateSignedUrl = signed.data?.signedUrl ?? null;
-      }
-
-      return {
-        id: item.id,
-        userId: item.user_id ?? null,
-        businessName: item.business_name,
-        ownerName: item.owner_name ?? null,
-        email: relatedUser?.email ?? null,
-        phone: relatedUser?.phone ?? null,
-        category: item.category,
-        customCategory: item.custom_category ?? null,
-        location: item.location,
-        priceRange: item.price_range ?? null,
-        status: item.status ?? null,
-        primarySocialLink: item.primary_social_link ?? null,
-        website: item.website ?? null,
-        adminNotes: item.admin_notes ?? null,
-        governmentIdSignedUrl,
-        cacCertificateSignedUrl,
-        portfolioImages,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at ?? null,
-      } satisfies AdminVendorSubmission;
-    }),
-  );
 }
 
 async function getAdminNotes(): Promise<ManageAdminNote[]> {

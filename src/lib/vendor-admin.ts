@@ -25,11 +25,15 @@ const adminVendorSelect = `
   profile_status,
   onboarding_completed,
   approved,
+  published,
+  is_published,
+  rejected,
   verified,
   government_id_url,
   cac_certificate_url,
   admin_notes,
   created_at,
+  updated_at,
   users(email, phone),
   vendor_portfolio(image_url, sort_order)
 `;
@@ -58,7 +62,9 @@ const legacyAdminVendorSelect = `
   approved,
   verified,
   government_id_url,
+  admin_notes,
   created_at,
+  updated_at,
   users(email, phone),
   vendor_portfolio(image_url, sort_order)
 `;
@@ -87,6 +93,10 @@ export type AdminVendorSubmission = {
   priceAmount: number | null;
   priceRange: string | null;
   status: string | null;
+  rawStatus: string | null;
+  rawProfileStatus: string | null;
+  published: boolean;
+  rejected: boolean;
   adminNotes: string | null;
   onboardingCompleted: boolean;
   approved: boolean;
@@ -97,6 +107,7 @@ export type AdminVendorSubmission = {
   cacCertificateSignedUrl: string | null;
   portfolioImages: string[];
   createdAt: string;
+  updatedAt: string | null;
 };
 
 const lifecycleStatuses = new Set([
@@ -104,6 +115,7 @@ const lifecycleStatuses = new Set([
   "pending_review",
   "approved",
   "needs_changes",
+  "rejected",
   "suspended",
   "archived",
 ]);
@@ -142,27 +154,7 @@ export async function getAdminVendorSubmissions() {
     return [];
   }
 
-  console.log("Admin vendor review query result", {
-    count: data.length,
-    pendingReview: data.filter(
-      (item) =>
-        normalizeVendorStatus(item.status, item.profile_status, item.approved ?? false) ===
-        "pending_review",
-    ).length,
-    vendors: data.map((item) => ({
-      id: item.id,
-      businessName: item.business_name,
-      status: item.status ?? null,
-      approved: item.approved ?? false,
-      profileStatus: item.profile_status ?? null,
-      normalizedStatus: normalizeVendorStatus(
-        item.status,
-        item.profile_status,
-        item.approved ?? false,
-      ),
-    })),
-    columns: data[0] ? Object.keys(data[0]) : [],
-  });
+  logAdminVendorCounts(data);
 
   const results = await Promise.all(
     data.map(async (item) => {
@@ -189,11 +181,13 @@ export async function getAdminVendorSubmissions() {
         item.vendor_portfolio
           ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
           .map((entry) => entry.image_url) ?? [];
-      const normalizedStatus = normalizeVendorStatus(
-        item.status,
-        item.profile_status,
-        item.approved ?? false,
-      );
+      const normalizedStatus = normalizeVendorStatus({
+        status: item.status,
+        profileStatus: item.profile_status,
+        approved: item.approved ?? false,
+        published: item.published ?? item.is_published ?? false,
+        rejected: item.rejected ?? false,
+      });
       const isApproved = normalizedStatus === "approved";
 
       const relatedUser = Array.isArray(item.users) ? item.users[0] : item.users;
@@ -227,6 +221,10 @@ export async function getAdminVendorSubmissions() {
               : null,
         priceRange: item.price_range ?? null,
         status: normalizedStatus,
+        rawStatus: item.status ?? null,
+        rawProfileStatus: item.profile_status ?? null,
+        published: item.published ?? item.is_published ?? false,
+        rejected: item.rejected ?? false,
         adminNotes: item.admin_notes ?? null,
         onboardingCompleted: item.onboarding_completed ?? false,
         approved: isApproved,
@@ -237,6 +235,7 @@ export async function getAdminVendorSubmissions() {
         cacCertificateSignedUrl,
         portfolioImages,
         createdAt: item.created_at,
+        updatedAt: item.updated_at ?? null,
       } satisfies AdminVendorSubmission;
     }),
   );
@@ -252,11 +251,19 @@ function isSchemaDriftError(error: { message?: string | null }) {
   );
 }
 
-function normalizeVendorStatus(
-  status: string | null | undefined,
-  profileStatus: string | null | undefined,
-  approved: boolean,
-) {
+function normalizeVendorStatus({
+  status,
+  profileStatus,
+  approved,
+  published,
+  rejected,
+}: {
+  status: string | null | undefined;
+  profileStatus: string | null | undefined;
+  approved: boolean;
+  published?: boolean;
+  rejected?: boolean;
+}) {
   if (status && lifecycleStatuses.has(status)) {
     return status;
   }
@@ -268,11 +275,64 @@ function normalizeVendorStatus(
     return profileStatus;
   }
 
-  if (approved) {
+  if (rejected) {
+    return "rejected";
+  }
+
+  if (approved || published) {
     return "approved";
   }
 
-  return "draft";
+  return "pending_review";
+}
+
+function logAdminVendorCounts(
+  data: Array<{
+    id: string;
+    business_name: string;
+    status?: string | null;
+    profile_status?: string | null;
+    approved?: boolean | null;
+    published?: boolean | null;
+    is_published?: boolean | null;
+    rejected?: boolean | null;
+  }>,
+) {
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
+
+  const vendors = data.map((item) => {
+    const normalizedStatus = normalizeVendorStatus({
+      status: item.status,
+      profileStatus: item.profile_status,
+      approved: item.approved ?? false,
+      published: item.published ?? item.is_published ?? false,
+      rejected: item.rejected ?? false,
+    });
+
+    return {
+      id: item.id,
+      businessName: item.business_name,
+      status: item.status ?? null,
+      profileStatus: item.profile_status ?? null,
+      approved: item.approved ?? false,
+      published: item.published ?? item.is_published ?? false,
+      rejected: item.rejected ?? false,
+      normalizedStatus,
+    };
+  });
+
+  console.log("Admin vendor management query", {
+    totalFetched: data.length,
+    approvedCount: vendors.filter((vendor) => vendor.normalizedStatus === "approved").length,
+    pendingCount: vendors.filter((vendor) => vendor.normalizedStatus === "pending_review").length,
+    rejectedCount: vendors.filter((vendor) =>
+      ["needs_changes", "rejected", "suspended", "archived"].includes(vendor.normalizedStatus),
+    ).length,
+    vendors,
+    columns: data[0] ? Object.keys(data[0]) : [],
+  });
 }
 
 function serializeSupabaseError(error: {
