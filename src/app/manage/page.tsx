@@ -5,6 +5,7 @@ import {
   approveVendorAction,
   rejectVendorAction,
   setVendorPendingAction,
+  updateTikTokFeatureRequestAction,
 } from "@/app/manage/actions";
 import { MainNav } from "@/components/main-nav";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -14,6 +15,12 @@ import {
   getAdminVendorSubmissions,
   type AdminVendorSubmission,
 } from "@/lib/vendor-admin";
+import {
+  getAdminTikTokFeatureRequests,
+  getTikTokFeatureEligibilityLabel,
+  getTikTokFeatureRequestStatusLabel,
+  type AdminTikTokFeatureRequest,
+} from "@/lib/vendor-tiktok-feature-requests";
 
 type SearchParams = Promise<{
   tab?: string;
@@ -23,7 +30,7 @@ type SearchParams = Promise<{
   sort?: string;
 }>;
 
-type ManageTab = "all" | "pending" | "approved" | "rejected" | "notes" | "users";
+type ManageTab = "all" | "pending" | "approved" | "rejected" | "notes" | "tiktok" | "users";
 type VendorSort = "newest" | "oldest" | "updated";
 type ManageAdminNote = {
   id: string;
@@ -60,6 +67,7 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
   const manageNextPath = buildManageNextPath(tab, expandedVendorId, query, sort);
   const message = typeof searchParams.message === "string" ? searchParams.message : "";
   const notes = await getAdminNotes();
+  const tiktokRequests = await getAdminTikTokFeatureRequests();
   const users = await getManageUsers();
 
   const pendingVendors = filteredVendors.filter((vendor) => vendor.status === "pending_review");
@@ -90,7 +98,7 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
           ) : null}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-5">
+        <section className="grid gap-4 md:grid-cols-6">
           <TabCard
             href={buildManageTabHref("all", query, sort)}
             label="All Vendors"
@@ -120,6 +128,12 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
             label="Admin Notes"
             count={notes.length}
             active={tab === "notes"}
+          />
+          <TabCard
+            href={buildManageTabHref("tiktok", query, sort)}
+            label="TikTok Requests"
+            count={tiktokRequests.length}
+            active={tab === "tiktok"}
           />
         </section>
         <section className="grid gap-4 md:grid-cols-5">
@@ -249,6 +263,13 @@ export default async function ManagePage(props: { searchParams: SearchParams }) 
           </section>
         ) : null}
 
+        {tab === "tiktok" ? (
+          <TikTokFeatureRequestsSection
+            requests={tiktokRequests}
+            nextPath={manageNextPath}
+          />
+        ) : null}
+
         {tab === "users" ? (
           <section className="surface-card rounded-[2rem] p-6 sm:p-8">
             <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
@@ -336,6 +357,133 @@ function TabCard({
       <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--color-muted)]">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-[color:var(--color-ink)]">{count}</p>
     </Link>
+  );
+}
+
+function TikTokFeatureRequestsSection({
+  requests,
+  nextPath,
+}: {
+  requests: AdminTikTokFeatureRequest[];
+  nextPath: string;
+}) {
+  return (
+    <section className="surface-card rounded-[2rem] p-6 sm:p-8">
+      <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+        TikTok Feature Requests
+      </h2>
+      <p className="mt-2 text-sm text-[color:var(--color-muted)]">
+        Review launch-campaign feature requests, check profile eligibility, and update scheduling status.
+      </p>
+
+      {requests.length ? (
+        <div className="mt-5 grid gap-4">
+          {requests.map((request) => (
+            <article key={request.id} className="surface-soft rounded-[1.5rem] p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--color-brand-primary)]">
+                    {request.category || "Vendor category"}
+                  </p>
+                  <h3 className="font-display mt-2 text-2xl text-[color:var(--color-ink)]">
+                    {request.businessName || "Vendor"}
+                  </h3>
+                  <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+                    Requested {formatDate(request.createdAt)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <TikTokRequestBadge label={getTikTokFeatureRequestStatusLabel(request.status)} />
+                  <TikTokRequestBadge label={getTikTokFeatureEligibilityLabel(request.eligibilityStatus)} muted />
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <Info label="Vendor status" value={formatStatusValue(request.vendorStatus)} />
+                <Info label="Profile status" value={formatStatusValue(request.vendorProfileStatus)} />
+                <Info label="Approved" value={request.vendorApproved ? "Yes" : "No"} />
+                <Info label="Portfolio images" value={String(request.vendorPortfolioCount)} />
+                <Info label="Permission confirmed" value={request.permissionConfirmed ? "Yes" : "No"} />
+                <Info label="Scheduled date" value={formatDate(request.scheduledFor)} />
+                <Info label="Posted date" value={formatDate(request.postedAt)} />
+                <Info label="Admin notes" value={request.adminNotes || "No notes added"} />
+              </div>
+
+              <div className="mt-4 grid gap-3 text-sm">
+                <LinkRow label="Social link" href={request.socialLink} />
+                <LinkRow label="Content link" href={request.contentLink} />
+                {request.caption ? (
+                  <div className="surface-card rounded-[1.2rem] p-4">
+                    <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--color-muted)]">
+                      Caption / feature note
+                    </p>
+                    <p className="mt-2 leading-6 text-[color:var(--color-ink)]">
+                      {request.caption}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              <form action={updateTikTokFeatureRequestAction} className="mt-5 grid gap-3">
+                <input type="hidden" name="requestId" value={request.id} />
+                <input type="hidden" name="nextPath" value={nextPath} />
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="grid gap-1 text-sm font-medium text-[color:var(--color-ink)]">
+                    Request status
+                    <select name="status" defaultValue={request.status} className="field-input rounded-[1rem]">
+                      <option value="pending_review">Pending Review</option>
+                      <option value="needs_changes">Needs Changes</option>
+                      <option value="approved">Approved</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="posted">Posted</option>
+                      <option value="not_eligible">Not Eligible</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm font-medium text-[color:var(--color-ink)]">
+                    Scheduled for
+                    <input
+                      type="datetime-local"
+                      name="scheduledFor"
+                      defaultValue={toDateTimeLocal(request.scheduledFor)}
+                      className="field-input rounded-[1rem]"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-medium text-[color:var(--color-ink)]">
+                    Posted at
+                    <input
+                      type="datetime-local"
+                      name="postedAt"
+                      defaultValue={toDateTimeLocal(request.postedAt)}
+                      className="field-input rounded-[1rem]"
+                    />
+                  </label>
+                </div>
+                <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                  Admin notes
+                  <textarea
+                    name="adminNotes"
+                    rows={3}
+                    defaultValue={request.adminNotes ?? ""}
+                    placeholder="Add scheduling notes, feedback, or content changes needed."
+                    className="field-input min-h-[96px] rounded-[1rem]"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" className="btn-primary px-3 py-1.5 text-sm">
+                    Save TikTok Request
+                  </button>
+                </div>
+              </form>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-[color:var(--color-muted)]">
+          No TikTok feature requests yet.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -529,6 +677,63 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
+function LinkRow({ label, href }: { label: string; href: string }) {
+  return (
+    <div className="surface-card rounded-[1.2rem] p-4">
+      <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--color-muted)]">{label}</p>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-2 block break-all text-sm font-semibold text-[color:var(--color-brand-primary)] underline decoration-[rgba(106,62,124,0.25)] underline-offset-4"
+      >
+        {href}
+      </a>
+    </div>
+  );
+}
+
+function TikTokRequestBadge({
+  label,
+  muted = false,
+}: {
+  label: string;
+  muted?: boolean;
+}) {
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
+        muted
+          ? "bg-[rgba(106,62,124,0.1)] text-[color:var(--color-brand-primary)]"
+          : "bg-amber-100 text-amber-800"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function formatStatusValue(value: string | null | undefined) {
+  if (!value) {
+    return "Not provided";
+  }
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function toDateTimeLocal(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return parsed.toISOString().slice(0, 16);
+}
+
 function StatusBadge({ status }: { status: string | null }) {
   const normalized = status ?? "pending_review";
   const label =
@@ -563,7 +768,7 @@ function ConfirmationBadge({ status }: { status: "confirmed" | "unconfirmed" }) 
 }
 
 function normalizeTab(tab: string | undefined): ManageTab {
-  if (tab === "all" || tab === "pending" || tab === "approved" || tab === "rejected" || tab === "notes" || tab === "users") return tab;
+  if (tab === "all" || tab === "pending" || tab === "approved" || tab === "rejected" || tab === "notes" || tab === "tiktok" || tab === "users") return tab;
   return "all";
 }
 

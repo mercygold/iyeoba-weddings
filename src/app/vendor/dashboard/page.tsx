@@ -6,8 +6,10 @@ import { CommunicationRealtimeSync } from "@/components/communication-realtime-s
 import { VendorAdminNoteAlert } from "@/components/vendor-admin-note-alert";
 import { VendorConversationCenter } from "@/components/vendor-conversation-center";
 import { VendorDashboardForm } from "@/components/vendor-dashboard-form";
+import { VendorTikTokFeatureRequest } from "@/components/vendor-tiktok-feature-request";
 import {
   replyToInquiryAction,
+  submitTikTokFeatureRequestAction,
   updateInquiryStatusAction,
 } from "@/app/vendor/dashboard/actions";
 import { requireVendorProfile } from "@/lib/auth";
@@ -16,6 +18,10 @@ import {
 } from "@/lib/inquiries";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getVendorByUserId } from "@/lib/vendors";
+import {
+  getLatestVendorTikTokFeatureRequest,
+  getTikTokFeatureRequestStatusLabel,
+} from "@/lib/vendor-tiktok-feature-requests";
 
 type SearchParams = Promise<{
   message?: string;
@@ -46,6 +52,9 @@ export default async function VendorDashboardPage(props: {
         vendor.lastReviewedAt ?? vendor.updatedAt ?? null,
       )
     : [];
+  const latestTikTokFeatureRequest = vendor?.id
+    ? await getLatestVendorTikTokFeatureRequest(vendor.id)
+    : null;
   const latestAdminNote = adminNotes[0] ?? null;
   const inquiries = await getVendorInquiries(profile.id);
   const openInquiriesCount = inquiries.filter(
@@ -273,19 +282,34 @@ export default async function VendorDashboardPage(props: {
               Grow with TikTok Exposure
             </p>
             <h3 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
-              Submit your best reel or event clip for feature placement.
+              Submit your best reel, event clip, or portfolio highlight for a chance to be featured on Iyeoba Weddings TikTok.
             </h3>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-[color:var(--color-muted)]">
-              We feature standout vendor moments across Iyeoba touchpoints to help couples discover premium services faster.
+              Launch Offer: Approved vendors who complete their profile within the launch period may receive up to 4 weekly TikTok features, subject to content quality and profile completeness.
             </p>
-            <div className="mt-5">
-              <Link
-                href="mailto:hello@iyeobaweddings.com?subject=Request%20Feature%20-%20TikTok%20Exposure"
-                className="btn-primary"
-              >
-                Request TikTok Feature
-              </Link>
-            </div>
+            <VendorTikTokFeatureRequest
+              action={submitTikTokFeatureRequestAction}
+              businessName={vendor.businessName}
+              category={vendor.customCategory || vendor.category}
+              socialLink={vendor.primarySocialLink || vendor.website || ""}
+              latestStatusLabel={
+                latestTikTokFeatureRequest
+                  ? getTikTokFeatureRequestStatusLabel(latestTikTokFeatureRequest.status)
+                  : null
+              }
+              latestStatusDetail={
+                latestTikTokFeatureRequest?.status === "needs_changes"
+                  ? "please update your content link or profile details."
+                  : null
+              }
+              latestAdminNotes={latestTikTokFeatureRequest?.adminNotes ?? null}
+              canSubmit={
+                !latestTikTokFeatureRequest ||
+                ["posted", "cancelled", "not_eligible"].includes(
+                  latestTikTokFeatureRequest.status,
+                )
+              }
+            />
           </section>
           </>
         )}

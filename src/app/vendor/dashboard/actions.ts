@@ -12,6 +12,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureVendorStorageBuckets } from "@/lib/supabase/storage";
+import {
+  calculateTikTokFeatureEligibility,
+  isMissingTikTokFeatureRequestTable,
+} from "@/lib/vendor-tiktok-feature-requests";
 
 export async function saveVendorDraftAction(formData: FormData) {
   console.log("SAVE_DRAFT_ONLY_RUNNING");
@@ -50,6 +54,117 @@ export async function saveOrSubmitVendorProfileAction(formData: FormData) {
   console.log("VENDOR_FORM_INTENT_SUBMIT");
   console.log("SUBMIT_REVIEW_ONLY_RUNNING");
   await persistVendorProfile(formData, "pending_review");
+}
+
+export async function submitTikTokFeatureRequestAction(formData: FormData) {
+  const profile = await requireVendorProfile("/vendor/dashboard");
+  const supabase = await createSupabaseServerClient();
+  const nextPath = "/vendor/dashboard";
+
+  const socialLink = String(formData.get("socialLink") ?? "").trim();
+  const contentLink = String(formData.get("contentLink") ?? "").trim();
+  const caption = String(formData.get("caption") ?? "").trim();
+  const permissionConfirmed = formData.get("permissionConfirmed") === "yes";
+
+  if (!socialLink) {
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "Please add your TikTok, Instagram, website, or portfolio link.",
+      ),
+    );
+  }
+
+  if (!contentLink) {
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "Please add the content link you want Iyeoba to review.",
+      ),
+    );
+  }
+
+  if (!permissionConfirmed) {
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "Please confirm you have permission to share this content.",
+      ),
+    );
+  }
+
+  const { data: vendor, error: vendorError } = await supabase
+    .from("vendors")
+    .select(
+      "id, user_id, business_name, category, status, approved, primary_social_link, website, portfolio_image_urls, vendor_portfolio(image_url)",
+    )
+    .eq("user_id", profile.id)
+    .maybeSingle();
+
+  if (vendorError || !vendor?.id) {
+    console.error("TikTok feature request failed while loading vendor", {
+      userId: profile.id,
+      error: serializeSupabaseError(vendorError ?? {}),
+    });
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not find your vendor profile for this request.",
+      ),
+    );
+  }
+
+  const portfolioImageCount =
+    vendor.vendor_portfolio?.length ?? vendor.portfolio_image_urls?.length ?? 0;
+  const profileSocialLink =
+    vendor.primary_social_link?.trim() || vendor.website?.trim() || socialLink;
+  const eligibilityStatus = calculateTikTokFeatureEligibility({
+    status: vendor.status,
+    approved: vendor.approved ?? false,
+    socialLink: profileSocialLink,
+    portfolioImageCount,
+    contentLink,
+    permissionConfirmed,
+  });
+
+  const { error } = await supabase.from("vendor_tiktok_feature_requests").insert({
+    vendor_id: vendor.id,
+    user_id: profile.id,
+    business_name: vendor.business_name ?? String(formData.get("businessName") ?? "").trim(),
+    category: vendor.category ?? String(formData.get("category") ?? "").trim(),
+    social_link: socialLink,
+    content_link: contentLink,
+    caption: caption || null,
+    permission_confirmed: permissionConfirmed,
+    status: "pending_review",
+    eligibility_status: eligibilityStatus,
+  });
+
+  if (error) {
+    console.error("TikTok feature request insert failed", {
+      userId: profile.id,
+      vendorId: vendor.id,
+      error: serializeSupabaseError(error),
+    });
+    const message = isMissingTikTokFeatureRequestTable(error)
+      ? "TikTok feature requests are not ready yet. Please run the latest Supabase migration."
+      : "We could not submit your TikTok feature request right now.";
+    redirect(withQueryParam(nextPath, "error", message));
+  }
+
+  revalidatePath("/vendor/dashboard");
+  revalidatePath("/manage");
+  redirect(
+    withQueryParam(
+      nextPath,
+      "message",
+      "Your TikTok feature request has been submitted for review.",
+    ),
+  );
 }
 
 export async function updateInquiryStatusAction(formData: FormData) {

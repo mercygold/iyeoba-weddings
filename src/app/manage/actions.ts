@@ -127,10 +127,73 @@ export async function addManageVendorNoteAction(formData: FormData) {
   redirect(withManageQueryParam(nextPath, "message", "Admin note saved."));
 }
 
+export async function updateTikTokFeatureRequestAction(formData: FormData) {
+  await requireAdmin("/manage");
+  const nextPath = normalizeManageNextPath(formData.get("nextPath"));
+  const requestId = String(formData.get("requestId") ?? "").trim();
+  const status = normalizeTikTokFeatureRequestStatus(formData.get("status"));
+  const adminNotes = String(formData.get("adminNotes") ?? "").trim();
+  const scheduledFor = String(formData.get("scheduledFor") ?? "").trim();
+  const postedAt = String(formData.get("postedAt") ?? "").trim();
+
+  if (!requestId || !status) {
+    redirect(withManageQueryParam(nextPath, "message", "Invalid TikTok request update."));
+  }
+
+  const adminClient = createSupabaseAdminClient();
+  const supabase = await createSupabaseServerClient();
+  const writeClient = adminClient ?? supabase;
+  const now = new Date().toISOString();
+  const payload = {
+    status,
+    admin_notes: adminNotes || null,
+    scheduled_for:
+      status === "scheduled" && scheduledFor
+        ? new Date(scheduledFor).toISOString()
+        : null,
+    posted_at:
+      status === "posted"
+        ? postedAt
+          ? new Date(postedAt).toISOString()
+          : now
+        : null,
+    updated_at: now,
+  };
+
+  const { error } = await writeClient
+    .from("vendor_tiktok_feature_requests")
+    .update(payload)
+    .eq("id", requestId);
+
+  if (error) {
+    redirect(withManageQueryParam(nextPath, "message", error.message));
+  }
+
+  revalidatePath("/manage");
+  revalidatePath("/vendor/dashboard");
+  redirect(withManageQueryParam(nextPath, "message", "TikTok feature request updated."));
+}
+
 function mapManageStatus(value: string) {
   if (value === "approved") return "approved";
   if (value === "pending_review") return "pending_review";
   if (value === "rejected") return "rejected";
+  return null;
+}
+
+function normalizeTikTokFeatureRequestStatus(raw: FormDataEntryValue | null) {
+  const value = String(raw ?? "").trim();
+  if (
+    value === "pending_review" ||
+    value === "needs_changes" ||
+    value === "approved" ||
+    value === "scheduled" ||
+    value === "posted" ||
+    value === "not_eligible" ||
+    value === "cancelled"
+  ) {
+    return value;
+  }
   return null;
 }
 
