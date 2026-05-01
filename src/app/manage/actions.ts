@@ -74,11 +74,11 @@ export async function addManageVendorNoteAction(formData: FormData) {
     note,
   });
 
-  if (insertResult.error) {
+  if (insertResult.error && !isMissingTableError(insertResult.error)) {
     redirect(withManageQueryParam(nextPath, "message", insertResult.error.message));
   }
 
-  const vendorUpdateResult = await supabase
+  let vendorUpdateResult = await supabase
     .from("vendors")
     .update({
       admin_notes: note,
@@ -86,6 +86,15 @@ export async function addManageVendorNoteAction(formData: FormData) {
       reviewed_by: admin.userId,
     })
     .eq("id", vendorId);
+
+  if (vendorUpdateResult.error && isMissingColumnError(vendorUpdateResult.error)) {
+    vendorUpdateResult = await supabase
+      .from("vendors")
+      .update({
+        admin_notes: note,
+      })
+      .eq("id", vendorId);
+  }
 
   if (vendorUpdateResult.error) {
     redirect(withManageQueryParam(nextPath, "message", vendorUpdateResult.error.message));
@@ -106,7 +115,7 @@ function mapManageStatus(value: string) {
 async function setVendorStatus(vendorId: string, status: "pending_review" | "approved" | "rejected") {
   const admin = await requireAdmin(MANAGE_PATH);
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  let result = await supabase
     .from("vendors")
     .update({
       status,
@@ -118,6 +127,19 @@ async function setVendorStatus(vendorId: string, status: "pending_review" | "app
     })
     .eq("id", vendorId);
 
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await supabase
+      .from("vendors")
+      .update({
+        status,
+        profile_status: status,
+        approved: status === "approved",
+        verified: status === "approved",
+      })
+      .eq("id", vendorId);
+  }
+
+  const { error } = result;
   if (error) {
     redirect(`${MANAGE_PATH}?message=${encodeURIComponent(error.message)}`);
   }
@@ -144,4 +166,18 @@ function withManageQueryParam(path: string, key: "message" | "error", value: str
   params.set(key, value);
   const serialized = params.toString();
   return serialized ? `${pathname}?${serialized}` : pathname;
+}
+
+function isMissingColumnError(error: { code?: string | null; message?: string | null }) {
+  const message = error.message?.toLowerCase() ?? "";
+  return error.code === "42703" || message.includes("column") && message.includes("does not exist");
+}
+
+function isMissingTableError(error: { code?: string | null; message?: string | null }) {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    (message.includes("could not find the table") && message.includes("admin_notes"))
+  );
 }
