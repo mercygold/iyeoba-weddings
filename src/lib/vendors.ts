@@ -14,8 +14,6 @@ const vendorSelect = `
   business_name,
   owner_name,
   category,
-  custom_category,
-  registered_business,
   country_region,
   nigeria_state,
   phone_code,
@@ -24,16 +22,12 @@ const vendorSelect = `
   location,
   years_experience,
   primary_social_link,
-  contact_email,
   instagram,
   website,
   whatsapp,
   price_currency,
   price_amount,
   price_range,
-  currency_code,
-  starting_price,
-  price_label,
   status,
   profile_status,
   onboarding_completed,
@@ -42,7 +36,6 @@ const vendorSelect = `
   updated_at,
   portfolio_image_urls,
   government_id_url,
-  cac_certificate_url,
   admin_notes,
   availability_status,
   verified,
@@ -203,13 +196,14 @@ export async function getVendorDirectory(filters: Filters = {}) {
 
     if (!error && data?.length) {
       const mapped = data.map((item) => {
+        const itemRecord = item as Record<string, any>;
         const portfolioImages =
           item.vendor_portfolio
             ?.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
             .map((entry) => entry.image_url) ?? [];
         const normalizedCategory = normalizeVendorCategory(
           item.category,
-          item.custom_category ?? null,
+          itemRecord.custom_category ?? null,
         );
         const rawStatus = item.status ?? null;
         const rawApproved = item.approved ?? false;
@@ -228,7 +222,7 @@ export async function getVendorDirectory(filters: Filters = {}) {
         ownerName: item.owner_name ?? null,
         category: normalizedCategory.category,
         customCategory: normalizedCategory.subcategory,
-        registeredBusiness: item.registered_business ?? false,
+        registeredBusiness: itemRecord.registered_business ?? false,
         countryRegion: item.country_region ?? null,
         nigeriaState: item.nigeria_state ?? null,
         phoneCode: item.phone_code ?? null,
@@ -237,19 +231,19 @@ export async function getVendorDirectory(filters: Filters = {}) {
         location: item.location,
         yearsExperience: item.years_experience ?? null,
         primarySocialLink: item.primary_social_link ?? item.instagram ?? null,
-        contactEmail: item.contact_email ?? null,
+        contactEmail: itemRecord.contact_email ?? null,
         instagram: item.instagram ?? "",
         website: item.website ?? "",
         whatsapp: item.whatsapp ?? "",
         priceCurrency:
-          toSupportedVendorCurrency(item.currency_code) ??
+          toSupportedVendorCurrency(itemRecord.currency_code) ??
           toSupportedVendorCurrency(item.price_currency) ??
           null,
         priceAmount:
-          typeof item.starting_price === "number"
-            ? item.starting_price
-            : item.starting_price
-              ? Number(item.starting_price)
+          typeof itemRecord.starting_price === "number"
+            ? itemRecord.starting_price
+            : itemRecord.starting_price
+              ? Number(itemRecord.starting_price)
               : typeof item.price_amount === "number"
                 ? item.price_amount
                 : item.price_amount
@@ -257,20 +251,20 @@ export async function getVendorDirectory(filters: Filters = {}) {
                   : null,
         priceRange: formatVendorStartingPrice({
           currencyCode:
-            toSupportedVendorCurrency(item.currency_code) ??
+            toSupportedVendorCurrency(itemRecord.currency_code) ??
             toSupportedVendorCurrency(item.price_currency),
           startingPrice:
-            typeof item.starting_price === "number"
-              ? item.starting_price
-              : item.starting_price
-                ? Number(item.starting_price)
+            typeof itemRecord.starting_price === "number"
+              ? itemRecord.starting_price
+              : itemRecord.starting_price
+                ? Number(itemRecord.starting_price)
                 : typeof item.price_amount === "number"
                   ? item.price_amount
                   : item.price_amount
                     ? Number(item.price_amount)
                     : null,
           priceLabel:
-            typeof item.price_label === "string" ? item.price_label : null,
+            typeof itemRecord.price_label === "string" ? itemRecord.price_label : null,
           legacyPriceRange: item.price_range ?? null,
         }),
         status,
@@ -279,7 +273,7 @@ export async function getVendorDirectory(filters: Filters = {}) {
         portfolioImageUrls:
           portfolioImages.length ? portfolioImages : item.portfolio_image_urls ?? [],
         governmentIdUrl: item.government_id_url ?? null,
-        cacCertificateUrl: item.cac_certificate_url ?? null,
+        cacCertificateUrl: itemRecord.cac_certificate_url ?? null,
         adminNotes: item.admin_notes ?? null,
         lastReviewedAt: item.last_reviewed_at ?? null,
         updatedAt: item.updated_at ?? null,
@@ -410,12 +404,6 @@ export async function getVendorByUserId(userId: string) {
     return null;
   }
 
-  console.log("[vendor-read] getVendorByUserId:start", {
-    authUserId: userId,
-    table: "vendors",
-    filter: { user_id: userId },
-  });
-
   const initialQuery = await supabase
     .from("vendors")
     .select(vendorSelect)
@@ -431,21 +419,8 @@ export async function getVendorByUserId(userId: string) {
     hint?: string | null;
   } | null = initialQuery.error;
 
-  console.log("Vendor dashboard lookup", {
-    userId,
-    filter: { user_id: userId },
-    returnedRowCount: Array.isArray(initialQuery.data) ? initialQuery.data.length : 0,
-    foundVendorId: data?.id ?? null,
-    businessName: data?.business_name ?? null,
-    status: data?.status ?? null,
-    approved: data?.approved ?? false,
-    legacyProfileStatus: data?.profile_status ?? null,
-    columns: data ? Object.keys(data) : [],
-    error: error ? serializeSupabaseError(error) : null,
-  });
-
   if (error && isSchemaDriftError(error)) {
-    console.warn("Vendor dashboard query fell back to legacy select", {
+    debugLog("Vendor dashboard query fell back to legacy select", {
       userId,
       select: legacyVendorSelect,
       error: serializeSupabaseError(error),
@@ -461,45 +436,7 @@ export async function getVendorByUserId(userId: string) {
       ? ((fallback.data[0] as Record<string, any> | null) ?? null)
       : null;
     error = fallback.error;
-    console.log("[vendor-read] fallback legacy", {
-      userId,
-      filter: { user_id: userId },
-      returnedRowCount: Array.isArray(fallback.data) ? fallback.data.length : 0,
-      error: error ? serializeSupabaseError(error) : null,
-    });
-  }
-
-  if (error && isSchemaDriftError(error)) {
-    const fallback = await supabase
-      .from("vendors")
-      .select(vendorSelect)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-
-    data = Array.isArray(fallback.data)
-      ? ((fallback.data[0] as Record<string, any> | null) ?? null)
-      : null;
-    error = fallback.error;
-    console.log("[vendor-read] fallback full-select", {
-      userId,
-      filter: { user_id: userId },
-      returnedRowCount: Array.isArray(fallback.data) ? fallback.data.length : 0,
-      error: error ? serializeSupabaseError(error) : null,
-    });
-  }
-
-  if (error && isSchemaDriftError(error)) {
-    const fallback = await supabase
-      .from("vendors")
-      .select(legacyVendorSelect)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-
-    data = Array.isArray(fallback.data)
-      ? ((fallback.data[0] as Record<string, any> | null) ?? null)
-      : null;
-    error = fallback.error;
-    console.log("[vendor-read] fallback legacy second", {
+    debugLog("[vendor-read] fallback legacy", {
       userId,
       filter: { user_id: userId },
       returnedRowCount: Array.isArray(fallback.data) ? fallback.data.length : 0,
@@ -514,7 +451,7 @@ export async function getVendorByUserId(userId: string) {
         error: serializeSupabaseError(error),
         select: vendorSelect,
         legacySelect: legacyVendorSelect,
-        legacySelectTried: true,
+        legacySelectTried: Boolean(error && isSchemaDriftError(error)),
       });
     }
     return null;
@@ -659,4 +596,10 @@ function serializeSupabaseError(error: {
     details: error.details ?? null,
     hint: error.hint ?? null,
   };
+}
+
+function debugLog(message: string, details: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== "production") {
+    console.debug(message, details);
+  }
 }

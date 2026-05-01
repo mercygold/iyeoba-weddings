@@ -63,16 +63,6 @@ export default async function VendorDashboardPage(props: {
   const initialInquiryId =
     typeof searchParams.thread === "string" ? searchParams.thread : null;
   const status = vendor?.status || "draft";
-  console.log("Vendor dashboard status view", {
-    userId: profile.id,
-    vendorId: vendor?.id ?? null,
-    status,
-    approved: vendor?.approved ?? false,
-    adminNotes: vendor?.adminNotes ?? null,
-    adminNoteCount: adminNotes.length,
-    latestAdminNoteId: latestAdminNote?.id ?? null,
-    visibleFromStatus: status === "approved",
-  });
   const showOnboarding =
     !vendor ||
     searchParams.edit === "1" ||
