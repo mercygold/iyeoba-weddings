@@ -43,6 +43,7 @@ export default async function VendorDashboardPage(props: {
     vendorId: vendor?.id ?? null,
     status,
     approved: vendor?.approved ?? false,
+    adminNotes: vendor?.adminNotes ?? null,
     visibleFromStatus: status === "approved",
   });
   const showOnboarding =
@@ -110,7 +111,7 @@ export default async function VendorDashboardPage(props: {
             ) : null}
             {vendor?.adminNotes ? (
               <div className="mt-5 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-                <p className="font-semibold text-amber-950">Admin review note</p>
+                <p className="font-semibold text-amber-950">Message from Iyeoba Admin</p>
                 <p className="mt-1">{vendor.adminNotes}</p>
               </div>
             ) : null}

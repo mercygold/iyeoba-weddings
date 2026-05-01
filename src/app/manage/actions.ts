@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/requireAdmin";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const MANAGE_PATH = "/manage";
@@ -68,30 +69,47 @@ export async function addManageVendorNoteAction(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const adminClient = createSupabaseAdminClient();
+  const writeClient = adminClient ?? supabase;
 
-  let vendorUpdateResult = await supabase
+  let vendorUpdateResult = await writeClient
     .from("vendors")
     .update({
       admin_notes: note,
       last_reviewed_at: new Date().toISOString(),
       reviewed_by: admin.userId,
     })
-    .eq("id", vendorId);
+    .eq("id", vendorId)
+    .select("id, user_id, business_name, admin_notes")
+    .maybeSingle();
 
   if (vendorUpdateResult.error && isMissingColumnError(vendorUpdateResult.error)) {
-    vendorUpdateResult = await supabase
+    vendorUpdateResult = await writeClient
       .from("vendors")
       .update({
         admin_notes: note,
       })
-      .eq("id", vendorId);
+      .eq("id", vendorId)
+      .select("id, user_id, business_name, admin_notes")
+      .maybeSingle();
   }
 
   if (vendorUpdateResult.error) {
     redirect(withManageQueryParam(nextPath, "message", vendorUpdateResult.error.message));
   }
 
-  const insertResult = await supabase.from("admin_notes").insert({
+  if (!vendorUpdateResult.data?.id) {
+    redirect(withManageQueryParam(nextPath, "message", "Vendor record was not found."));
+  }
+
+  console.log("Admin note saved to vendor row", {
+    vendorId: vendorUpdateResult.data.id,
+    vendorUserId: vendorUpdateResult.data.user_id ?? null,
+    businessName: vendorUpdateResult.data.business_name ?? null,
+    adminNotes: vendorUpdateResult.data.admin_notes ?? null,
+  });
+
+  const insertResult = await writeClient.from("admin_notes").insert({
     vendor_id: vendorId,
     admin_id: admin.userId,
     note,
