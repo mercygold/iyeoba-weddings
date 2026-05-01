@@ -662,7 +662,25 @@ async function getAdminNotes(): Promise<ManageAdminNote[]> {
     .order("created_at", { ascending: false });
 
   if (error || !data) {
-    return [];
+    const { data: vendorNotes, error: vendorNotesError } = await supabase
+      .from("vendors")
+      .select("id, business_name, admin_notes, created_at")
+      .order("created_at", { ascending: false });
+
+    if (vendorNotesError || !vendorNotes) {
+      return [];
+    }
+
+    return vendorNotes
+      .filter((row) => Boolean(row.admin_notes?.trim()))
+      .map((row) => ({
+        id: `vendor-${row.id}`,
+        note: row.admin_notes,
+        createdAt: row.created_at,
+        vendorName: row.business_name ?? null,
+        adminName: null,
+        adminEmail: null,
+      }));
   }
 
   return data.map((row) => {
@@ -686,16 +704,13 @@ async function getManageUsers(): Promise<ManageUserSummary[]> {
     return [];
   }
 
-  const [{ data: publicUsers, error: publicUsersError }, { data: authUsers, error: authUsersError }] =
+  const [{ data: publicUsers, error: publicUsersError }, authUsersResult] =
     await Promise.all([
       adminClient
         .from("users")
         .select("id, email, full_name, phone, role, created_at")
         .order("created_at", { ascending: false }),
-      adminClient
-        .schema("auth")
-        .from("users")
-        .select("id, email_confirmed_at"),
+      adminClient.auth.admin.listUsers(),
     ]);
 
   if (publicUsersError) {
@@ -703,12 +718,18 @@ async function getManageUsers(): Promise<ManageUserSummary[]> {
     return [];
   }
 
-  if (authUsersError) {
-    console.error("[manage:getManageUsers] failed to fetch auth.users", authUsersError);
+  if (authUsersResult.error) {
+    console.error("[manage:getManageUsers] failed to list auth users", {
+      message: authUsersResult.error.message,
+      status: authUsersResult.error.status ?? null,
+    });
   }
 
   const confirmationByUserId = new Map<string, string | null>(
-    (authUsers ?? []).map((row) => [row.id, row.email_confirmed_at ?? null]),
+    (authUsersResult.data?.users ?? []).map((row) => [
+      row.id,
+      row.email_confirmed_at ?? null,
+    ]),
   );
 
   return (publicUsers ?? []).map((row) => {

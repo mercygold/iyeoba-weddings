@@ -108,6 +108,12 @@ export default async function VendorDashboardPage(props: {
                 Your listing is currently suspended and is not visible to the public.
               </p>
             ) : null}
+            {vendor?.adminNotes ? (
+              <div className="mt-5 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                <p className="font-semibold text-amber-950">Admin review note</p>
+                <p className="mt-1">{vendor.adminNotes}</p>
+              </div>
+            ) : null}
           </div>
 
           <aside className="rounded-[2rem] bg-[color:var(--color-brand-primary)] p-5 text-white sm:p-8">
