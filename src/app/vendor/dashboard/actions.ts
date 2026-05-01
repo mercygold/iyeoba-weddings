@@ -596,8 +596,8 @@ async function persistVendorProfile(
   const portfolioImageUrls = parseJsonArray(formData.get("portfolioImageUrls"));
   const governmentIdPath = String(formData.get("governmentIdPath") ?? "").trim();
   const cacCertificatePath = String(formData.get("cacCertificatePath") ?? "").trim();
-  const isOthersCategory = category === "Others" || category === "Other";
-  const resolvedCategory = category || "Others";
+  const isOthersCategory = category === "Other" || category === "Others";
+  const resolvedCategory = category === "Others" ? "Other" : category || "Other";
 
   const location =
     countryRegion === "Nigeria"
@@ -606,7 +606,9 @@ async function persistVendorProfile(
         ? `${regionLabel}, ${countryRegion}`
         : countryRegion;
 
-  const fullPhone = `${normalizePhoneCode(phoneCode)}${normalizedPhoneLocal}`;
+  const fullPhone = normalizedPhoneLocal
+    ? `${normalizePhoneCode(phoneCode)}${normalizedPhoneLocal}`
+    : "";
   const effectiveEmail = contactEmail || user.email || "";
   const numericPrice = priceAmount ? Number(priceAmount) : null;
   const priceCurrency = supportedVendorCurrencies.includes(
@@ -671,13 +673,19 @@ async function persistVendorProfile(
 
     if (!hasSocialProof) {
       redirect(
-        "/vendor/dashboard?edit=1&error=Please%20add%20at%20least%20one%20social%20media,%20website,%20or%20portfolio%20link%20so%20customers%20and%20Iyeoba%20can%20verify%20your%20work.",
+        "/vendor/dashboard?edit=1&error=Please%20add%20a%20social%20media,%20website,%20or%20portfolio%20link%20before%20submitting.",
       );
     }
 
     if (!hasPortfolioImages) {
       redirect(
-        "/vendor/dashboard?edit=1&error=Please%20upload%20at%20least%20one%20portfolio%20image%20so%20couples%20can%20see%20your%20work.",
+        "/vendor/dashboard?edit=1&error=Please%20upload%20at%20least%20one%20portfolio%20image%20before%20submitting.",
+      );
+    }
+
+    if (isOthersCategory && !customCategory) {
+      redirect(
+        "/vendor/dashboard?edit=1&error=Please%20write%20the%20type%20of%20service%20you%20offer.",
       );
     }
 
@@ -836,7 +844,8 @@ async function persistVendorProfile(
     redirect("/vendor/dashboard?edit=1&message=Your%20listing%20updates%20are%20now%20live");
   }
 
-  if (
+  const isPublicationIntent = intent !== "draft";
+  const missingRequiredPublicationFields =
     !businessName ||
     !ownerName ||
     !effectiveEmail ||
@@ -844,20 +853,21 @@ async function persistVendorProfile(
     !countryRegion ||
     !location ||
     !phoneCode ||
-    !normalizedPhoneLocal
-  ) {
+    !normalizedPhoneLocal;
+
+  if (isPublicationIntent && missingRequiredPublicationFields) {
     redirect(
-      "/vendor/dashboard?edit=1&error=Business%20name,%20owner%20name,%20email,%20phone,%20country%20or%20region,%20and%20location%20are%20required%20before%20saving.",
+      "/vendor/dashboard?edit=1&error=Business%20brand%20name,%20owner%20name,%20email,%20phone,%20business%20category,%20country%20or%20region,%20and%20location%20are%20required%20before%20submitting.",
     );
   }
 
-  if (!isValidEmail(effectiveEmail)) {
+  if (effectiveEmail && !isValidEmail(effectiveEmail)) {
     redirect(
       "/vendor/dashboard?edit=1&error=Please%20enter%20a%20valid%20email%20address.",
     );
   }
 
-  if (!isValidPhoneLocal(normalizedPhoneLocal)) {
+  if (normalizedPhoneLocal && !isValidPhoneLocal(normalizedPhoneLocal)) {
     redirect(
       "/vendor/dashboard?edit=1&error=Please%20enter%20a%20valid%20phone%20number.",
     );
@@ -866,25 +876,19 @@ async function persistVendorProfile(
   if (intent === "pending_review") {
     if (!hasSocialProof) {
       redirect(
-        "/vendor/dashboard?edit=1&error=Please%20add%20at%20least%20one%20social%20media,%20website,%20or%20portfolio%20link%20so%20customers%20and%20Iyeoba%20can%20verify%20your%20work.",
+        "/vendor/dashboard?edit=1&error=Please%20add%20a%20social%20media,%20website,%20or%20portfolio%20link%20before%20submitting.",
       );
     }
 
     if (!hasPortfolioImages) {
       redirect(
-        "/vendor/dashboard?edit=1&error=Please%20upload%20at%20least%20one%20portfolio%20image%20so%20couples%20can%20see%20your%20work.",
+        "/vendor/dashboard?edit=1&error=Please%20upload%20at%20least%20one%20portfolio%20image%20before%20submitting.",
       );
     }
 
-    const requiredChecks = [
-      description,
-      servicesOffered.length ? "services" : "",
-      governmentIdPath,
-    ];
-
-    if (requiredChecks.some((value) => !value)) {
+    if (isOthersCategory && !customCategory) {
       redirect(
-        "/vendor/dashboard?edit=1&error=Complete%20the%20required%20business%20details%20and%20upload%20your%20government-issued%20ID%20before%20submitting%20for%20review.",
+        "/vendor/dashboard?edit=1&error=Please%20write%20the%20type%20of%20service%20you%20offer.",
       );
     }
   }
@@ -946,14 +950,15 @@ async function persistVendorProfile(
       ? String((existingVendor as Record<string, unknown>)["id"])
       : null;
   let vendorId = existingVendorId;
-  const slug = await resolveVendorSlug(admin, businessName, existingVendorId);
+  const draftBusinessName = businessName || ownerName || user.email || "Draft vendor profile";
+  const slug = await resolveVendorSlug(admin, draftBusinessName, existingVendorId);
 
   if (!vendorId) {
     const basePayload = {
       user_id: user.id,
       slug,
-      business_name: businessName,
-      category: resolvedCategory || "Others",
+      business_name: draftBusinessName,
+      category: resolvedCategory || "Other",
       location: location || countryRegion || "Location pending",
     };
 
@@ -1007,8 +1012,8 @@ async function persistVendorProfile(
       console.error("Vendor profile save failed while creating vendor record", {
         userId: user.id,
         slug,
-        businessName,
-        category: resolvedCategory || "Others",
+        businessName: draftBusinessName,
+        category: resolvedCategory || "Other",
         location: location || countryRegion || "Location pending",
         error: serializeSupabaseError(insertError ?? {}),
       });
@@ -1093,16 +1098,16 @@ async function persistVendorProfile(
   const restrictedFieldFallback = {
     business_name:
       shouldPreserveRestrictedFields
-        ? normalizeString(readStringField(existingVendorRecord, "business_name")) || businessName
-        : businessName,
+        ? normalizeString(readStringField(existingVendorRecord, "business_name")) || draftBusinessName
+        : draftBusinessName,
     owner_name:
       shouldPreserveRestrictedFields
         ? normalizeString(readStringField(existingVendorRecord, "owner_name")) || ownerName || null
         : ownerName || null,
     category:
       shouldPreserveRestrictedFields
-        ? normalizeString(readStringField(existingVendorRecord, "category")) || (resolvedCategory || "Others")
-        : resolvedCategory || "Others",
+        ? normalizeString(readStringField(existingVendorRecord, "category")) || (resolvedCategory || "Other")
+        : resolvedCategory || "Other",
     country_region:
       shouldPreserveRestrictedFields
         ? normalizeString(readStringField(existingVendorRecord, "country_region")) || null
@@ -1168,7 +1173,7 @@ async function persistVendorProfile(
     category: restrictedFieldFallback.category,
     custom_category: isOthersCategory
       ? customCategory || null
-      : subcategory || null,
+      : null,
     registered_business:
       shouldPreserveRestrictedFields
         ? Boolean((existingVendor as Record<string, unknown> | null)?.["registered_business"])

@@ -17,7 +17,6 @@ import {
 import type { VendorDirectoryItem } from "@/lib/vendors";
 import {
   TOP_LEVEL_VENDOR_CATEGORIES,
-  getSubcategoriesForCategory,
   normalizeVendorCategory,
 } from "@/lib/vendor-categories";
 import { supportedVendorCurrencies } from "@/lib/currency";
@@ -81,11 +80,6 @@ export function VendorDashboardForm({
   const [selectedCategory, setSelectedCategory] = useState(
     normalizedVendorCategory.category || "",
   );
-  const [selectedSubcategory, setSelectedSubcategory] = useState(
-    normalizedVendorCategory.category === "Others"
-      ? ""
-      : normalizedVendorCategory.subcategory || "",
-  );
   const [registeredBusiness, setRegisteredBusiness] = useState(
     vendor?.registeredBusiness ?? false,
   );
@@ -139,12 +133,8 @@ export function VendorDashboardForm({
       businessName: vendor?.businessName || "",
       ownerName: vendor?.ownerName || profile.full_name || "",
       category: normalizedVendorCategory.category || "",
-      subcategory:
-        normalizedVendorCategory.category === "Others"
-          ? ""
-          : normalizedVendorCategory.subcategory || "",
       customCategory:
-        normalizedVendorCategory.category === "Others"
+        normalizedVendorCategory.category === "Other"
           ? normalizedVendorCategory.subcategory || ""
           : "",
       nigeriaState: vendor?.nigeriaState || "",
@@ -164,10 +154,6 @@ export function VendorDashboardForm({
       servicesOffered: vendor?.servicesOffered?.join(", ") || "",
     }),
     [countryRegion, normalizedVendorCategory, profile.full_name, vendor],
-  );
-  const subcategoryOptions = useMemo(
-    () => getSubcategoriesForCategory(selectedCategory),
-    [selectedCategory],
   );
 
   async function handlePortfolioUpload(
@@ -413,7 +399,7 @@ export function VendorDashboardForm({
   }
 
   return (
-    <form action="/vendor/dashboard/update" method="post" className="mt-8 grid gap-8">
+    <form action="/vendor/dashboard/update" method="post" noValidate className="mt-8 grid gap-8">
       <div className="rounded-[1.5rem] border border-[rgba(201,161,91,0.3)] bg-[rgba(201,161,91,0.12)] px-5 py-4 text-sm leading-7 text-[color:var(--color-ink)]">
         Business identity fields require admin review after approval. Pricing,
         portfolio, website, services, and social links update directly.
@@ -450,25 +436,15 @@ export function VendorDashboardForm({
             required
             onChangeValue={(value) => {
               setSelectedCategory(value);
-              setSelectedSubcategory("");
             }}
           />
-          {selectedCategory !== "Others" && subcategoryOptions.length ? (
-            <SelectField
-              label="Subcategory"
-              name="subcategory"
-              options={subcategoryOptions}
-              defaultValue={selectedSubcategory}
-              optional
-              onChangeValue={setSelectedSubcategory}
-            />
-          ) : null}
-          {selectedCategory === "Others" ? (
+          {selectedCategory === "Other" ? (
             <Field
-              label="Your Category"
+              label="Write what you do"
               name="customCategory"
               defaultValue={formDefaults.customCategory}
-              placeholder="Tell us the type of business you run"
+              placeholder="e.g. MUA, bridal robe vendor, champagne tower service, henna artist, bridal stylist, etc."
+              helperText="Use this only if your service is not listed in the main categories."
               required
             />
           ) : null}
@@ -514,9 +490,9 @@ export function VendorDashboardForm({
           label="Social Media / Portfolio Link"
           name="primarySocialLink"
           defaultValue={formDefaults.primarySocialLink}
-          optional
           placeholder="Instagram, TikTok, Behance, or another business portfolio link"
           helperText="Required before submission: add Instagram, TikTok, Facebook, your website, or another portfolio link."
+          required
         />
         <Field
           label="Website"
@@ -565,6 +541,7 @@ export function VendorDashboardForm({
         <UploadField
           ref={portfolioInputRef}
           label="Portfolio Images"
+          required
           accept="image/*"
           multiple
           helperText="Upload at least 1 strong work image before submitting. Recommended size: 1600 x 2000px or larger, with the subject centered for clean marketplace cropping."
@@ -679,6 +656,7 @@ export function VendorDashboardForm({
             name="intent"
             value="draft"
             className="btn-secondary"
+            formNoValidate
             onClick={() => setActionFeedback("Draft saved only.")}
           >
             Save Draft
@@ -978,6 +956,7 @@ function UploadFieldImpl(
     label,
     accept,
     helperText,
+    required = false,
     multiple = false,
     uploading,
     onChange,
@@ -986,6 +965,7 @@ function UploadFieldImpl(
     label: string;
     accept: string;
     helperText: string;
+    required?: boolean;
     multiple?: boolean;
     uploading: boolean;
     onChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -995,12 +975,13 @@ function UploadFieldImpl(
 ) {
   return (
     <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
-      {label}
+      <LabelText label={label} required={required} />
       <input
         ref={ref}
         type="file"
         accept={accept}
         multiple={multiple}
+        required={required}
         onChange={onChange}
         disabled={disabled || uploading}
         className="field-input rounded-[1.25rem] file:mr-4 file:rounded-full file:border-0 file:bg-[color:var(--color-brand-primary)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"

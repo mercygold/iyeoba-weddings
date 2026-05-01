@@ -175,12 +175,12 @@ export function buildPlannerDashboard(
   ];
 
   const vendorCategories = [
-    "Photography & Video",
+    "Photography & Videography",
     "Beauty & Grooming",
-    "Decor & Floral",
-    "Catering & Desserts",
-    "Fashion & Attire",
-    diasporaWedding ? "Logistics & Transport" : "Entertainment",
+    "Decor & Rentals",
+    "Catering & Small Chops",
+    "Fashion & Aso-Oke",
+    diasporaWedding ? "Logistics & Transportation" : "Music, DJ & MC",
   ].filter((category) => TOP_LEVEL_VENDOR_CATEGORIES.includes(category));
 
   return {

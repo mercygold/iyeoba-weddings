@@ -6,67 +6,82 @@ export type VendorCategoryGroup = {
 
 export const VENDOR_CATEGORY_GROUPS: VendorCategoryGroup[] = [
   {
-    category: "Entertainment",
-    description: "DJ, MC, live music, and cultural hosting services.",
-    subcategories: ["DJ", "MC", "Live Band", "Alaga"],
-  },
-  {
-    category: "Photography & Video",
-    description: "Photo and film teams capturing wedding moments.",
-    subcategories: ["Photographer", "Videographer"],
-  },
-  {
     category: "Beauty & Grooming",
-    description: "Makeup, hair, skin, and grooming specialists.",
-    subcategories: ["Makeup", "Hair", "Nails", "Skincare"],
+    description: "Makeup, hair, skin, grooming, and beauty services.",
+    subcategories: [],
   },
   {
-    category: "Fashion & Attire",
-    description: "Outfits, fabrics, and accessories for wedding style.",
-    subcategories: ["Aso-Oke", "Wedding Gowns", "Accessories"],
+    category: "Event Planning",
+    description: "Planning, coordination, and event management support.",
+    subcategories: [],
   },
   {
-    category: "Catering & Desserts",
-    description: "Meals, small chops, and dessert experiences.",
-    subcategories: ["Meals", "Small Chops", "Cakes"],
+    category: "Photography & Videography",
+    description: "Photo and film teams capturing wedding moments.",
+    subcategories: [],
   },
   {
-    category: "Decor & Floral",
-    description: "Venue styling, décor design, and floral details.",
-    subcategories: ["Decorators", "Florists"],
+    category: "Decor & Rentals",
+    description: "Venue styling, décor design, props, rentals, and setup.",
+    subcategories: [],
   },
   {
-    category: "Rentals & Setup",
-    description: "Event rentals and setup logistics.",
-    subcategories: ["Chairs", "Tables", "Props"],
+    category: "Fashion & Aso-Oke",
+    description: "Outfits, fabrics, aso-oke, and wedding style.",
+    subcategories: [],
   },
   {
-    category: "Souvenirs",
-    description: "Wedding favors and guest gifting.",
-    subcategories: ["Wedding Favors"],
+    category: "Cakes & Desserts",
+    description: "Wedding cakes, dessert tables, and sweet treats.",
+    subcategories: [],
   },
   {
-    category: "Drinks & Bar",
-    description: "Bar service, drink supply, and mixology.",
-    subcategories: ["Mixologists", "Drinks", "Ice"],
+    category: "Catering & Small Chops",
+    description: "Meals, small chops, drinks, and catering service.",
+    subcategories: [],
   },
   {
-    category: "Printing & Branding",
+    category: "Music, DJ & MC",
+    description: "DJ, MC, live music, and cultural hosting services.",
+    subcategories: [],
+  },
+  {
+    category: "Traditional Wedding Services",
+    description: "Cultural wedding support, traditional ceremony services, and family-facing roles.",
+    subcategories: [],
+  },
+  {
+    category: "Venues & Hospitality",
+    description: "Venues, accommodation, and guest hospitality support.",
+    subcategories: [],
+  },
+  {
+    category: "Printing & Invitations",
     description: "Wedding stationery and event branding assets.",
-    subcategories: ["Invites", "Programs", "Banners"],
+    subcategories: [],
   },
   {
-    category: "Logistics & Transport",
+    category: "Logistics & Transportation",
     description: "Transport, movement coordination, and logistics.",
-    subcategories: ["Cars", "Movement", "Vendor logistics"],
+    subcategories: [],
   },
   {
-    category: "Hospitality",
-    description: "Guest stay and accommodation support.",
-    subcategories: ["Shortlets", "Guest accommodation"],
+    category: "Jewelry & Accessories",
+    description: "Wedding jewelry, accessories, and finishing touches.",
+    subcategories: [],
   },
   {
-    category: "Others",
+    category: "Souvenirs & Gifts",
+    description: "Wedding favors, guest gifting, and keepsakes.",
+    subcategories: [],
+  },
+  {
+    category: "Florals & Bouquets",
+    description: "Bouquets, floral installations, and fresh flower styling.",
+    subcategories: [],
+  },
+  {
+    category: "Other",
     description: "Additional wedding services not listed above.",
     subcategories: [],
   },
@@ -75,18 +90,31 @@ export const VENDOR_CATEGORY_GROUPS: VendorCategoryGroup[] = [
 const legacyCategoryToStructured: Record<string, { category: string; subcategory?: string }> = {
   "makeup artist": { category: "Beauty & Grooming", subcategory: "Makeup" },
   beauty: { category: "Beauty & Grooming", subcategory: "Skincare" },
-  photographer: { category: "Photography & Video", subcategory: "Photographer" },
-  videographer: { category: "Photography & Video", subcategory: "Videographer" },
-  "event planner": { category: "Others", subcategory: "Event Planner" },
-  decorator: { category: "Decor & Floral", subcategory: "Decorators" },
-  caterer: { category: "Catering & Desserts", subcategory: "Meals" },
-  "asoebi designer": { category: "Fashion & Attire", subcategory: "Aso-Oke" },
-  venue: { category: "Hospitality", subcategory: "Guest accommodation" },
-  "mc / host": { category: "Entertainment", subcategory: "MC" },
-  mc: { category: "Entertainment", subcategory: "MC" },
-  dj: { category: "Entertainment", subcategory: "DJ" },
-  florist: { category: "Decor & Floral", subcategory: "Florists" },
-  planner: { category: "Others", subcategory: "Event Planner" },
+  photographer: { category: "Photography & Videography", subcategory: "Photographer" },
+  videographer: { category: "Photography & Videography", subcategory: "Videographer" },
+  "photography & video": { category: "Photography & Videography" },
+  "event planner": { category: "Event Planning" },
+  "event planning": { category: "Event Planning" },
+  decorator: { category: "Decor & Rentals", subcategory: "Decorators" },
+  "decor & floral": { category: "Decor & Rentals" },
+  "rentals & setup": { category: "Decor & Rentals" },
+  caterer: { category: "Catering & Small Chops", subcategory: "Meals" },
+  "catering & desserts": { category: "Catering & Small Chops" },
+  "asoebi designer": { category: "Fashion & Aso-Oke", subcategory: "Aso-Oke" },
+  "fashion & attire": { category: "Fashion & Aso-Oke" },
+  venue: { category: "Venues & Hospitality", subcategory: "Guest accommodation" },
+  hospitality: { category: "Venues & Hospitality" },
+  "mc / host": { category: "Music, DJ & MC", subcategory: "MC" },
+  entertainment: { category: "Music, DJ & MC" },
+  mc: { category: "Music, DJ & MC", subcategory: "MC" },
+  dj: { category: "Music, DJ & MC", subcategory: "DJ" },
+  florist: { category: "Florals & Bouquets", subcategory: "Florists" },
+  "decor & rentals": { category: "Decor & Rentals" },
+  "printing & branding": { category: "Printing & Invitations" },
+  "logistics & transport": { category: "Logistics & Transportation" },
+  souvenirs: { category: "Souvenirs & Gifts" },
+  others: { category: "Other" },
+  planner: { category: "Event Planning" },
 };
 
 export const TOP_LEVEL_VENDOR_CATEGORIES = VENDOR_CATEGORY_GROUPS.map(
@@ -119,7 +147,7 @@ export function normalizeVendorCategory(
   if (TOP_LEVEL_VENDOR_CATEGORIES.includes(category)) {
     return {
       category,
-      subcategory: category === "Others" ? customCategory || null : customCategory || null,
+      subcategory: category === "Other" ? customCategory || null : customCategory || null,
     };
   }
 
@@ -133,13 +161,13 @@ export function normalizeVendorCategory(
 
   if (!category && !customCategory) {
     return {
-      category: "Others",
+      category: "Other",
       subcategory: null,
     };
   }
 
   return {
-    category: "Others",
+    category: "Other",
     subcategory: customCategory || category || null,
   };
 }
