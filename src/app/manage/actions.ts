@@ -170,7 +170,12 @@ function withManageQueryParam(path: string, key: "message" | "error", value: str
 
 function isMissingColumnError(error: { code?: string | null; message?: string | null }) {
   const message = error.message?.toLowerCase() ?? "";
-  return error.code === "42703" || message.includes("column") && message.includes("does not exist");
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    (message.includes("column") &&
+      (message.includes("does not exist") || message.includes("could not find")))
+  );
 }
 
 function isMissingTableError(error: { code?: string | null; message?: string | null }) {
