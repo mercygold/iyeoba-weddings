@@ -40,7 +40,11 @@ export default async function VendorDashboardPage(props: {
   const searchParams = await props.searchParams;
   const vendor = await getVendorByUserId(profile.id);
   const adminNotes = vendor?.id
-    ? await getVendorAdminNotes(vendor.id, vendor.adminNotes ?? null)
+    ? await getVendorAdminNotes(
+        vendor.id,
+        vendor.adminNotes ?? null,
+        vendor.lastReviewedAt ?? vendor.updatedAt ?? null,
+      )
     : [];
   const latestAdminNote = adminNotes[0] ?? null;
   const inquiries = await getVendorInquiries(profile.id);
@@ -302,6 +306,7 @@ export default async function VendorDashboardPage(props: {
 async function getVendorAdminNotes(
   vendorId: string,
   fallbackNote: string | null,
+  fallbackCreatedAt: string | null,
 ): Promise<VendorAdminNote[]> {
   const admin = createSupabaseAdminClient();
 
@@ -328,7 +333,7 @@ async function getVendorAdminNotes(
           {
             id: `vendor-admin-note-${vendorId}-${hashNote(normalizedFallback)}`,
             note: normalizedFallback,
-            createdAt: null,
+            createdAt: fallbackCreatedAt,
           },
           ...history,
         ];
@@ -347,7 +352,7 @@ async function getVendorAdminNotes(
     {
       id: `vendor-admin-note-${vendorId}-${hashNote(normalizedFallback)}`,
       note: normalizedFallback,
-      createdAt: null,
+      createdAt: fallbackCreatedAt,
     },
   ];
 }

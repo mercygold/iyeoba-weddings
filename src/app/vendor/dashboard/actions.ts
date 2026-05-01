@@ -505,6 +505,8 @@ async function persistVendorProfile(
     priceLabel: null,
     legacyPriceRange: null,
   });
+  const hasSocialProof = Boolean(primarySocialLink || website);
+  const hasPortfolioImages = portfolioImageUrls.length > 0;
 
   if (intent === "publish") {
     console.log("PUBLISH_UPDATES_ONLY_RUNNING", { authUserId: user.id });
@@ -549,6 +551,18 @@ async function persistVendorProfile(
     if (!vendorRow?.id) {
       redirect(
         "/vendor/dashboard?edit=1&error=No%20vendor%20profile%20found%20for%20this%20account.",
+      );
+    }
+
+    if (!hasSocialProof) {
+      redirect(
+        "/vendor/dashboard?edit=1&error=Please%20add%20at%20least%20one%20social%20media,%20website,%20or%20portfolio%20link%20so%20customers%20and%20Iyeoba%20can%20verify%20your%20work.",
+      );
+    }
+
+    if (!hasPortfolioImages) {
+      redirect(
+        "/vendor/dashboard?edit=1&error=Please%20upload%20at%20least%20one%20portfolio%20image%20so%20couples%20can%20see%20your%20work.",
       );
     }
 
@@ -735,16 +749,27 @@ async function persistVendorProfile(
   }
 
   if (intent === "pending_review") {
+    if (!hasSocialProof) {
+      redirect(
+        "/vendor/dashboard?edit=1&error=Please%20add%20at%20least%20one%20social%20media,%20website,%20or%20portfolio%20link%20so%20customers%20and%20Iyeoba%20can%20verify%20your%20work.",
+      );
+    }
+
+    if (!hasPortfolioImages) {
+      redirect(
+        "/vendor/dashboard?edit=1&error=Please%20upload%20at%20least%20one%20portfolio%20image%20so%20couples%20can%20see%20your%20work.",
+      );
+    }
+
     const requiredChecks = [
-      primarySocialLink,
       description,
       servicesOffered.length ? "services" : "",
       governmentIdPath,
     ];
 
-    if (requiredChecks.some((value) => !value) || portfolioImageUrls.length < 4) {
+    if (requiredChecks.some((value) => !value)) {
       redirect(
-        "/vendor/dashboard?edit=1&error=Complete%20the%20required%20business%20details,%20upload%20your%20government-issued%20ID,%20and%20add%20at%20least%204%20portfolio%20images%20before%20submitting%20for%20review.",
+        "/vendor/dashboard?edit=1&error=Complete%20the%20required%20business%20details%20and%20upload%20your%20government-issued%20ID%20before%20submitting%20for%20review.",
       );
     }
   }

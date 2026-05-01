@@ -420,7 +420,13 @@ export function VendorDashboardForm({
       </div>
       <div className="grid gap-5 md:grid-cols-2">
         <>
-          <Field label="Business Name" name="businessName" defaultValue={formDefaults.businessName} required />
+          <Field
+            label="Business / Brand Name"
+            name="businessName"
+            defaultValue={formDefaults.businessName}
+            helperText="Use the name customers know your business by. Do not enter only your personal name unless it is also your business name."
+            required
+          />
           <Field label="Owner Name" name="ownerName" defaultValue={formDefaults.ownerName} required />
           <Field
             label="Email Address"
@@ -510,6 +516,7 @@ export function VendorDashboardForm({
           defaultValue={formDefaults.primarySocialLink}
           optional
           placeholder="Instagram, TikTok, Behance, or another business portfolio link"
+          helperText="Required before submission: add Instagram, TikTok, Facebook, your website, or another portfolio link."
         />
         <Field
           label="Website"
@@ -517,6 +524,7 @@ export function VendorDashboardForm({
           defaultValue={formDefaults.website}
           optional
           placeholder="https://yourbusiness.com"
+          helperText="A website can satisfy the social proof requirement if you do not use a social media portfolio."
         />
         <SelectField
           label="Culture Specialization"
@@ -559,7 +567,7 @@ export function VendorDashboardForm({
           label="Portfolio Images"
           accept="image/*"
           multiple
-          helperText="Upload 4 to 8 strong images in a 4:5 portrait ratio. Recommended size: 1600 x 2000px or larger, with the subject centered for clean marketplace cropping."
+          helperText="Upload at least 1 strong work image before submitting. Recommended size: 1600 x 2000px or larger, with the subject centered for clean marketplace cropping."
           uploading={uploadState.portfolio}
           onChange={handlePortfolioUpload}
         />
@@ -717,6 +725,7 @@ function Field({
   name,
   defaultValue,
   placeholder,
+  helperText,
   required = false,
   optional = false,
   type = "text",
@@ -726,6 +735,7 @@ function Field({
   name: string;
   defaultValue?: string;
   placeholder?: string;
+  helperText?: string;
   required?: boolean;
   optional?: boolean;
   type?: string;
@@ -743,6 +753,11 @@ function Field({
         readOnly={readOnly}
         className="field-input rounded-[1.25rem]"
       />
+      {helperText ? (
+        <p className="text-xs leading-5 text-[color:var(--color-muted)]">
+          {helperText}
+        </p>
+      ) : null}
     </label>
   );
 }

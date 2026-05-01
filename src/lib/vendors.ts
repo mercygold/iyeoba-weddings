@@ -38,6 +38,8 @@ const vendorSelect = `
   profile_status,
   onboarding_completed,
   approved,
+  last_reviewed_at,
+  updated_at,
   portfolio_image_urls,
   government_id_url,
   cac_certificate_url,
@@ -74,6 +76,8 @@ const legacyVendorSelect = `
   profile_status,
   onboarding_completed,
   approved,
+  last_reviewed_at,
+  updated_at,
   portfolio_image_urls,
   government_id_url,
   admin_notes,
@@ -115,6 +119,8 @@ export type VendorDirectoryItem = {
   governmentIdUrl?: string | null;
   cacCertificateUrl?: string | null;
   adminNotes?: string | null;
+  lastReviewedAt?: string | null;
+  updatedAt?: string | null;
   availabilityStatus: string;
   verified: boolean;
   description: string;
@@ -275,6 +281,8 @@ export async function getVendorDirectory(filters: Filters = {}) {
         governmentIdUrl: item.government_id_url ?? null,
         cacCertificateUrl: item.cac_certificate_url ?? null,
         adminNotes: item.admin_notes ?? null,
+        lastReviewedAt: item.last_reviewed_at ?? null,
+        updatedAt: item.updated_at ?? null,
         availabilityStatus: item.availability_status ?? "Availability on request",
         verified: item.verified ?? false,
         description: item.description ?? item.value_statement ?? "Vendor profile scaffolded.",
@@ -365,6 +373,8 @@ export async function getVendorDirectory(filters: Filters = {}) {
       priceAmount: null,
       cacCertificateUrl: null,
       adminNotes: null,
+      lastReviewedAt: null,
+      updatedAt: null,
       imageUrl: getVendorPlaceholderImage(normalizedCategory.category),
     };
     });
@@ -586,6 +596,8 @@ export async function getVendorByUserId(userId: string) {
     governmentIdUrl: data.government_id_url ?? null,
     cacCertificateUrl: data.cac_certificate_url ?? null,
     adminNotes: data.admin_notes ?? null,
+    lastReviewedAt: data.last_reviewed_at ?? null,
+    updatedAt: data.updated_at ?? null,
     availabilityStatus: data.availability_status ?? "Availability on request",
     verified: data.verified ?? false,
     description: data.description ?? data.value_statement ?? "Vendor profile scaffolded.",
