@@ -185,6 +185,10 @@ export function calculateTikTokFeatureEligibility(input: {
     return "needs_profile_completion" satisfies TikTokFeatureEligibilityStatus;
   }
 
+  if ((input.portfolioImageCount ?? 0) < 4) {
+    return "intro_feature_only" satisfies TikTokFeatureEligibilityStatus;
+  }
+
   return "full_launch_offer" satisfies TikTokFeatureEligibilityStatus;
 }
 
