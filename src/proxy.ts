@@ -36,6 +36,7 @@ export const config = {
     "/planner/:path*",
     "/vendor/:path*",
     "/admin/:path*",
+    "/manage/:path*",
     "/auth/callback",
   ],
 };
