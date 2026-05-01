@@ -16,6 +16,7 @@ export function SiteFooter() {
           links={[
             { href: "/", label: "Home" },
             { href: "/vendors", label: "Find Vendors" },
+            { href: "/ai-planner", label: "AI Planner" },
             { href: "/#categories", label: "Categories" },
           ]}
         />
