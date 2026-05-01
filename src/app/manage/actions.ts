@@ -68,15 +68,6 @@ export async function addManageVendorNoteAction(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const insertResult = await supabase.from("admin_notes").insert({
-    vendor_id: vendorId,
-    admin_id: admin.userId,
-    note,
-  });
-
-  if (insertResult.error && !isMissingTableError(insertResult.error)) {
-    redirect(withManageQueryParam(nextPath, "message", insertResult.error.message));
-  }
 
   let vendorUpdateResult = await supabase
     .from("vendors")
@@ -98,6 +89,19 @@ export async function addManageVendorNoteAction(formData: FormData) {
 
   if (vendorUpdateResult.error) {
     redirect(withManageQueryParam(nextPath, "message", vendorUpdateResult.error.message));
+  }
+
+  const insertResult = await supabase.from("admin_notes").insert({
+    vendor_id: vendorId,
+    admin_id: admin.userId,
+    note,
+  });
+
+  if (insertResult.error && !isMissingTableError(insertResult.error)) {
+    console.warn("Admin note history insert skipped", {
+      vendorId,
+      error: serializeManageError(insertResult.error),
+    });
   }
 
   revalidatePath("/manage");
@@ -185,4 +189,18 @@ function isMissingTableError(error: { code?: string | null; message?: string | n
     error.code === "PGRST205" ||
     (message.includes("could not find the table") && message.includes("admin_notes"))
   );
+}
+
+function serializeManageError(error: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+}) {
+  return {
+    code: error.code ?? null,
+    message: error.message ?? null,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+  };
 }
