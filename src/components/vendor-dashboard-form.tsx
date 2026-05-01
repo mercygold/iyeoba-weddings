@@ -435,21 +435,27 @@ export function VendorDashboardForm({
           "x-vendor-dashboard-submit": "json",
         },
       });
-      const payload = (await response.json()) as {
+      const rawResponseText = await response.text();
+      const payload = parseSubmitResponse(rawResponseText) as {
         ok?: boolean;
         message?: string | null;
         error?: string | null;
+        details?: unknown;
         redirectTo?: string | null;
       };
 
       if (!response.ok || !payload.ok) {
         console.error("Vendor profile submit failed", {
           status: response.status,
+          statusText: response.statusText,
           intent,
+          rawResponseText,
           payload,
+          submittedPayload: summarizeVendorProfilePayload(formData),
         });
         setActionError(
-          "We couldn’t save your profile yet. Your changes are still here. Please try again.",
+          payload.error ||
+            "We couldn’t save your profile yet. Your changes are still here. Please try again.",
         );
         return;
       }
@@ -1067,6 +1073,61 @@ function UploadFieldImpl(
 }
 
 const UploadField = forwardRef(UploadFieldImpl);
+
+function parseSubmitResponse(rawResponseText: string) {
+  if (!rawResponseText) {
+    return {
+      ok: false,
+      error: "The server returned an empty response.",
+    };
+  }
+
+  try {
+    return JSON.parse(rawResponseText);
+  } catch (error) {
+    console.error("Vendor profile submit response was not JSON", {
+      rawResponseText,
+      error,
+    });
+    return {
+      ok: false,
+      error: "The server returned an unreadable response.",
+      rawResponseText,
+    };
+  }
+}
+
+function summarizeVendorProfilePayload(formData: FormData) {
+  const summary: Record<string, unknown> = {};
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof File) {
+      summary[key] = {
+        fileName: value.name,
+        size: value.size,
+        type: value.type,
+      };
+      continue;
+    }
+
+    if (key.toLowerCase().includes("path")) {
+      summary[key] = value ? "present" : "";
+      continue;
+    }
+
+    if (key === "portfolioImageUrls") {
+      try {
+        const parsed = JSON.parse(String(value));
+        summary[key] = Array.isArray(parsed) ? { count: parsed.length } : "invalid";
+      } catch {
+        summary[key] = "invalid_json";
+      }
+      continue;
+    }
+
+    summary[key] = String(value);
+  }
+  return summary;
+}
 
 function getSuccessMessage(intent: string) {
   if (intent === "submit") {

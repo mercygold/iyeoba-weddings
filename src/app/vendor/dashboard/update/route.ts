@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
         {
           ok: false,
           error: "We couldn’t save your profile yet. Your changes are still here. Please try again.",
+          details: serializeRouteError(error),
         },
         { status: 500 },
       );
@@ -80,8 +81,38 @@ function buildJsonRedirectResponse(location: string, requestUrl: string) {
         (url.pathname.startsWith("/auth/sign-in")
           ? "Please sign in again before saving your profile."
           : null),
+      details: {
+        source: "server_action_redirect",
+        pathname: url.pathname,
+        search: url.search,
+      },
       redirectTo: `${url.pathname}${url.search}`,
     },
     { status: isError ? 400 : 200 },
   );
+}
+
+function serializeRouteError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    };
+  }
+
+  if (error && typeof error === "object") {
+    return Object.fromEntries(
+      Object.entries(error as Record<string, unknown>).map(([key, value]) => [
+        key,
+        typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+          ? value
+          : String(value),
+      ]),
+    );
+  }
+
+  return {
+    message: String(error),
+  };
 }
