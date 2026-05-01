@@ -230,7 +230,7 @@ export async function requestPasswordResetAction(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const origin = await getRequestOrigin();
   const siteUrl = getAuthSiteUrl(origin);
-  const redirectTo = `${siteUrl}/auth/reset-password`;
+  const redirectTo = `${siteUrl}/auth/callback?next=/auth/reset-password`;
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo,
@@ -313,6 +313,15 @@ async function getRequestOrigin() {
 }
 
 function getAuthSiteUrl(origin: string) {
+  const normalizedOrigin = normalizeSiteUrl(origin);
+  if (
+    process.env.NODE_ENV !== "production" &&
+    normalizedOrigin &&
+    new URL(normalizedOrigin).hostname === "localhost"
+  ) {
+    return normalizedOrigin;
+  }
+
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (configured) {
     const normalized = normalizeSiteUrl(configured);
@@ -322,10 +331,9 @@ function getAuthSiteUrl(origin: string) {
   }
 
   if (process.env.NODE_ENV === "production") {
-    return "https://www.iyeobaweddings.com";
+    return "https://iyeobaweddings.com";
   }
 
-  const normalizedOrigin = normalizeSiteUrl(origin);
   return normalizedOrigin ?? "http://localhost:3000";
 }
 

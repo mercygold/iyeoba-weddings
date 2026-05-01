@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { MainNav } from "@/components/main-nav";
 import { requestPasswordResetAction, updatePasswordAction } from "@/app/auth/actions";
@@ -22,25 +23,25 @@ export default async function ResetPasswordPage(props: {
   const code = typeof searchParams.code === "string" ? searchParams.code : "";
   const tokenHash = typeof searchParams.token_hash === "string" ? searchParams.token_hash : "";
   const recoveryType = typeof searchParams.type === "string" ? searchParams.type : "";
-  const isRecoveryFlow = Boolean(code || (tokenHash && recoveryType === "recovery"));
-  let recoveryError: string | null = null;
+  const hasRecoveryToken = Boolean(code || (tokenHash && recoveryType === "recovery"));
 
-  if (!configError && isRecoveryFlow) {
+  if (!configError && code) {
+    redirect(
+      `/auth/callback?code=${encodeURIComponent(code)}&next=/auth/reset-password`,
+    );
+  }
+
+  if (!configError && tokenHash && recoveryType === "recovery") {
+    redirect(
+      `/auth/callback?token_hash=${encodeURIComponent(tokenHash)}&type=recovery&next=/auth/reset-password`,
+    );
+  }
+
+  let hasRecoverySession = false;
+  if (!configError) {
     const supabase = await createSupabaseServerClient();
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        recoveryError = error.message;
-      }
-    } else if (tokenHash && recoveryType === "recovery") {
-      const { error } = await supabase.auth.verifyOtp({
-        token_hash: tokenHash,
-        type: "recovery",
-      });
-      if (error) {
-        recoveryError = error.message;
-      }
-    }
+    const { data } = await supabase.auth.getUser();
+    hasRecoverySession = Boolean(data.user);
   }
 
   return (
@@ -49,13 +50,13 @@ export default async function ResetPasswordPage(props: {
       <main className="mx-auto grid max-w-5xl gap-8 px-6 py-10 md:grid-cols-[0.9fr_1.1fr] md:px-10 lg:px-12">
         <section className="rounded-[2rem] bg-[linear-gradient(160deg,#5B2C83_0%,#7b4b92_78%,#C9A15B_100%)] p-8 text-stone-50">
           <p className="text-sm uppercase tracking-[0.24em] text-white/70">
-            {isRecoveryFlow ? "Set new password" : "Reset password"}
+            {hasRecoverySession ? "Set new password" : "Reset password"}
           </p>
           <h1 className="font-display mt-4 text-5xl leading-none">
-            {isRecoveryFlow ? "Choose a new password." : "Reset your password securely."}
+            {hasRecoverySession ? "Choose a new password." : "Reset your password securely."}
           </h1>
           <p className="mt-4 text-base leading-8 text-white/80">
-            {isRecoveryFlow
+            {hasRecoverySession
               ? "Create a new secure password for your Iyeoba Weddings account."
               : "Enter your account email and we will send reset instructions."}
           </p>
@@ -80,13 +81,13 @@ export default async function ResetPasswordPage(props: {
             </p>
           ) : null}
 
-          {recoveryError ? (
+          {hasRecoveryToken ? (
             <p className="mb-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-              {recoveryError}
+              We could not verify your reset link. Please request a new password reset email.
             </p>
           ) : null}
 
-          {isRecoveryFlow && !recoveryError ? (
+          {hasRecoverySession ? (
             <form action={updatePasswordAction} className="grid gap-5">
               <input type="hidden" name="returnTo" value="/auth/reset-password" />
               <div className="grid gap-2">
