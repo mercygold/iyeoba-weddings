@@ -3,6 +3,7 @@ import Link from "next/link";
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
 import { CommunicationRealtimeSync } from "@/components/communication-realtime-sync";
+import { VendorAdminNoteAlert } from "@/components/vendor-admin-note-alert";
 import { VendorConversationCenter } from "@/components/vendor-conversation-center";
 import { VendorDashboardForm } from "@/components/vendor-dashboard-form";
 import {
@@ -13,6 +14,7 @@ import { requireVendorProfile } from "@/lib/auth";
 import {
   getVendorInquiries,
 } from "@/lib/inquiries";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getVendorByUserId } from "@/lib/vendors";
 
 type SearchParams = Promise<{
@@ -21,6 +23,12 @@ type SearchParams = Promise<{
   edit?: string;
   thread?: string;
 }>;
+
+type VendorAdminNote = {
+  id: string;
+  note: string;
+  createdAt: string | null;
+};
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,6 +39,10 @@ export default async function VendorDashboardPage(props: {
   const profile = await requireVendorProfile("/vendor/dashboard");
   const searchParams = await props.searchParams;
   const vendor = await getVendorByUserId(profile.id);
+  const adminNotes = vendor?.id
+    ? await getVendorAdminNotes(vendor.id, vendor.adminNotes ?? null)
+    : [];
+  const latestAdminNote = adminNotes[0] ?? null;
   const inquiries = await getVendorInquiries(profile.id);
   const openInquiriesCount = inquiries.filter(
     (inquiry) => inquiry.threadStatus !== "archived",
@@ -44,6 +56,8 @@ export default async function VendorDashboardPage(props: {
     status,
     approved: vendor?.approved ?? false,
     adminNotes: vendor?.adminNotes ?? null,
+    adminNoteCount: adminNotes.length,
+    latestAdminNoteId: latestAdminNote?.id ?? null,
     visibleFromStatus: status === "approved",
   });
   const showOnboarding =
@@ -109,10 +123,13 @@ export default async function VendorDashboardPage(props: {
                 Your listing is currently suspended and is not visible to the public.
               </p>
             ) : null}
-            {vendor?.adminNotes ? (
-              <div className="mt-5 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-                <p className="font-semibold text-amber-950">Message from Iyeoba Admin</p>
-                <p className="mt-1">{vendor.adminNotes}</p>
+            {vendor?.id && latestAdminNote ? (
+              <div className="mt-5">
+                <VendorAdminNoteAlert
+                  vendorId={vendor.id}
+                  noteId={latestAdminNote.id}
+                  note={latestAdminNote.note}
+                />
               </div>
             ) : null}
           </div>
@@ -143,6 +160,35 @@ export default async function VendorDashboardPage(props: {
             </div>
           </aside>
         </section>
+
+        {adminNotes.length ? (
+          <section className="surface-card rounded-[2rem] p-5 sm:p-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
+              Admin Note
+            </p>
+            <h2 className="font-display mt-3 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+              Communication history
+            </h2>
+            <div className="mt-5 grid gap-4">
+              {adminNotes.map((adminNote) => (
+                <article
+                  key={adminNote.id}
+                  className="surface-soft rounded-[1.5rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]"
+                >
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-semibold text-[color:var(--color-ink)]">
+                      From Iyeoba Admin
+                    </p>
+                    <time className="text-xs uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
+                      {formatDateTime(adminNote.createdAt)}
+                    </time>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line">{adminNote.note}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {showOnboarding ? (
           <section className="surface-card rounded-[2rem] p-5 sm:p-8">
@@ -215,10 +261,6 @@ export default async function VendorDashboardPage(props: {
                   label="Verification"
                   value={vendor.governmentIdUrl ? "Document received" : "Awaiting document"}
                 />
-                <MetricCard
-                  label="Admin note"
-                  value={vendor.adminNotes || "No moderation note at the moment."}
-                />
               </div>
             </div>
           </section>
@@ -257,6 +299,67 @@ export default async function VendorDashboardPage(props: {
   );
 }
 
+async function getVendorAdminNotes(
+  vendorId: string,
+  fallbackNote: string | null,
+): Promise<VendorAdminNote[]> {
+  const admin = createSupabaseAdminClient();
+
+  if (admin) {
+    const { data, error } = await admin
+      .from("admin_notes")
+      .select("id, note, created_at")
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false });
+
+    if (!error && data?.length) {
+      const history = data.map((row) => ({
+        id: row.id,
+        note: row.note,
+        createdAt: row.created_at ?? null,
+      }));
+
+      const normalizedFallback = fallbackNote?.trim();
+      if (
+        normalizedFallback &&
+        !history.some((entry) => entry.note.trim() === normalizedFallback)
+      ) {
+        return [
+          {
+            id: `vendor-admin-note-${vendorId}-${hashNote(normalizedFallback)}`,
+            note: normalizedFallback,
+            createdAt: null,
+          },
+          ...history,
+        ];
+      }
+
+      return history;
+    }
+  }
+
+  const normalizedFallback = fallbackNote?.trim();
+  if (!normalizedFallback) {
+    return [];
+  }
+
+  return [
+    {
+      id: `vendor-admin-note-${vendorId}-${hashNote(normalizedFallback)}`,
+      note: normalizedFallback,
+      createdAt: null,
+    },
+  ];
+}
+
+function hashNote(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
 function sanitizeVendorFacingError(value: string | undefined) {
   if (!value) {
     return undefined;
@@ -279,6 +382,25 @@ function formatStatus(value: string) {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "Timestamp unavailable";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Timestamp unavailable";
+  }
+
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function getNextStep(status: string) {
