@@ -838,10 +838,10 @@ async function persistVendorProfile(
     revalidatePath("/vendors");
     if (pricingCooldownBlocked) {
       redirect(
-        "/vendor/dashboard?edit=1&message=Your%20listing%20updates%20are%20now%20live.%20You%20can%20update%20pricing%20once%20every%2024%20hours.",
+        "/vendor/dashboard?edit=1&message=Your%20profile%20has%20been%20updated%20successfully.%20You%20can%20update%20pricing%20once%20every%2024%20hours.",
       );
     }
-    redirect("/vendor/dashboard?edit=1&message=Your%20listing%20updates%20are%20now%20live");
+    redirect("/vendor/dashboard?edit=1&message=Your%20profile%20has%20been%20updated%20successfully.");
   }
 
   const isPublicationIntent = intent !== "draft";
@@ -1523,17 +1523,17 @@ async function persistVendorProfile(
 
   if (approvedVendorIsEditing && shouldSubmitIdentityReview) {
     redirect(
-      "/vendor/dashboard?edit=1&message=Your%20business%20identity%20changes%20have%20been%20sent%20to%20admin%20for%20review.%20You%20will%20receive%20a%20response%20within%203%20business%20days.",
+      "/vendor/dashboard?edit=1&message=Your%20profile%20update%20has%20been%20sent%20to%20admin%20for%20review.",
     );
   }
 
   if (approvedVendorIsEditing) {
     redirect(
-      "/vendor/dashboard?edit=1&message=Your%20changes%20have%20been%20saved%20and%20your%20listing%20remains%20live.",
+      "/vendor/dashboard?edit=1&message=Your%20profile%20has%20been%20updated%20successfully.",
     );
   }
 
-  redirect("/vendor/dashboard?edit=1&message=Your%20profile%20has%20been%20submitted%20for%20review.");
+  redirect("/vendor/dashboard?edit=1&message=Sent%20to%20admin.%20Your%20updated%20profile%20is%20now%20under%20review.");
 }
 
 async function queryVendorForAction(

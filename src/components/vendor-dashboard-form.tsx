@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type FormEvent,
   type ForwardedRef,
 } from "react";
 
@@ -120,6 +121,8 @@ export function VendorDashboardForm({
     error: null,
   });
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [submittingIntent, setSubmittingIntent] = useState<string | null>(null);
 
   const portfolioInputRef = useRef<HTMLInputElement | null>(null);
   const governmentIdInputRef = useRef<HTMLInputElement | null>(null);
@@ -233,6 +236,7 @@ export function VendorDashboardForm({
       }
       setUploadState((state) => ({ ...state, portfolio: false, error: null }));
     } catch (error) {
+      console.error("Vendor portfolio image upload failed", error);
       setUploadState((state) => ({
         ...state,
         portfolio: false,
@@ -308,6 +312,7 @@ export function VendorDashboardForm({
       }
       setUploadState((state) => ({ ...state, governmentId: false, error: null }));
     } catch (error) {
+      console.error("Vendor government ID upload failed", error);
       setUploadState((state) => ({
         ...state,
         governmentId: false,
@@ -383,6 +388,7 @@ export function VendorDashboardForm({
       }
       setUploadState((state) => ({ ...state, cacCertificate: false, error: null }));
     } catch (error) {
+      console.error("Vendor CAC certificate upload failed", error);
       setUploadState((state) => ({
         ...state,
         cacCertificate: false,
@@ -398,8 +404,78 @@ export function VendorDashboardForm({
     setCountryRegion(nextRegion);
   }
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (submittingIntent) {
+      return;
+    }
+
+    const form = event.currentTarget;
+    const submitter =
+      "submitter" in event.nativeEvent
+        ? (event.nativeEvent.submitter as HTMLButtonElement | null)
+        : null;
+    const intent = submitter?.value || "submit";
+    const formData = new FormData(form);
+
+    if (submitter?.name) {
+      formData.set(submitter.name, submitter.value);
+    }
+
+    setSubmittingIntent(intent);
+    setActionFeedback(null);
+    setActionError(null);
+
+    try {
+      const response = await fetch(form.action, {
+        method: "POST",
+        body: formData,
+        headers: {
+          "x-vendor-dashboard-submit": "json",
+        },
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string | null;
+        error?: string | null;
+        redirectTo?: string | null;
+      };
+
+      if (!response.ok || !payload.ok) {
+        console.error("Vendor profile submit failed", {
+          status: response.status,
+          intent,
+          payload,
+        });
+        setActionError(
+          "We couldn’t save your profile yet. Your changes are still here. Please try again.",
+        );
+        return;
+      }
+
+      setActionFeedback(payload.message || getSuccessMessage(intent));
+    } catch (error) {
+      console.error("Vendor profile submit request failed", {
+        intent,
+        error,
+      });
+      setActionError(
+        "We couldn’t save your profile yet. Your changes are still here. Please try again.",
+      );
+    } finally {
+      setSubmittingIntent(null);
+    }
+  }
+
   return (
-    <form action="/vendor/dashboard/update" method="post" noValidate className="mt-8 grid gap-8">
+    <form
+      action="/vendor/dashboard/update"
+      method="post"
+      noValidate
+      onSubmit={handleSubmit}
+      className="mt-8 grid gap-8"
+    >
       <div className="rounded-[1.5rem] border border-[rgba(201,161,91,0.3)] bg-[rgba(201,161,91,0.12)] px-5 py-4 text-sm leading-7 text-[color:var(--color-ink)]">
         Business identity fields require admin review after approval. Pricing,
         portfolio, website, services, and social links update directly.
@@ -657,40 +733,37 @@ export function VendorDashboardForm({
             value="draft"
             className="btn-secondary"
             formNoValidate
-            onClick={() => setActionFeedback("Draft saved only.")}
+            disabled={Boolean(submittingIntent)}
           >
-            Save Draft
+            {submittingIntent === "draft" ? "Saving..." : "Save Draft"}
           </button>
           <button
             type="submit"
             name="intent"
             value="publish"
             className="btn-secondary"
-            onClick={() => {
-              console.log("PUBLISH_BUTTON_CLICKED");
-              setActionFeedback("Your listing updates are now live.");
-            }}
+            disabled={Boolean(submittingIntent)}
           >
-            Publish Updates
+            {submittingIntent === "publish" ? "Saving..." : "Publish Updates"}
           </button>
           <button
             type="submit"
             name="intent"
             value="submit"
             className="btn-primary"
-            onClick={() => {
-              console.log("SUBMIT_BUTTON_CLICKED");
-              setActionFeedback(
-                "Your business identity changes have been sent to admin for review. You will receive a response within 3 business days.",
-              );
-            }}
+            disabled={Boolean(submittingIntent)}
           >
-            Submit
+            {submittingIntent === "submit" ? "Submitting..." : "Submit"}
           </button>
         </div>
       </div>
+      {actionError ? (
+        <p className="rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {actionError}
+        </p>
+      ) : null}
       {actionFeedback ? (
-        <p className="text-sm text-[color:var(--color-brand-primary)]">
+        <p className="rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {actionFeedback}
         </p>
       ) : null}
@@ -994,6 +1067,16 @@ function UploadFieldImpl(
 }
 
 const UploadField = forwardRef(UploadFieldImpl);
+
+function getSuccessMessage(intent: string) {
+  if (intent === "submit") {
+    return "Sent to admin. Your updated profile is now under review.";
+  }
+  if (intent === "publish") {
+    return "Your profile has been updated successfully.";
+  }
+  return "Draft saved. You can continue editing later.";
+}
 
 function inferRegionFromLocation(location: string) {
   const normalized = location.toLowerCase();
