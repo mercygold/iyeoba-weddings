@@ -6,8 +6,6 @@ const adminVendorSelect = `
   business_name,
   owner_name,
   category,
-  custom_category,
-  registered_business,
   country_region,
   nigeria_state,
   phone_code,
@@ -25,16 +23,12 @@ const adminVendorSelect = `
   profile_status,
   onboarding_completed,
   approved,
-  published,
-  is_published,
-  rejected,
   verified,
   government_id_url,
-  cac_certificate_url,
   admin_notes,
   created_at,
   updated_at,
-  users(email, phone),
+  users!vendors_user_id_fkey(email, phone),
   vendor_portfolio(image_url, sort_order)
 `;
 
@@ -57,6 +51,7 @@ const legacyAdminVendorSelect = `
   price_currency,
   price_amount,
   price_range,
+  status,
   profile_status,
   onboarding_completed,
   approved,
@@ -65,7 +60,7 @@ const legacyAdminVendorSelect = `
   admin_notes,
   created_at,
   updated_at,
-  users(email, phone),
+  users!vendors_user_id_fkey(email, phone),
   vendor_portfolio(image_url, sort_order)
 `;
 
@@ -158,9 +153,10 @@ export async function getAdminVendorSubmissions() {
 
   const results = await Promise.all(
     data.map(async (item) => {
+      const itemRecord = item as Record<string, any>;
       const governmentIdPath = item.government_id_url ?? null;
       let governmentIdSignedUrl: string | null = null;
-      const cacCertificatePath = item.cac_certificate_url ?? null;
+      const cacCertificatePath = itemRecord.cac_certificate_url ?? null;
       let cacCertificateSignedUrl: string | null = null;
 
       if (governmentIdPath) {
@@ -185,8 +181,8 @@ export async function getAdminVendorSubmissions() {
         status: item.status,
         profileStatus: item.profile_status,
         approved: item.approved ?? false,
-        published: item.published ?? item.is_published ?? false,
-        rejected: item.rejected ?? false,
+        published: itemRecord.published ?? itemRecord.is_published ?? false,
+        rejected: itemRecord.rejected ?? false,
       });
       const isApproved = normalizedStatus === "approved";
 
@@ -200,8 +196,8 @@ export async function getAdminVendorSubmissions() {
         email: relatedUser?.email ?? null,
         phone: relatedUser?.phone ?? null,
         category: item.category,
-        customCategory: item.custom_category ?? null,
-        registeredBusiness: item.registered_business ?? false,
+        customCategory: itemRecord.custom_category ?? null,
+        registeredBusiness: itemRecord.registered_business ?? false,
         countryRegion: item.country_region ?? null,
         nigeriaState: item.nigeria_state ?? null,
         phoneCode: item.phone_code ?? null,
@@ -223,8 +219,8 @@ export async function getAdminVendorSubmissions() {
         status: normalizedStatus,
         rawStatus: item.status ?? null,
         rawProfileStatus: item.profile_status ?? null,
-        published: item.published ?? item.is_published ?? false,
-        rejected: item.rejected ?? false,
+        published: itemRecord.published ?? itemRecord.is_published ?? false,
+        rejected: itemRecord.rejected ?? false,
         adminNotes: item.admin_notes ?? null,
         onboardingCompleted: item.onboarding_completed ?? false,
         approved: isApproved,
