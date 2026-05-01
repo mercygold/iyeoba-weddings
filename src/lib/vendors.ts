@@ -76,6 +76,7 @@ const legacyVendorSelect = `
   approved,
   portfolio_image_urls,
   government_id_url,
+  admin_notes,
   availability_status,
   verified,
   description,
