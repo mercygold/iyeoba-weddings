@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { MainNav } from "@/components/main-nav";
+import { PasswordField } from "@/components/password-field";
 import { requestPasswordResetAction, updatePasswordAction } from "@/app/auth/actions";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -90,33 +91,22 @@ export default async function ResetPasswordPage(props: {
           {hasRecoverySession ? (
             <form action={updatePasswordAction} className="grid gap-5">
               <input type="hidden" name="returnTo" value="/auth/reset-password" />
-              <div className="grid gap-2">
-                <label htmlFor="password" className="text-sm font-medium text-[color:var(--color-ink)]">
-                  New password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={8}
-                  className="field-input rounded-2xl"
-                />
-              </div>
+              <PasswordField
+                id="password"
+                name="password"
+                label="New password"
+                autoComplete="new-password"
+                confirmFieldName="confirmPassword"
+                showSuggestion
+              />
 
-              <div className="grid gap-2">
-                <label htmlFor="confirmPassword" className="text-sm font-medium text-[color:var(--color-ink)]">
-                  Confirm new password
-                </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  minLength={8}
-                  className="field-input rounded-2xl"
-                />
-              </div>
+              <PasswordField
+                id="confirmPassword"
+                name="confirmPassword"
+                label="Confirm new password"
+                autoComplete="new-password"
+                helpText=""
+              />
 
               <button type="submit" className="btn-primary">
                 Update password

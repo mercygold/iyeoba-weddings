@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MainNav } from "@/components/main-nav";
+import { PasswordField } from "@/components/password-field";
 import { signInAction } from "@/app/auth/actions";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 
@@ -51,29 +52,21 @@ export default async function SignInPage(props: {
               />
             </div>
 
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium text-[color:var(--color-ink)]"
-                >
-                  Password
-                </label>
+            <PasswordField
+              id="password"
+              name="password"
+              label="Password"
+              autoComplete="current-password"
+              helpText=""
+              labelAction={
                 <Link
                   href="/auth/forgot-password"
                   className="text-xs font-semibold text-[color:var(--color-brand-primary)] hover:text-[color:var(--color-brand-primary-dark)]"
                 >
                   Forgot password?
                 </Link>
-              </div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="field-input rounded-2xl"
-              />
-            </div>
+              }
+            />
 
             {searchParams.message ? (
               <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

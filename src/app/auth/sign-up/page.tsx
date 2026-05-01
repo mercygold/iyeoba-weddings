@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MainNav } from "@/components/main-nav";
+import { PasswordField } from "@/components/password-field";
 import { SignUpCountryPhoneFields } from "@/components/sign-up-country-phone-fields";
 import { signUpAction } from "@/app/auth/actions";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
@@ -77,39 +78,22 @@ export default async function SignUpPage(props: {
               />
             </div>
 
-            <div className="grid gap-2">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-[color:var(--color-ink)]"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                minLength={8}
-                className="field-input rounded-2xl"
-              />
-            </div>
+            <PasswordField
+              id="password"
+              name="password"
+              label="Password"
+              autoComplete="new-password"
+              confirmFieldName="confirmPassword"
+              showSuggestion
+            />
 
-            <div className="grid gap-2">
-              <label
-                htmlFor="confirmPassword"
-                className="text-sm font-medium text-[color:var(--color-ink)]"
-              >
-                Confirm password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                minLength={8}
-                className="field-input rounded-2xl"
-              />
-            </div>
+            <PasswordField
+              id="confirmPassword"
+              name="confirmPassword"
+              label="Confirm password"
+              autoComplete="new-password"
+              helpText=""
+            />
 
             <fieldset className="grid gap-3">
               <legend className="text-sm font-medium text-[color:var(--color-ink)]">
