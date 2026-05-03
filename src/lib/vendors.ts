@@ -82,6 +82,42 @@ const legacyVendorSelect = `
   vendor_portfolio(image_url, sort_order)
 `;
 
+const vendorDashboardSelect = `
+  id,
+  user_id,
+  slug,
+  business_name,
+  owner_name,
+  category,
+  country_region,
+  nigeria_state,
+  phone_code,
+  culture,
+  culture_specialization,
+  location,
+  years_experience,
+  primary_social_link,
+  instagram,
+  website,
+  whatsapp,
+  price_currency,
+  price_amount,
+  price_range,
+  status,
+  profile_status,
+  onboarding_completed,
+  approved,
+  portfolio_image_urls,
+  government_id_url,
+  admin_notes,
+  availability_status,
+  verified,
+  description,
+  services_offered,
+  value_statement,
+  vendor_portfolio(image_url, sort_order)
+`;
+
 export type VendorDirectoryItem = {
   id?: string;
   userId?: string | null;
@@ -406,7 +442,7 @@ export async function getVendorByUserId(userId: string) {
 
   const initialQuery = await supabase
     .from("vendors")
-    .select(vendorSelect)
+    .select(vendorDashboardSelect)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   let data: Record<string, any> | null = Array.isArray(initialQuery.data)
@@ -436,12 +472,6 @@ export async function getVendorByUserId(userId: string) {
       ? ((fallback.data[0] as Record<string, any> | null) ?? null)
       : null;
     error = fallback.error;
-    debugLog("[vendor-read] fallback legacy", {
-      userId,
-      filter: { user_id: userId },
-      returnedRowCount: Array.isArray(fallback.data) ? fallback.data.length : 0,
-      error: error ? serializeSupabaseError(error) : null,
-    });
   }
 
   if (error || !data) {
@@ -449,7 +479,7 @@ export async function getVendorByUserId(userId: string) {
       console.error("Vendor dashboard lookup failed", {
         userId,
         error: serializeSupabaseError(error),
-        select: vendorSelect,
+        select: vendorDashboardSelect,
         legacySelect: legacyVendorSelect,
         legacySelectTried: Boolean(error && isSchemaDriftError(error)),
       });

@@ -435,6 +435,7 @@ export function VendorDashboardForm({
         body: formData,
         headers: {
           Accept: "application/json",
+          "X-Requested-With": "vendor-dashboard-form",
           "x-vendor-dashboard-submit": "json",
         },
       });

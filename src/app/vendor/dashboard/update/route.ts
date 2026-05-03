@@ -25,8 +25,9 @@ export async function POST(request: NextRequest) {
     .toString(36)
     .slice(2, 8)}`;
   const wantsJson =
-    request.headers.get("x-vendor-dashboard-submit") === "json" ||
-    request.headers.get("accept")?.includes("application/json");
+    request.headers.get("accept")?.includes("application/json") ||
+    request.headers.get("x-requested-with") === "vendor-dashboard-form" ||
+    request.headers.get("x-vendor-dashboard-submit") === "json";
   let intent = "unknown";
 
   try {
@@ -43,22 +44,21 @@ export async function POST(request: NextRequest) {
     });
 
     await saveOrSubmitVendorProfileAction(formData);
+    const fallbackLocation = "/vendor/dashboard?edit=1";
+
     if (wantsJson) {
-      console.log("Vendor dashboard update route succeeded", {
-        traceId,
-        intent,
-      });
       return NextResponse.json({
         ok: true,
         traceId,
         intent,
-        message: "Your profile has been updated successfully.",
+        message: getSuccessMessage(intent),
+        redirectTo: fallbackLocation,
       });
     }
-    return NextResponse.redirect(
-      new URL("/vendor/dashboard?edit=1", request.url),
-      { status: 303 },
-    );
+
+    return NextResponse.redirect(new URL(fallbackLocation, request.url), {
+      status: 303,
+    });
   } catch (error) {
     const location = extractRedirectLocation(error);
     if (location) {
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
         });
         return response;
       }
+
       return NextResponse.redirect(new URL(location, request.url), { status: 303 });
     }
 
@@ -82,19 +83,23 @@ export async function POST(request: NextRequest) {
       traceId,
       method: request.method,
       url: request.url,
+      intent,
       error: serializeRouteError(error),
     });
+
     if (wantsJson) {
       return NextResponse.json(
         {
           ok: false,
           traceId,
+          intent,
           error: "We couldn’t save your profile yet. Your changes are still here. Please try again.",
           details: serializeRouteError(error),
         },
         { status: 500 },
       );
     }
+
     return NextResponse.redirect(
       new URL(
         "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20profile%20right%20now.",
@@ -120,7 +125,7 @@ function buildJsonRedirectResponse(
       ok: !isError,
       traceId: context.traceId,
       intent: context.intent,
-      message: message || null,
+      message: message || (!isError ? getSuccessMessage(context.intent) : null),
       error:
         error ||
         (url.pathname.startsWith("/auth/sign-in")
@@ -137,29 +142,41 @@ function buildJsonRedirectResponse(
   );
 }
 
+function getSuccessMessage(intent: string) {
+  if (intent === "submit") {
+    return "Sent to admin. Your updated profile is now under review.";
+  }
+  if (intent === "publish") {
+    return "Your profile has been updated successfully.";
+  }
+  return "Draft saved. You can continue editing later.";
+}
+
 function serializeRouteError(error: unknown) {
   if (error instanceof Error) {
     return {
       name: error.name,
       message: error.message,
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
     };
   }
 
   if (error && typeof error === "object") {
     return Object.fromEntries(
-      Object.entries(error as Record<string, unknown>).map(([key, value]) => [
-        key,
-        typeof value === "string" || typeof value === "number" || typeof value === "boolean"
-          ? value
-          : String(value),
-      ]),
+      Object.entries(error as Record<string, unknown>)
+        .filter(([key]) => !key.toLowerCase().includes("key"))
+        .map(([key, value]) => [
+          key,
+          typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean"
+            ? value
+            : String(value),
+        ]),
     );
   }
 
-  return {
-    message: String(error),
-  };
+  return { message: String(error) };
 }
 
 function summarizeRouteFormData(formData: FormData) {
