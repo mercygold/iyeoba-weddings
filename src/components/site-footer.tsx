@@ -36,7 +36,13 @@ export function SiteFooter() {
         />
         <FooterColumn
           title="Contact"
-          links={[{ href: "mailto:hello@iyeobaweddings.com", label: "hello@iyeobaweddings.com" }]}
+          links={[
+            {
+              href: "https://www.iyeobaweddings.com/",
+              label: "https://www.iyeobaweddings.com/",
+            },
+            { href: "mailto:hello@iyeobaweddings.com", label: "hello@iyeobaweddings.com" },
+          ]}
         />
       </div>
       <div className="mx-auto max-w-6xl border-t border-white/15 px-6 pb-7 pt-4 text-xs text-white/78 md:px-10 lg:px-12">
@@ -72,15 +78,29 @@ function FooterColumn({
         {title}
       </p>
       <div className="flex flex-col gap-2 text-sm">
-        {links.map((link) => (
-          <Link
-            key={`${title}-${link.href}-${link.label}`}
-            href={link.href}
-            className="text-white/82 transition-colors duration-200 hover:text-white"
-          >
-            {link.label}
-          </Link>
-        ))}
+        {links.map((link) => {
+          const isExternal = /^https?:\/\//i.test(link.href);
+
+          return isExternal ? (
+            <a
+              key={`${title}-${link.href}-${link.label}`}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white/82 transition-colors duration-200 hover:text-white"
+            >
+              {link.label}
+            </a>
+          ) : (
+            <Link
+              key={`${title}-${link.href}-${link.label}`}
+              href={link.href}
+              className="text-white/82 transition-colors duration-200 hover:text-white"
+            >
+              {link.label}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

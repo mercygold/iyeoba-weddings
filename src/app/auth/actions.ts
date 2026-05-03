@@ -372,7 +372,7 @@ function getAuthSiteUrl(origin: string) {
   }
 
   if (process.env.NODE_ENV === "production") {
-    return "https://iyeobaweddings.com";
+    return "https://www.iyeobaweddings.com";
   }
 
   return normalizedOrigin ?? "http://localhost:3000";

@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 const googleAnalyticsId = "G-THETT8PBSQ";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.iyeobaweddings.com"),
+  metadataBase: new URL("https://www.iyeobaweddings.com/"),
   title: "Iyeoba Weddings | Trusted Vendor Marketplace & Planning Tool",
   description:
     "Discover trusted Nigerian wedding vendors, planning tools, cultural inspiration, and wedding trends across Nigeria and the diaspora.",
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     title: "Iyeoba Weddings | Trusted Vendor Marketplace & Planning Tool",
     description:
       "Discover trusted Nigerian wedding vendors, planning tools, cultural inspiration, and wedding trends across Nigeria and the diaspora.",
-    url: "https://www.iyeobaweddings.com",
+    url: "https://www.iyeobaweddings.com/",
     siteName: "Iyeoba Weddings",
     images: [
       {

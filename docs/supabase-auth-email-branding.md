@@ -12,7 +12,7 @@ Add:
 - `http://localhost:3000/auth/reset-password`
 - `http://localhost:3001/auth/reset-password`
 - `http://localhost:3002/auth/reset-password`
-- `https://iyeobaweddings.com/auth/reset-password`
+- [`https://www.iyeobaweddings.com/auth/reset-password`](https://www.iyeobaweddings.com/auth/reset-password)
 
 ## 2) Email sender branding
 
@@ -67,6 +67,6 @@ CTA:
 
 Set in local + Vercel:
 
-- `NEXT_PUBLIC_SITE_URL=https://iyeobaweddings.com`
+- `NEXT_PUBLIC_SITE_URL=https://www.iyeobaweddings.com/`
 
 The app uses this value for password reset redirect links in production.
