@@ -64,7 +64,10 @@ export async function saveOrSubmitVendorProfileAction(formData: FormData) {
 export async function submitTikTokFeatureRequestAction(formData: FormData) {
   const profile = await requireVendorProfile("/vendor/dashboard");
   const supabase = await createSupabaseServerClient();
+  const admin = createSupabaseAdminClient();
+  const requestClient = admin ?? supabase;
   const nextPath = "/vendor/dashboard";
+  const tableName = "vendor_tiktok_feature_requests";
 
   const socialLink = String(formData.get("socialLink") ?? "").trim();
   const contentLink = String(formData.get("contentLink") ?? "").trim();
@@ -101,7 +104,7 @@ export async function submitTikTokFeatureRequestAction(formData: FormData) {
     );
   }
 
-  const { data: vendor, error: vendorError } = await supabase
+  const { data: vendor, error: vendorError } = await requestClient
     .from("vendors")
     .select(
       "id, user_id, business_name, category, status, approved, primary_social_link, website, portfolio_image_urls, vendor_portfolio(image_url)",
@@ -109,9 +112,19 @@ export async function submitTikTokFeatureRequestAction(formData: FormData) {
     .eq("user_id", profile.id)
     .maybeSingle();
 
+  console.log("TikTok feature request vendor lookup", {
+    authUserIdExists: Boolean(profile.id),
+    vendorRecordExists: Boolean(vendor?.id),
+    targetTable: tableName,
+    client: admin ? "service_role" : "authenticated_server",
+    error: vendorError ? serializeSupabaseError(vendorError) : null,
+  });
+
   if (vendorError || !vendor?.id) {
     console.error("TikTok feature request failed while loading vendor", {
-      userId: profile.id,
+      authUserIdExists: Boolean(profile.id),
+      vendorRecordExists: Boolean(vendor?.id),
+      targetTable: tableName,
       error: serializeSupabaseError(vendorError ?? {}),
     });
     redirect(
@@ -136,7 +149,7 @@ export async function submitTikTokFeatureRequestAction(formData: FormData) {
     permissionConfirmed,
   });
 
-  const { error } = await supabase.from("vendor_tiktok_feature_requests").insert({
+  const insertPayload = {
     vendor_id: vendor.id,
     user_id: profile.id,
     business_name: vendor.business_name ?? String(formData.get("businessName") ?? "").trim(),
@@ -147,16 +160,57 @@ export async function submitTikTokFeatureRequestAction(formData: FormData) {
     permission_confirmed: permissionConfirmed,
     status: "pending_review",
     eligibility_status: eligibilityStatus,
+  };
+
+  console.log("TikTok feature request insert attempt", {
+    authUserIdExists: Boolean(profile.id),
+    vendorRecordExists: Boolean(vendor.id),
+    vendorId: vendor.id,
+    targetTable: tableName,
+    client: admin ? "service_role" : "authenticated_server",
+    payloadSummary: {
+      hasSocialLink: Boolean(socialLink),
+      hasContentLink: Boolean(contentLink),
+      hasCaption: Boolean(caption),
+      permissionConfirmed,
+      eligibilityStatus,
+    },
   });
+
+  let { error } = await requestClient
+    .from(tableName)
+    .insert(insertPayload);
+
+  if (error && isUserForeignKeyError(error)) {
+    console.warn("TikTok feature request retrying without user_id", {
+      authUserIdExists: Boolean(profile.id),
+      vendorRecordExists: Boolean(vendor.id),
+      vendorId: vendor.id,
+      targetTable: tableName,
+      client: admin ? "service_role" : "authenticated_server",
+      error: serializeSupabaseError(error),
+    });
+
+    const retryResult = await requestClient
+      .from(tableName)
+      .insert({
+        ...insertPayload,
+        user_id: null,
+      });
+    error = retryResult.error;
+  }
 
   if (error) {
     console.error("TikTok feature request insert failed", {
-      userId: profile.id,
+      authUserIdExists: Boolean(profile.id),
+      vendorRecordExists: Boolean(vendor.id),
       vendorId: vendor.id,
+      targetTable: tableName,
+      client: admin ? "service_role" : "authenticated_server",
       error: serializeSupabaseError(error),
     });
     const message = isMissingTikTokFeatureRequestTable(error)
-      ? "TikTok feature requests are not ready yet. Please run the latest Supabase migration."
+      ? "TikTok feature requests are not ready yet. Please ask admin to run the latest database migration."
       : "We could not submit your TikTok feature request right now.";
     redirect(withQueryParam(nextPath, "error", message));
   }
@@ -1918,6 +1972,18 @@ function serializeSupabaseError(error: {
     details: error.details ?? null,
     hint: error.hint ?? null,
   };
+}
+
+function isUserForeignKeyError(error: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+}) {
+  const message = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+  return (
+    error.code === "23503" &&
+    (message.includes("user_id") || message.includes("users"))
+  );
 }
 
 function mapThreadStatusToLegacyStatus(

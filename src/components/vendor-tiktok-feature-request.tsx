@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useFormStatus } from "react-dom";
 
 import type { submitTikTokFeatureRequestAction } from "@/app/vendor/dashboard/actions";
@@ -27,6 +28,11 @@ export function VendorTikTokFeatureRequest({
   canSubmit,
 }: TikTokFeatureRequestProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <>
@@ -60,23 +66,24 @@ export function VendorTikTokFeatureRequest({
         </p>
       ) : null}
 
-      {isOpen ? (
-        <div className="fixed inset-0 z-[9998]" role="presentation">
+      {isOpen && mounted
+        ? createPortal(
+            <div className="fixed inset-0 z-[2147483646]" role="presentation">
           <button
             type="button"
             aria-label="Close TikTok feature request"
             onClick={() => setIsOpen(false)}
-            className="absolute inset-0 h-full w-full bg-black/55"
+            className="absolute inset-0 h-full w-full bg-black/65 backdrop-blur-[2px]"
           />
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-6">
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center overflow-hidden px-4 py-4 sm:py-6">
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="tiktok-feature-title"
-              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] bg-white shadow-2xl"
+              className="flex h-[85dvh] max-h-[85dvh] w-full max-w-[840px] flex-col overflow-hidden rounded-[1.75rem] border border-[rgba(201,161,91,0.22)] bg-white shadow-[0_32px_90px_-28px_rgba(31,31,31,0.72)]"
             >
-              <form action={action} className="flex min-h-0 flex-1 flex-col">
-                <div className="border-b border-[rgba(106,62,124,0.12)] px-5 py-4 sm:px-6">
+              <form action={action} className="flex h-full min-h-0 flex-col">
+                <div className="shrink-0 border-b border-[rgba(106,62,124,0.12)] bg-white px-5 py-4 sm:px-7">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
@@ -100,7 +107,7 @@ export function VendorTikTokFeatureRequest({
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,#fff_0%,#FAF9F7_100%)] px-5 py-5 sm:px-7">
                   <div className="grid gap-4">
                     <label className="grid gap-2 text-sm font-semibold text-[color:var(--color-ink)]">
                       Business / Brand Name
@@ -172,8 +179,10 @@ export function VendorTikTokFeatureRequest({
               </form>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
@@ -182,7 +191,7 @@ function TikTokFeatureRequestFooter({ onCancel }: { onCancel: () => void }) {
   const { pending } = useFormStatus();
 
   return (
-    <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-[rgba(106,62,124,0.12)] bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+    <div className="sticky bottom-0 z-10 flex shrink-0 flex-col-reverse gap-2 border-t border-[rgba(106,62,124,0.12)] bg-white px-5 py-4 shadow-[0_-18px_34px_-32px_rgba(31,31,31,0.55)] sm:flex-row sm:justify-end sm:px-7">
       <button
         type="button"
         onClick={onCancel}
