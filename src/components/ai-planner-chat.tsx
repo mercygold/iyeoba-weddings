@@ -29,6 +29,18 @@ const starterPrompts = [
   "Build a vendor checklist for an intimate court wedding.",
 ];
 
+const weddingTypeOptions = [
+  "Traditional wedding",
+  "White wedding",
+  "Court/Civil wedding",
+  "Introduction",
+  "Traditional + White wedding",
+  "Traditional + Court wedding",
+  "White + Court wedding",
+  "Full wedding celebration",
+  "Other",
+];
+
 const emptyPlan: PlannerPlan = {
   reply: "",
   checklist: [],
@@ -41,6 +53,7 @@ const emptyPlan: PlannerPlan = {
 
 export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatProps) {
   const [weddingType, setWeddingType] = useState("");
+  const [customWeddingType, setCustomWeddingType] = useState("");
   const [location, setLocation] = useState("");
   const [guestCount, setGuestCount] = useState("");
   const [budget, setBudget] = useState("");
@@ -51,6 +64,7 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
   const [plan, setPlan] = useState<PlannerPlan>(emptyPlan);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [saved, setSaved] = useState(false);
 
   const hasPlan = useMemo(
@@ -80,6 +94,7 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
     setMessages(nextMessages);
     setMessage("");
     setError("");
+    setNotice("");
     setSaved(false);
     setIsLoading(true);
 
@@ -92,7 +107,8 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
         body: JSON.stringify({
           messages: nextMessages,
           intake: {
-            weddingType,
+            weddingType:
+              weddingType === "Other" ? customWeddingType.trim() || "Other" : weddingType,
             location,
             guestCount,
             budget,
@@ -102,9 +118,28 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
         }),
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+      let data: Record<string, any> = {};
+
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch (parseError) {
+        console.error("Iyeoba AI planner response parse failed", {
+          status: response.status,
+          statusText: response.statusText,
+          rawText,
+          parseError,
+        });
+        throw new Error("Iyeoba AI returned an unexpected response. Please try again.");
+      }
 
       if (!response.ok) {
+        console.error("Iyeoba AI planner request failed", {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error,
+          diagnostics: data.diagnostics,
+        });
         throw new Error(data.error ?? "Iyeoba AI could not create a plan right now.");
       }
 
@@ -120,6 +155,9 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
 
       setPlan(nextPlan);
       setSaved(Boolean(data.saved));
+      if (data.saveError) {
+        setNotice("Starter plan shown. Full AI planning and saved chat history will resume shortly.");
+      }
       setMessages([
         ...nextMessages,
         {
@@ -150,41 +188,53 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
           Planning Details
         </p>
         <div className="mt-5 space-y-4">
-          <PlannerField
+          <PlannerSelectField
             label="Wedding type"
             value={weddingType}
             onChange={setWeddingType}
-            placeholder="Traditional, court, white, or combined"
+            options={weddingTypeOptions}
+            placeholder="Choose wedding type"
           />
+          {weddingType === "Other" ? (
+            <PlannerField
+              label="Custom wedding type"
+              value={customWeddingType}
+              onChange={setCustomWeddingType}
+              placeholder="Tell us the wedding format"
+            />
+          ) : null}
           <PlannerField
             label="Location"
             value={location}
             onChange={setLocation}
-            placeholder="Lagos, Abuja, London, Atlanta..."
+            placeholder="Lagos, Abuja, London, Houston, Toronto..."
           />
           <PlannerField
             label="Guest count"
             value={guestCount}
             onChange={setGuestCount}
-            placeholder="150 guests"
+            placeholder="300"
+            type="number"
+            min={1}
           />
           <PlannerField
             label="Budget"
             value={budget}
             onChange={setBudget}
-            placeholder="₦8m, $25k, £18k..."
+            placeholder="₦5,000,000 or $10,000"
           />
           <PlannerField
-            label="Wedding date/month"
+            label="Wedding date"
             value={weddingDate}
             onChange={setWeddingDate}
-            placeholder="December 2026"
+            placeholder=""
+            type="date"
           />
           <PlannerField
             label="Culture or tradition"
             value={culture}
             onChange={setCulture}
-            placeholder="Yoruba, Igbo, Edo, Hausa, inter-cultural..."
+            placeholder="Yoruba, Igbo, Hausa, Edo, Nigerian diaspora, mixed culture..."
           />
         </div>
 
@@ -270,6 +320,12 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
             </div>
           ) : null}
 
+          {notice ? (
+            <div className="surface-soft rounded-[1.5rem] border border-[rgba(91,44,131,0.12)] p-4 text-xs leading-6 text-[color:var(--color-muted)]">
+              {notice}
+            </div>
+          ) : null}
+
           {hasPlan ? <PlannerResult plan={plan} /> : null}
         </div>
 
@@ -303,20 +359,65 @@ type PlannerFieldProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  type?: string;
+  min?: number;
 };
 
-function PlannerField({ label, value, onChange, placeholder }: PlannerFieldProps) {
+function PlannerField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  min,
+}: PlannerFieldProps) {
   return (
     <label className="block">
       <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
         {label}
       </span>
       <input
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="field-input mt-2 rounded-[1.25rem] text-sm"
         placeholder={placeholder}
+        min={min}
       />
+    </label>
+  );
+}
+
+function PlannerSelectField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="field-input mt-2 rounded-[1.25rem] text-sm"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
