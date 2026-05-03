@@ -630,6 +630,8 @@ async function persistVendorProfile(
     const publishLookup = await queryVendorForAction(admin, user.id, {
       select:
         "id,user_id,approved,status,currency_code,starting_price,price_currency,price_amount,price_last_updated_at,created_at",
+      fallbackSelect:
+        "id,user_id,approved,status,price_currency,price_amount,created_at",
       context: "publish",
     });
 
@@ -753,11 +755,44 @@ async function persistVendorProfile(
       payload: safeUpdatePayload,
     });
 
-    const publishUpdateResult = await admin
+    let publishUpdateResult = await admin
       .from("vendors")
       .update(safeUpdatePayload)
       .eq("id", vendorRow.id)
       .eq("user_id", user.id);
+
+    if (publishUpdateResult.error && isSchemaDriftError(publishUpdateResult.error)) {
+      const compatiblePublishPayload = {
+        years_experience: yearsExperience || null,
+        primary_social_link: primarySocialLink || null,
+        instagram: primarySocialLink || null,
+        website: website || null,
+        culture: cultureSpecialization || null,
+        culture_specialization: cultureSpecialization || null,
+        description: description || null,
+        services_offered: servicesOffered,
+        portfolio_image_urls: portfolioImageUrls,
+        ...(canPublishPriceFields
+          ? {
+              price_currency: priceCurrency,
+              price_amount: Number.isFinite(numericPrice) ? numericPrice : null,
+              price_range: formattedPrice,
+            }
+          : {}),
+      };
+
+      console.warn("Publish update retrying with compatible payload", {
+        authUserId: user.id,
+        vendorId: vendorRow.id,
+        error: serializeSupabaseError(publishUpdateResult.error),
+      });
+
+      publishUpdateResult = await admin
+        .from("vendors")
+        .update(compatiblePublishPayload)
+        .eq("id", vendorRow.id)
+        .eq("user_id", user.id);
+    }
 
     if (publishUpdateResult.error) {
       console.error("Publish safe update failed", {
@@ -786,7 +821,13 @@ async function persistVendorProfile(
         .from("vendor_price_history")
         .insert(historyPayload);
 
-      if (historyResult.error) {
+      if (historyResult.error && isOptionalDatabaseFeatureError(historyResult.error)) {
+        console.warn("Publish price history table not available yet", {
+          authUserId: user.id,
+          vendorId: vendorRow.id,
+          error: serializeSupabaseError(historyResult.error),
+        });
+      } else if (historyResult.error) {
         console.error("Publish price history insert failed", {
           authUserId: user.id,
           vendorId: vendorRow.id,
@@ -801,7 +842,13 @@ async function persistVendorProfile(
       .delete()
       .eq("vendor_id", vendorRow.id);
 
-    if (deletePortfolioResult.error) {
+    if (deletePortfolioResult.error && isOptionalDatabaseFeatureError(deletePortfolioResult.error)) {
+      console.warn("Publish portfolio table not available yet", {
+        authUserId: user.id,
+        vendorId: vendorRow.id,
+        error: serializeSupabaseError(deletePortfolioResult.error),
+      });
+    } else if (deletePortfolioResult.error) {
       console.error("Publish portfolio refresh delete failed", {
         authUserId: user.id,
         vendorId: vendorRow.id,
@@ -812,7 +859,7 @@ async function persistVendorProfile(
       );
     }
 
-    if (portfolioImageUrls.length) {
+    if (portfolioImageUrls.length && !deletePortfolioResult.error) {
       const insertPortfolioResult = await admin.from("vendor_portfolio").insert(
         portfolioImageUrls.map((imageUrl, index) => ({
           vendor_id: vendorRow.id,
@@ -821,7 +868,13 @@ async function persistVendorProfile(
         })),
       );
 
-      if (insertPortfolioResult.error) {
+      if (insertPortfolioResult.error && isOptionalDatabaseFeatureError(insertPortfolioResult.error)) {
+        console.warn("Publish portfolio table not available yet", {
+          authUserId: user.id,
+          vendorId: vendorRow.id,
+          error: serializeSupabaseError(insertPortfolioResult.error),
+        });
+      } else if (insertPortfolioResult.error) {
         console.error("Publish portfolio refresh insert failed", {
           authUserId: user.id,
           vendorId: vendorRow.id,
@@ -915,6 +968,7 @@ async function persistVendorProfile(
 
   const existingVendorLookup = await queryVendorForAction(admin, user.id, {
     select: "id,user_id,status,approved,verified,created_at",
+    fallbackSelect: "id,user_id,status,approved,verified,created_at",
     context: "draft_or_submit",
   });
 
@@ -1264,7 +1318,6 @@ async function persistVendorProfile(
       price_currency: vendorPayload.price_currency,
       price_amount: vendorPayload.price_amount,
       price_range: vendorPayload.price_range,
-      price_last_updated_at: vendorPayload.price_last_updated_at,
       portfolio_image_urls: vendorPayload.portfolio_image_urls,
       government_id_url: vendorPayload.government_id_url,
       admin_notes: vendorPayload.admin_notes,
@@ -1304,8 +1357,17 @@ async function persistVendorProfile(
       price_currency: vendorPayload.price_currency,
       price_amount: vendorPayload.price_amount,
       price_range: vendorPayload.price_range,
-      price_last_updated_at: vendorPayload.price_last_updated_at,
+      primary_social_link: vendorPayload.primary_social_link,
+      instagram: vendorPayload.instagram,
+      website: vendorPayload.website,
+      culture: vendorPayload.culture,
+      culture_specialization: vendorPayload.culture_specialization,
+      years_experience: vendorPayload.years_experience,
+      portfolio_image_urls: vendorPayload.portfolio_image_urls,
+      government_id_url: vendorPayload.government_id_url,
       admin_notes: vendorPayload.admin_notes,
+      availability_status: vendorPayload.availability_status,
+      value_statement: vendorPayload.value_statement,
       status: vendorPayload.status,
       profile_status: vendorPayload.profile_status,
       onboarding_completed: vendorPayload.onboarding_completed,
@@ -1382,12 +1444,63 @@ async function persistVendorProfile(
     { onConflict: "vendor_id,user_id", ignoreDuplicates: false },
   );
 
-  if (draftResult.error && isSchemaDriftError(draftResult.error)) {
+  if (draftResult.error && isOptionalDatabaseFeatureError(draftResult.error)) {
     console.warn("Vendor draft table not available yet", {
       vendorId,
       userId: user.id,
       error: serializeSupabaseError(draftResult.error),
     });
+    if (intent === "draft" && !approvedVendorIsEditing) {
+      const draftVendorPayload = {
+        slug: vendorPayload.slug,
+        business_name: vendorPayload.business_name,
+        owner_name: vendorPayload.owner_name,
+        category: vendorPayload.category,
+        country_region: vendorPayload.country_region,
+        nigeria_state: vendorPayload.nigeria_state,
+        phone_code: vendorPayload.phone_code,
+        culture: vendorPayload.culture,
+        culture_specialization: vendorPayload.culture_specialization,
+        location: vendorPayload.location,
+        years_experience: vendorPayload.years_experience,
+        primary_social_link: vendorPayload.primary_social_link,
+        instagram: vendorPayload.instagram,
+        website: vendorPayload.website,
+        whatsapp: vendorPayload.whatsapp,
+        description: vendorPayload.description,
+        services_offered: vendorPayload.services_offered,
+        price_currency: vendorPayload.price_currency,
+        price_amount: vendorPayload.price_amount,
+        price_range: vendorPayload.price_range,
+        portfolio_image_urls: vendorPayload.portfolio_image_urls,
+        government_id_url: vendorPayload.government_id_url,
+        admin_notes: vendorPayload.admin_notes,
+        status: vendorPayload.status,
+        profile_status: vendorPayload.profile_status,
+        onboarding_completed: vendorPayload.onboarding_completed,
+        availability_status: vendorPayload.availability_status,
+        value_statement: vendorPayload.value_statement,
+        approved: vendorPayload.approved,
+        verified: vendorPayload.verified,
+      };
+
+      const draftVendorResult = await admin
+        .from("vendors")
+        .update(draftVendorPayload)
+        .eq("id", vendorId)
+        .eq("user_id", user.id);
+
+      if (draftVendorResult.error) {
+        console.error("Vendor draft fallback save failed", {
+          vendorId,
+          userId: user.id,
+          error: serializeSupabaseError(draftVendorResult.error),
+        });
+        redirect(
+          "/vendor/dashboard?edit=1&error=We%20could%20not%20save%20your%20draft%20right%20now.",
+        );
+      }
+    }
   } else if (draftResult.error) {
     console.error("Vendor draft save failed", {
       vendorId,
@@ -1427,7 +1540,7 @@ async function persistVendorProfile(
       status: "pending",
     });
 
-    if (changeRequestResult.error && isSchemaDriftError(changeRequestResult.error)) {
+    if (changeRequestResult.error && isOptionalDatabaseFeatureError(changeRequestResult.error)) {
       console.warn("Vendor change request table not available yet", {
         vendorId,
         userId: user.id,
@@ -1457,7 +1570,7 @@ async function persistVendorProfile(
         nextStartingPrice === null ? null : String(nextStartingPrice),
     };
     const historyResult = await admin.from("vendor_price_history").insert(historyPayload);
-    if (historyResult.error && isSchemaDriftError(historyResult.error)) {
+    if (historyResult.error && isOptionalDatabaseFeatureError(historyResult.error)) {
       console.warn("Vendor price history table not available yet", {
         vendorId,
         userId: user.id,
@@ -1480,7 +1593,13 @@ async function persistVendorProfile(
       .delete()
       .eq("vendor_id", vendorId);
 
-    if (deletePortfolioError) {
+    if (deletePortfolioError && isOptionalDatabaseFeatureError(deletePortfolioError)) {
+      console.warn("Vendor portfolio table not available yet", {
+        vendorId,
+        userId: user.id,
+        error: serializeSupabaseError(deletePortfolioError),
+      });
+    } else if (deletePortfolioError) {
       console.error("Vendor profile save failed while refreshing portfolio rows", {
         vendorId,
         error: deletePortfolioError,
@@ -1490,7 +1609,7 @@ async function persistVendorProfile(
       );
     }
 
-    if (portfolioImageUrls.length) {
+    if (portfolioImageUrls.length && !deletePortfolioError) {
       const { error: insertPortfolioError } = await admin.from("vendor_portfolio").insert(
         portfolioImageUrls.map((imageUrl, index) => ({
           vendor_id: vendorId,
@@ -1499,7 +1618,13 @@ async function persistVendorProfile(
         })),
       );
 
-      if (insertPortfolioError) {
+      if (insertPortfolioError && isOptionalDatabaseFeatureError(insertPortfolioError)) {
+        console.warn("Vendor portfolio table not available yet", {
+          vendorId,
+          userId: user.id,
+          error: serializeSupabaseError(insertPortfolioError),
+        });
+      } else if (insertPortfolioError) {
         console.error("Vendor profile save failed while writing portfolio rows", {
           vendorId,
           error: insertPortfolioError,
@@ -1541,6 +1666,7 @@ async function queryVendorForAction(
   userId: string,
   options: {
     select: string;
+    fallbackSelect: string;
     context: "publish" | "draft_or_submit";
   },
 ) {
@@ -1563,15 +1689,20 @@ async function queryVendorForAction(
     return ordered;
   }
 
+  const retrySelect = isSchemaDriftError(ordered.error)
+    ? options.fallbackSelect
+    : options.select;
+
   console.warn("Vendor lookup ordered query failed; retrying without ordering", {
     context: options.context,
     authUserId: userId,
     error: serializeSupabaseError(ordered.error),
+    usingFallbackSelect: retrySelect !== options.select,
   });
 
   const unordered = (await admin
     .from("vendors")
-    .select(options.select)
+    .select(retrySelect)
     .eq("user_id", userId)) as unknown as {
     data: Array<Record<string, unknown>> | null;
     error: {
@@ -1695,6 +1826,20 @@ function isSchemaDriftError(error: {
     error.code === "PGRST204" ||
     (message.includes("column") &&
       (message.includes("does not exist") || message.includes("could not find")))
+  );
+}
+
+function isOptionalDatabaseFeatureError(error: {
+  code?: string | null;
+  message?: string | null;
+}) {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    isSchemaDriftError(error) ||
+    error.code === "42P01" ||
+    message.includes("relation") ||
+    message.includes("does not exist") ||
+    message.includes("could not find")
   );
 }
 

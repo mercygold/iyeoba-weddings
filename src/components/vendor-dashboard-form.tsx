@@ -406,6 +406,7 @@ export function VendorDashboardForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    console.log("Vendor submit diagnostics version active");
 
     if (submittingIntent) {
       return;
@@ -426,33 +427,45 @@ export function VendorDashboardForm({
     setSubmittingIntent(intent);
     setActionFeedback(null);
     setActionError(null);
+    console.log("Submitting vendor profile to /vendor/dashboard/update", { intent });
 
     try {
       const response = await fetch(form.action, {
         method: "POST",
         body: formData,
         headers: {
+          Accept: "application/json",
           "x-vendor-dashboard-submit": "json",
         },
       });
-      const rawResponseText = await response.text();
-      const payload = parseSubmitResponse(rawResponseText) as {
+      const rawText = await response.text();
+      const payload = parseSubmitResponse(rawText) as {
         ok?: boolean;
         message?: string | null;
         error?: string | null;
         details?: unknown;
         redirectTo?: string | null;
       };
+      console.log("Vendor submit response diagnostics", {
+        status: response.status,
+        statusText: response.statusText,
+        rawText,
+        payload,
+      });
 
       if (!response.ok || !payload.ok) {
-        console.error("Vendor profile submit failed", {
+        const diagnostic = {
           status: response.status,
           statusText: response.statusText,
           intent,
-          rawResponseText,
+          rawText,
           payload,
           submittedPayload: summarizeVendorProfilePayload(formData),
-        });
+        };
+        console.error(
+          "Vendor profile submit failed",
+          JSON.stringify(diagnostic, null, 2),
+        );
         setActionError(
           payload.error ||
             "We couldn’t save your profile yet. Your changes are still here. Please try again.",
@@ -1101,11 +1114,7 @@ function summarizeVendorProfilePayload(formData: FormData) {
   const summary: Record<string, unknown> = {};
   for (const [key, value] of formData.entries()) {
     if (value instanceof File) {
-      summary[key] = {
-        fileName: value.name,
-        size: value.size,
-        type: value.type,
-      };
+      summary[key] = value.size > 0 ? "file_present" : "empty_file_input";
       continue;
     }
 

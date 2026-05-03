@@ -126,7 +126,11 @@ export async function signUpAction(formData: FormData) {
       }
 
       if (!existingVendor) {
-        const slug = buildVendorSlug(fullName || email);
+        const slug = await resolveVendorSignupSlug(
+          adminClient,
+          fullName || email,
+          authUserId,
+        );
         const { error: vendorInsertError } = await adminClient.from("vendors").insert({
           user_id: authUserId,
           business_name: fullName || email,
@@ -293,11 +297,48 @@ export async function updatePasswordAction(formData: FormData) {
 }
 
 function buildVendorSlug(value: string) {
-  return value
+  const slug = value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
+
+  return slug || "vendor";
+}
+
+async function resolveVendorSignupSlug(
+  adminClient: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  value: string,
+  authUserId: string,
+) {
+  const baseSlug = buildVendorSlug(value);
+  const candidates = [
+    baseSlug,
+    `${baseSlug.slice(0, 39)}-${authUserId.slice(0, 8)}`,
+    `${baseSlug.slice(0, 35)}-${Date.now().toString().slice(-6)}`,
+  ];
+
+  for (const candidate of candidates) {
+    const { data, error } = await adminClient
+      .from("vendors")
+      .select("id")
+      .eq("slug", candidate)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Failed to check vendor signup slug availability", {
+        candidate,
+        error,
+      });
+      continue;
+    }
+
+    if (!data) {
+      return candidate;
+    }
+  }
+
+  return `vendor-${authUserId.slice(0, 8)}`;
 }
 
 async function getRequestOrigin() {
