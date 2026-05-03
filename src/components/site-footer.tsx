@@ -37,11 +37,8 @@ export function SiteFooter() {
         <FooterColumn
           title="Contact"
           links={[
-            {
-              href: "https://www.iyeobaweddings.com/",
-              label: "https://www.iyeobaweddings.com/",
-            },
             { href: "mailto:hello@iyeobaweddings.com", label: "hello@iyeobaweddings.com" },
+            { href: "https://www.tiktok.com/@iyeobaweddings", label: "TikTok: @iyeobaweddings" },
           ]}
         />
       </div>
