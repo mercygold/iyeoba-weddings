@@ -8,6 +8,11 @@ import {
   formatVendorStartingPrice,
   supportedVendorCurrencies,
 } from "@/lib/currency";
+import {
+  getMessageAttachmentFiles,
+  uploadMessageAttachments,
+  validateMessageAttachmentFiles,
+} from "@/lib/message-attachments";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -303,10 +308,16 @@ export async function replyToInquiryAction(formData: FormData) {
 
   const inquiryId = String(formData.get("inquiryId") ?? "").trim();
   const body = String(formData.get("message") ?? "").trim();
+  const attachmentFiles = getMessageAttachmentFiles(formData);
+  const attachmentError = validateMessageAttachmentFiles(attachmentFiles);
   const nextPath = normalizeVendorDashboardNextPath(formData.get("nextPath"));
 
-  if (!inquiryId || !body) {
-    redirect(withQueryParam(nextPath, "error", "Add a reply before sending."));
+  if (!inquiryId || (!body && !attachmentFiles.length)) {
+    redirect(withQueryParam(nextPath, "error", "Add a reply or attachment before sending."));
+  }
+
+  if (attachmentError) {
+    redirect(withQueryParam(nextPath, "error", attachmentError));
   }
 
   const { data: vendor, error: vendorError } = await supabase
@@ -372,9 +383,13 @@ export async function replyToInquiryAction(formData: FormData) {
     payload: messagePayload,
   });
 
-  let { error: messageError } = await supabase
+  let messageId: string | null = null;
+  let { data: messageData, error: messageError } = await (supabase
     .from("lead_messages")
-    .insert(messagePayload);
+    .insert(messagePayload) as any)
+    .select("id")
+    .single();
+  messageId = messageData?.id ?? null;
 
   if (messageError && supportsLeadMessageFallback(messageError)) {
     const fallbackPayload = {
@@ -394,9 +409,12 @@ export async function replyToInquiryAction(formData: FormData) {
       error: serializeSupabaseError(messageError),
     });
 
-    const fallbackResult = await supabase
+    const fallbackResult = await (supabase
       .from("lead_messages")
-      .insert(fallbackPayload);
+      .insert(fallbackPayload) as any)
+      .select("id")
+      .single();
+    messageId = fallbackResult.data?.id ?? null;
     messageError = fallbackResult.error;
 
     if (messageError && supportsLeadMessageFallback(messageError)) {
@@ -417,9 +435,12 @@ export async function replyToInquiryAction(formData: FormData) {
         error: serializeSupabaseError(messageError),
       });
 
-      const minimalFallbackResult = await supabase
+      const minimalFallbackResult = await (supabase
         .from("lead_messages")
-        .insert(minimalFallbackPayload);
+        .insert(minimalFallbackPayload) as any)
+        .select("id")
+        .single();
+      messageId = minimalFallbackResult.data?.id ?? null;
       messageError = minimalFallbackResult.error;
     }
   }
@@ -451,6 +472,48 @@ export async function replyToInquiryAction(formData: FormData) {
         nextPath,
         "error",
         "We could not send this reply right now.",
+      ),
+    );
+  }
+
+  if (!messageId) {
+    console.error("Vendor inquiry reply create failed without message id", {
+      table: "lead_messages",
+      client: "authenticated_server",
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+    });
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not send this reply right now.",
+      ),
+    );
+  }
+
+  try {
+    await uploadMessageAttachments({
+      leadId: inquiryId,
+      messageId,
+      uploaderUserId: profile.id,
+      files: attachmentFiles,
+    });
+  } catch (error) {
+    await deleteMessageAfterAttachmentFailure(supabase, messageId);
+    console.error("Vendor inquiry attachment upload failed", {
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+      messageId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    redirect(
+      withQueryParam(
+        nextPath,
+        "error",
+        "We could not upload your attachment right now.",
       ),
     );
   }
@@ -2088,6 +2151,20 @@ function areNumbersEqual(left: number | null, right: number | null) {
     return false;
   }
   return Math.abs(left - right) < 0.0000001;
+}
+
+async function deleteMessageAfterAttachmentFailure(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  messageId: string,
+) {
+  const { error } = await supabase.from("lead_messages").delete().eq("id", messageId);
+  if (error) {
+    console.warn("Failed to clean up message after attachment upload failure", {
+      table: "lead_messages",
+      messageId,
+      error: serializeSupabaseError(error),
+    });
+  }
 }
 
 async function resolveVendorSlug(

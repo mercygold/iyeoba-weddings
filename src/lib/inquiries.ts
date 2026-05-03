@@ -8,6 +8,10 @@ import {
 import { normalizeVendorCategory } from "@/lib/vendor-categories";
 import { getVendorDirectory } from "@/lib/vendors";
 import { getVendorPlaceholderImage } from "@/lib/vendor-placeholders";
+import {
+  getMessageAttachmentsForMessages,
+  type MessageAttachment,
+} from "@/lib/message-attachments";
 import { unstable_noStore as noStore } from "next/cache";
 
 export type InquiryMessage = {
@@ -16,6 +20,7 @@ export type InquiryMessage = {
   senderLabel: string;
   body: string;
   createdAt: string | null;
+  attachments: MessageAttachment[];
 };
 
 export type PlannerSavedVendor = {
@@ -742,6 +747,31 @@ export async function getVendorInquiries(userId: string) {
         plannerLookup.set(planner.id, planner);
       }
     }
+
+    const missingPlannerIds = uniquePlannerIds.filter(
+      (plannerId) => !plannerLookup.has(plannerId),
+    );
+    if (missingPlannerIds.length) {
+      const admin = createSupabaseAdminClient();
+      if (admin) {
+        const adminPlannerResult = await admin
+          .from("users")
+          .select("id, full_name, email, phone")
+          .in("id", missingPlannerIds);
+
+        if (adminPlannerResult.error) {
+          console.warn("Vendor inquiries planner admin lookup failed", {
+            table: "users",
+            plannerIds: missingPlannerIds,
+            error: serializeSupabaseError(adminPlannerResult.error),
+          });
+        } else {
+          for (const planner of adminPlannerResult.data ?? []) {
+            plannerLookup.set(planner.id, planner);
+          }
+        }
+      }
+    }
   }
 
   if (uniqueWeddingIds.length) {
@@ -922,6 +952,9 @@ async function getLeadMessagesMap(
   );
 
   const leadMessageRows = data as LeadMessageRow[];
+  const attachmentsByMessage = await getMessageAttachmentsForMessages(
+    leadMessageRows.map((row) => row.id),
+  );
 
   console.log("Thread messages loaded", {
     leadIds,
@@ -950,6 +983,7 @@ async function getLeadMessagesMap(
       senderLabel: senderRole === "vendor" ? "Vendor" : "Planner",
       body: (row.body ?? row.message ?? "").trim(),
       createdAt: toValidTimestamp(row.created_at) ?? participants?.leadCreatedAt ?? null,
+      attachments: attachmentsByMessage.get(row.id) ?? [],
     });
     map.set(row.lead_id, current);
   }
@@ -1000,8 +1034,9 @@ function buildThreadMessages(
         message.senderRole === "planner"
           ? plannerLabel
           : (message.senderLabel?.trim() || "Vendor"),
+      attachments: message.attachments ?? [],
     }))
-    .filter((message) => Boolean(message.body.trim()));
+    .filter((message) => Boolean(message.body.trim()) || message.attachments.length > 0);
 
   const sortedMessages = normalizedRows.sort((a, b) => {
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number.POSITIVE_INFINITY;
@@ -1020,6 +1055,7 @@ function buildThreadMessages(
     senderLabel: plannerLabel,
     body: initialText,
     createdAt: leadCreatedAt ?? sortedMessages[0]?.createdAt ?? null,
+    attachments: [],
   };
 
   const firstMessage = sortedMessages[0];

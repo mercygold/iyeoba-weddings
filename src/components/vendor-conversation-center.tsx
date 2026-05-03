@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 type VendorConversationCenterProps = {
   inquiries: VendorInquiry[];
@@ -15,6 +15,15 @@ type InquiryMessage = {
   senderLabel: string;
   body: string;
   createdAt: string | null;
+  attachments: MessageAttachment[];
+};
+
+type MessageAttachment = {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  signedUrl: string | null;
 };
 
 type VendorInquiry = {
@@ -172,6 +181,7 @@ export function VendorConversationCenter({
                             {message.senderLabel}
                           </p>
                           <p className="mt-1 text-sm leading-6">{message.body}</p>
+                          <MessageAttachments attachments={message.attachments} />
                           {formatDateTime(message.createdAt) ? (
                             <p className="mt-1 text-[11px] opacity-75">
                               {formatDateTime(message.createdAt)}
@@ -189,7 +199,10 @@ export function VendorConversationCenter({
               </div>
 
               <div className="border-t border-[rgba(106,62,124,0.12)] px-4 py-4">
-                <form action={replyToInquiryAction} className="grid gap-3">
+                <form
+                  action={replyToInquiryAction}
+                  className="grid gap-3"
+                >
                   <input type="hidden" name="inquiryId" value={selectedInquiry.id} />
                   <input type="hidden" name="nextPath" value={selectedNextPath} />
                   <textarea
@@ -198,60 +211,63 @@ export function VendorConversationCenter({
                     placeholder="Send a reply before moving the conversation to WhatsApp or email."
                     className="field-input min-h-[90px] rounded-[1.25rem] text-sm"
                   />
+                  <AttachmentPicker />
                   <button type="submit" className="btn-primary w-full px-4 py-2 sm:w-auto">
                     Reply
                   </button>
                 </form>
 
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {buildWhatsAppMessageLink(
-                    selectedInquiry.plannerPhone,
-                    `Hello, thanks for your inquiry on Iyeoba Weddings. I am following up on your request${selectedInquiry.weddingSummary ? ` for ${selectedInquiry.weddingSummary}` : ""}.`,
-                  ) ? (
-                    <a
-                      href={buildWhatsAppMessageLink(
-                        selectedInquiry.plannerPhone,
-                        `Hello, thanks for your inquiry on Iyeoba Weddings. I am following up on your request${selectedInquiry.weddingSummary ? ` for ${selectedInquiry.weddingSummary}` : ""}.`,
-                      )!}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary w-full px-4 py-2 sm:w-auto"
-                    >
-                      WhatsApp
-                    </a>
-                  ) : null}
-                  {buildEmailLink(
-                    selectedInquiry.plannerEmail,
-                    "Iyeoba Weddings inquiry",
-                  ) ? (
-                    <a
-                      href={buildEmailLink(
-                        selectedInquiry.plannerEmail,
-                        "Iyeoba Weddings inquiry",
-                      )!}
-                      className="btn-secondary w-full px-4 py-2 sm:w-auto"
-                    >
-                      Email
-                    </a>
-                  ) : null}
+                <div className="mt-3 grid gap-3 rounded-[1.25rem] border border-[rgba(106,62,124,0.1)] bg-[rgba(250,249,247,0.72)] p-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {buildWhatsAppMessageLink(
+                      selectedInquiry.plannerPhone,
+                      `Hello, thanks for your inquiry on Iyeoba Weddings. I am following up on your request${selectedInquiry.weddingSummary ? ` for ${selectedInquiry.weddingSummary}` : ""}.`,
+                    ) ? (
+                      <a
+                        href={buildWhatsAppMessageLink(
+                          selectedInquiry.plannerPhone,
+                          `Hello, thanks for your inquiry on Iyeoba Weddings. I am following up on your request${selectedInquiry.weddingSummary ? ` for ${selectedInquiry.weddingSummary}` : ""}.`,
+                        )!}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-secondary flex min-h-11 items-center justify-center px-4 py-2 text-sm"
+                      >
+                        WhatsApp
+                      </a>
+                    ) : null}
+                    {buildEmailLink(
+                      selectedInquiry.plannerEmail,
+                      "Iyeoba Weddings inquiry",
+                    ) ? (
+                      <a
+                        href={buildEmailLink(
+                          selectedInquiry.plannerEmail,
+                          "Iyeoba Weddings inquiry",
+                        )!}
+                        className="btn-secondary flex min-h-11 items-center justify-center px-4 py-2 text-sm"
+                      >
+                        Email
+                      </a>
+                    ) : null}
+                  </div>
 
                   <form
                     action={updateInquiryStatusAction}
-                    className="flex flex-wrap gap-3"
+                    className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   >
                     <input type="hidden" name="inquiryId" value={selectedInquiry.id} />
                     <input type="hidden" name="nextPath" value={selectedNextPath} />
                     <select
                       name="status"
                       defaultValue={selectedInquiry.threadStatus}
-                      className="field-input rounded-[1.25rem] px-4 py-2 text-sm"
+                      className="field-input min-h-11 rounded-[999px] px-4 py-2 text-sm"
                     >
                       <option value="open">Open</option>
                       <option value="contacted">Contacted</option>
                       <option value="closed">Closed</option>
                       <option value="archived">Archived</option>
                     </select>
-                    <button type="submit" className="btn-primary w-full px-4 py-2 sm:w-auto">
+                    <button type="submit" className="btn-primary min-h-11 w-full px-5 py-2 text-sm sm:w-auto">
                       Update status
                     </button>
                   </form>
@@ -307,6 +323,124 @@ function toTime(value: string | null | undefined) {
   if (!value) return 0;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function AttachmentPicker() {
+  const inputId = useId();
+  const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="rounded-[1.1rem] border border-[rgba(106,62,124,0.12)] bg-[rgba(250,249,247,0.78)] p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          htmlFor={inputId}
+          className="inline-flex cursor-pointer items-center rounded-full border border-[color:var(--color-brand-accent)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--color-brand-primary)] shadow-sm transition hover:bg-[rgba(201,161,91,0.1)]"
+        >
+          Attach file
+        </label>
+        <input
+          id={inputId}
+          name="attachments"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+          multiple
+          className="sr-only"
+          onChange={(event) => {
+            const selected = Array.from(event.target.files ?? []);
+            const validation = validateSelectedFiles(selected);
+            setError(validation);
+            setFiles(validation ? [] : selected);
+            if (validation) {
+              event.target.value = "";
+            }
+          }}
+        />
+        <span className="text-xs font-semibold text-[color:var(--color-muted)]">
+          JPG, PNG, WEBP, or PDF. Up to 3 files.
+        </span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-[color:var(--color-muted)]">
+        Only share files needed for wedding planning. Verification documents should be uploaded through the verification section, not chat.
+      </p>
+      {error ? <p className="text-xs text-red-700">{error}</p> : null}
+      {files.length ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {files.map((file) => (
+            <span
+              key={`${file.name}-${file.size}`}
+              className="rounded-full bg-[rgba(106,62,124,0.08)] px-3 py-1 text-xs text-[color:var(--color-ink)]"
+            >
+              {file.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MessageAttachments({
+  attachments,
+}: {
+  attachments: MessageAttachment[];
+}) {
+  if (!attachments?.length) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 grid gap-2">
+      {attachments.map((attachment) => {
+        const isImage = attachment.fileType.startsWith("image/");
+        return (
+          <a
+            key={attachment.id}
+            href={attachment.signedUrl ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="block overflow-hidden rounded-[1rem] border border-black/10 bg-white/70 text-[color:var(--color-ink)]"
+          >
+            {isImage && attachment.signedUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={attachment.signedUrl}
+                alt={attachment.fileName}
+                className="max-h-44 w-full object-cover"
+              />
+            ) : (
+              <div className="px-3 py-2 text-xs font-semibold">
+                {attachment.fileName}
+              </div>
+            )}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function validateSelectedFiles(files: File[]) {
+  if (files.length > 3) {
+    return "You can attach up to 3 files per message.";
+  }
+
+  const allowedTypes = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+  ]);
+  for (const file of files) {
+    if (!allowedTypes.has(file.type)) {
+      return "Attachments must be JPG, PNG, WEBP, or PDF files.";
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return "Each attachment must be 10MB or smaller.";
+    }
+  }
+
+  return null;
 }
 
 function buildWhatsAppMessageLink(

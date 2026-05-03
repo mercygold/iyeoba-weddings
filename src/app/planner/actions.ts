@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 
 import { requirePlannerProfile } from "@/lib/auth";
 import { getPlannerPrimaryWeddingId } from "@/lib/inquiries";
+import {
+  getMessageAttachmentFiles,
+  uploadMessageAttachments,
+  validateMessageAttachmentFiles,
+} from "@/lib/message-attachments";
 import { isBudgetCurrency, suggestBudgetCurrency } from "@/lib/planner";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -495,6 +500,8 @@ export async function createVendorInquiryAction(formData: FormData) {
   const vendorSlug = String(formData.get("vendorSlug") ?? "").trim();
   const contactMethod = String(formData.get("contactMethod") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
+  const attachmentFiles = getMessageAttachmentFiles(formData);
+  const attachmentError = validateMessageAttachmentFiles(attachmentFiles);
   const supabase = await createSupabaseServerClient();
   await ensurePlannerUserRow(supabase, profile);
   const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
@@ -520,6 +527,12 @@ export async function createVendorInquiryAction(formData: FormData) {
       reason: "missing_vendor_reference",
     });
     redirect(withPlannerQueryParam(nextPath, "error", "Vendor record was not found."));
+  }
+  if (!message && !attachmentFiles.length) {
+    redirect(withPlannerQueryParam(nextPath, "error", "Add a message or attachment before sending."));
+  }
+  if (attachmentError) {
+    redirect(withPlannerQueryParam(nextPath, "error", attachmentError));
   }
   if (!isUuid(vendorId)) {
     console.error("Planner inquiry validation failed", {
@@ -732,7 +745,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     });
   }
 
-  if (leadId && message) {
+  if (leadId && (message || attachmentFiles.length)) {
     const messagePayload = {
       lead_id: leadId,
       sender_user_id: ownerId,
@@ -750,15 +763,19 @@ export async function createVendorInquiryAction(formData: FormData) {
       payload: messagePayload,
     });
 
-    const { error: messageError } = await supabase
+    let messageId: string | null = null;
+    const { data: messageData, error: messageError } = await (supabase
       .from("lead_messages")
-      .insert(messagePayload);
+      .insert(messagePayload) as any)
+      .select("id")
+      .single();
+    messageId = messageData?.id ?? null;
     console.log("Planner inquiry message write response", {
       table: "lead_messages",
       plannerUserId: ownerId,
       vendorId,
       leadId,
-      data: null,
+      data: messageId ? { id: messageId } : null,
       error: messageError ? serializeSupabaseError(messageError) : null,
     });
 
@@ -779,19 +796,40 @@ export async function createVendorInquiryAction(formData: FormData) {
         error: serializeSupabaseError(messageError),
       });
 
-      const fallbackResult = await supabase
+      const fallbackResult = await (supabase
         .from("lead_messages")
-        .insert(fallbackPayload);
+        .insert(fallbackPayload) as any)
+        .select("id")
+        .single();
+      messageId = fallbackResult.data?.id ?? null;
       console.log("Planner inquiry message fallback response", {
         table: "lead_messages",
         plannerUserId: ownerId,
         vendorId,
         leadId,
-        data: null,
+        data: messageId ? { id: messageId } : null,
         error: fallbackResult.error ? serializeSupabaseError(fallbackResult.error) : null,
       });
 
-      if (!fallbackResult.error) {
+      if (!fallbackResult.error && messageId) {
+        try {
+          await uploadMessageAttachments({
+            leadId,
+            messageId,
+            uploaderUserId: ownerId,
+            files: attachmentFiles,
+          });
+        } catch (error) {
+          await deleteMessageAfterAttachmentFailure(supabase, messageId);
+          console.error("Planner inquiry attachment upload failed", {
+            plannerUserId: ownerId,
+            vendorId,
+            leadId,
+            messageId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          redirect(withPlannerQueryParam(nextPath, "error", "We could not upload your attachment right now."));
+        }
         revalidatePath("/planner/dashboard");
         revalidatePath("/vendor/dashboard");
         redirect(withPlannerQueryParam(nextPath, "message", "Inquiry created. You can now contact this vendor directly."));
@@ -802,17 +840,40 @@ export async function createVendorInquiryAction(formData: FormData) {
         sender_user_id: ownerId,
         message,
       };
-      const minimalResult = await supabase.from("lead_messages").insert(minimalPayload);
+      const minimalResult = await (supabase
+        .from("lead_messages")
+        .insert(minimalPayload) as any)
+        .select("id")
+        .single();
+      messageId = minimalResult.data?.id ?? null;
       console.log("Planner inquiry message minimal fallback response", {
         table: "lead_messages",
         plannerUserId: ownerId,
         vendorId,
         leadId,
-        data: null,
+        data: messageId ? { id: messageId } : null,
         error: minimalResult.error ? serializeSupabaseError(minimalResult.error) : null,
       });
 
-      if (!minimalResult.error) {
+      if (!minimalResult.error && messageId) {
+        try {
+          await uploadMessageAttachments({
+            leadId,
+            messageId,
+            uploaderUserId: ownerId,
+            files: attachmentFiles,
+          });
+        } catch (error) {
+          await deleteMessageAfterAttachmentFailure(supabase, messageId);
+          console.error("Planner inquiry attachment upload failed", {
+            plannerUserId: ownerId,
+            vendorId,
+            leadId,
+            messageId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          redirect(withPlannerQueryParam(nextPath, "error", "We could not upload your attachment right now."));
+        }
         revalidatePath("/planner/dashboard");
         revalidatePath("/vendor/dashboard");
         redirect(withPlannerQueryParam(nextPath, "message", "Inquiry created. You can now contact this vendor directly."));
@@ -827,6 +888,27 @@ export async function createVendorInquiryAction(formData: FormData) {
         error: serializeSupabaseError(minimalResult.error ?? fallbackResult.error ?? messageError),
       });
       redirect(withPlannerQueryParam(nextPath, "error", "We could not send your inquiry right now."));
+    }
+
+    if (messageId) {
+      try {
+        await uploadMessageAttachments({
+          leadId,
+          messageId,
+          uploaderUserId: ownerId,
+          files: attachmentFiles,
+        });
+      } catch (error) {
+        await deleteMessageAfterAttachmentFailure(supabase, messageId);
+        console.error("Planner inquiry attachment upload failed", {
+          plannerUserId: ownerId,
+          vendorId,
+          leadId,
+          messageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        redirect(withPlannerQueryParam(nextPath, "error", "We could not upload your attachment right now."));
+      }
     }
   }
 
@@ -1416,4 +1498,18 @@ function withPlannerQueryParam(path: string, key: "message" | "error", value: st
   params.set(key, value);
   const serialized = params.toString();
   return serialized ? `${pathname}?${serialized}` : pathname;
+}
+
+async function deleteMessageAfterAttachmentFailure(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  messageId: string,
+) {
+  const { error } = await supabase.from("lead_messages").delete().eq("id", messageId);
+  if (error) {
+    console.warn("Failed to clean up message after attachment upload failure", {
+      table: "lead_messages",
+      messageId,
+      error: serializeSupabaseError(error),
+    });
+  }
 }
