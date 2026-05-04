@@ -10,6 +10,7 @@ type ChatMessage = {
 
 type PlannerPlan = {
   reply: string;
+  suggested_cultural_elements: string[];
   checklist: string[];
   budget_breakdown: string[];
   vendor_categories: string[];
@@ -50,6 +51,7 @@ const weddingTypeOptions = [
 
 const emptyPlan: PlannerPlan = {
   reply: "",
+  suggested_cultural_elements: [],
   checklist: [],
   budget_breakdown: [],
   vendor_categories: [],
@@ -89,6 +91,7 @@ export function AiPlannerChat({
   const hasPlan = useMemo(
     () =>
       plan.reply ||
+      plan.suggested_cultural_elements.length ||
       plan.checklist.length ||
       plan.budget_breakdown.length ||
       plan.vendor_categories.length ||
@@ -164,6 +167,7 @@ export function AiPlannerChat({
 
       const nextPlan: PlannerPlan = {
         reply: data.reply ?? "",
+        suggested_cultural_elements: data.suggested_cultural_elements ?? [],
         checklist: data.checklist ?? [],
         budget_breakdown: data.budget_breakdown ?? [],
         vendor_categories: data.vendor_categories ?? [],
@@ -474,6 +478,7 @@ function normalizeInitialPlan(plan: Record<string, unknown> | undefined): Planne
 
   return {
     reply: typeof plan.reply === "string" ? plan.reply : "",
+    suggested_cultural_elements: stringArray(plan.suggested_cultural_elements),
     checklist: stringArray(plan.checklist),
     budget_breakdown: stringArray(plan.budget_breakdown),
     vendor_categories: stringArray(plan.vendor_categories),
@@ -528,6 +533,10 @@ function resolveInitialWeddingType(savedWeddingType: string) {
 function PlannerResult({ plan }: { plan: PlannerPlan }) {
   return (
     <div className="grid gap-4 pt-2 md:grid-cols-2">
+      <ResultList
+        title="Suggested Cultural Elements"
+        items={plan.suggested_cultural_elements}
+      />
       <ResultList title="Checklist" items={plan.checklist} />
       <ResultList title="Budget Breakdown" items={plan.budget_breakdown} />
       <ResultList title="Vendor Categories" items={plan.vendor_categories} />

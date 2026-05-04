@@ -21,8 +21,14 @@ type PlannerIntake = {
 const systemPrompt = `You are Iyeoba AI Planner, a wedding planning assistant inside Iyeoba Weddings.
 Help Nigerian and diaspora users plan traditional, court/civil, white, and combined weddings.
 Ask for missing details when needed: wedding type, location, guest count, budget, wedding date/month, and culture/tradition.
-Generate practical planning guidance with checklist, budget breakdown, vendor categories, timeline, and next steps.
+Generate practical planning guidance with these sections: Plan Summary, Suggested Cultural Elements, Checklist, Budget Breakdown, Vendor Categories Needed, Timeline, Next Steps, and Questions to Confirm.
 Respect Nigerian cultural nuance without claiming one tradition applies to every family.
+If culture/tradition includes Yoruba, consider family introduction/customary flow, engagement/traditional ceremony elements, Alaga Ijoko/Alaga Iduro where appropriate, aso-ebi coordination, traditional attire changes, family prayers/blessings, talking drum/live band/MC, and traditional food/drinks.
+If culture/tradition includes Igbo, consider wine-carrying, family introduction/customary rites, traditional attire, highlife/music/MC, traditional food/drinks, and family blessing moments.
+If culture/tradition includes Hausa/Northern, Edo, Efik/Ibibio, intertribal, diaspora, or mixed culture, provide careful general guidance and ask clarifying questions instead of inventing highly specific rites.
+If the user says Nigerian diaspora, include remote vendor coordination, a family representative in Nigeria if relevant, currency/budget conversion, travel/accommodation, documentation, and communication timeline.
+Use language like "consider", "confirm with family", and "depending on family tradition" for cultural details.
+Budget breakdown should be by category. If a budget is provided, include rough estimated amounts and percentage allocations where possible, with a reminder to confirm with vendors and families.
 Return strict JSON only.`;
 
 export async function POST(request: Request) {
@@ -289,11 +295,15 @@ async function requestPlannerResponse({
         strict: true,
         schema: {
           type: "object",
-          properties: {
-            reply: { type: "string" },
-            checklist: {
-              type: "array",
-              items: { type: "string" },
+            properties: {
+              reply: { type: "string" },
+              suggested_cultural_elements: {
+                type: "array",
+                items: { type: "string" },
+              },
+              checklist: {
+                type: "array",
+                items: { type: "string" },
             },
             budget_breakdown: {
               type: "array",
@@ -316,11 +326,12 @@ async function requestPlannerResponse({
               items: { type: "string" },
             },
           },
-          required: [
-            "reply",
-            "checklist",
-            "budget_breakdown",
-            "vendor_categories",
+            required: [
+              "reply",
+              "suggested_cultural_elements",
+              "checklist",
+              "budget_breakdown",
+              "vendor_categories",
             "timeline",
             "next_steps",
             "questions",
@@ -547,6 +558,7 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
   const budget = intake.budget?.trim();
   const weddingDate = intake.weddingDate?.trim();
   const culture = intake.culture?.trim();
+  const culturalElements = getSuggestedCulturalElements(culture, location, weddingType);
   const guestPhrase = guestCount ? ` for about ${guestCount} guests` : "";
   const budgetPhrase = budget ? ` with a working budget of ${budget}` : "";
   const datePhrase = weddingDate ? ` ahead of ${weddingDate}` : "";
@@ -554,6 +566,7 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
 
   return {
     reply: `Iyeoba AI is temporarily unable to reach the planning engine, but here is a practical starter plan for ${weddingType} in ${location}${guestPhrase}${budgetPhrase}${datePhrase}${culturePhrase}. Use this as a first draft, then confirm details with your families and vendors.`,
+    suggested_cultural_elements: culturalElements,
     checklist: [
       "Confirm wedding type, family priorities, ceremony flow, and any cultural requirements.",
       "Set a realistic budget range and decide which items are highest priority.",
@@ -561,11 +574,7 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
       "Shortlist vendors for planning, venue, catering, decor, photography, fashion, beauty, music, and logistics.",
       "Collect quotes, compare packages, and confirm what each vendor includes before paying deposits.",
     ],
-    budget_breakdown: [
-      "Venue, rentals, decor, catering, and drinks are usually the largest cost areas.",
-      "Reserve budget for outfits, beauty, photography/video, music/MC, transport, stationery, and gifts.",
-      "Keep a 10% to 15% contingency for family additions, logistics changes, and last-minute items.",
-    ],
+    budget_breakdown: getBudgetBreakdown(budget),
     vendor_categories: [
       "Event planner or coordinator",
       "Venue and hospitality",
@@ -594,5 +603,120 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
       "Which vendors do you already have, if any?",
       `What should the plan focus on most based on your prompt: ${prompt.slice(0, 180)}${prompt.length > 180 ? "..." : ""}`,
     ],
+  };
+}
+
+function getSuggestedCulturalElements(
+  culture: string | undefined,
+  location: string,
+  weddingType: string,
+) {
+  const normalizedCulture = (culture ?? "").toLowerCase();
+  const normalizedLocation = location.toLowerCase();
+  const elements: string[] = [];
+
+  if (normalizedCulture.includes("yoruba")) {
+    elements.push(
+      "For a Yoruba celebration, consider a family introduction/customary flow and confirm each step with both families.",
+      "If you are having an engagement/traditional ceremony, discuss whether Alaga Ijoko and Alaga Iduro are appropriate for your families.",
+      "Plan aso-ebi coordination, traditional attire changes, family prayers/blessings, and timing for the couple's entrance.",
+      "Consider talking drum, live band, MC, and traditional food/drinks depending on the tone of the event.",
+    );
+  }
+
+  if (normalizedCulture.includes("igbo")) {
+    elements.push(
+      "For an Igbo celebration, consider the wine-carrying ceremony and confirm the customary rites with both families.",
+      "Plan traditional attire, family blessing moments, and a clear flow for introductions and formal greetings.",
+      "Consider highlife music, MC support, and traditional food/drinks that fit the family and community expectations.",
+    );
+  }
+
+  if (
+    normalizedCulture.includes("hausa") ||
+    normalizedCulture.includes("northern") ||
+    normalizedCulture.includes("edo") ||
+    normalizedCulture.includes("efik") ||
+    normalizedCulture.includes("ibibio")
+  ) {
+    elements.push(
+      "For this tradition, confirm the specific family and community expectations before locking the ceremony flow.",
+      "Ask both families which customary moments, attire, food, music, prayers, or blessings should be included.",
+    );
+  }
+
+  if (
+    normalizedCulture.includes("intertribal") ||
+    normalizedCulture.includes("mixed") ||
+    normalizedCulture.includes("diaspora") ||
+    normalizedLocation.includes("london") ||
+    normalizedLocation.includes("houston") ||
+    normalizedLocation.includes("toronto") ||
+    normalizedLocation.includes("atlanta") ||
+    normalizedLocation.includes("uk") ||
+    normalizedLocation.includes("usa") ||
+    normalizedLocation.includes("canada")
+  ) {
+    elements.push(
+      "For diaspora or mixed-culture planning, create one shared ceremony brief so families, vendors, and MCs understand the flow.",
+      "Plan remote vendor coordination, currency conversion, travel/accommodation, and a communication timeline for family decisions.",
+      "If vendors or family representatives are in Nigeria, assign one trusted person to confirm details locally.",
+    );
+  }
+
+  if (!elements.length) {
+    elements.push(
+      `For ${weddingType}, confirm the family introduction, blessings, attire expectations, food, music, and ceremony flow with both families.`,
+      "Avoid assuming every family follows the same order; use this plan as a guide and confirm the details with elders or family representatives.",
+    );
+  }
+
+  return elements;
+}
+
+function getBudgetBreakdown(budget: string | undefined) {
+  const amount = parseBudgetAmount(budget);
+
+  if (!amount) {
+    return [
+      "Venue, rentals, decor, catering, and drinks are usually the largest cost areas; compare vendor quotes early.",
+      "Reserve budget for outfits, beauty, photography/video, music/MC, transport, stationery, gifts, and family logistics.",
+      "Keep a 10% to 15% contingency for guest-count changes, family additions, and last-minute logistics.",
+    ];
+  }
+
+  const formatAmount = (value: number) => `${amount.currency}${Math.round(value).toLocaleString()}`;
+
+  return [
+    `Venue, rentals, decor, catering, and drinks: about 45% to 55% (${formatAmount(amount.value * 0.45)} to ${formatAmount(amount.value * 0.55)}).`,
+    `Photography/video, music, MC, beauty, outfits, and fashion: about 20% to 30% (${formatAmount(amount.value * 0.2)} to ${formatAmount(amount.value * 0.3)}).`,
+    `Stationery, transport, gifts, family logistics, and admin: about 10% to 15% (${formatAmount(amount.value * 0.1)} to ${formatAmount(amount.value * 0.15)}).`,
+    `Contingency: keep about 10% (${formatAmount(amount.value * 0.1)}) for changes. Confirm actual pricing with vendors and families.`,
+  ];
+}
+
+function parseBudgetAmount(budget: string | undefined) {
+  if (!budget) {
+    return null;
+  }
+
+  const currency = budget.includes("$")
+    ? "$"
+    : budget.includes("£")
+      ? "£"
+      : budget.includes("€")
+        ? "€"
+        : budget.includes("₦") || /ngn|naira/i.test(budget)
+          ? "₦"
+          : "";
+  const numeric = Number(budget.replace(/[^0-9.]/g, ""));
+
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return null;
+  }
+
+  return {
+    currency,
+    value: numeric,
   };
 }
