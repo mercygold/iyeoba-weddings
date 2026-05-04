@@ -13,10 +13,25 @@ type PlannerPlan = {
   suggested_cultural_elements: string[];
   checklist: string[];
   budget_breakdown: string[];
+  budget_summary: BudgetSummary;
+  budget_allocations: BudgetAllocation[];
   vendor_categories: string[];
   timeline: string[];
   next_steps: string[];
   questions: string[];
+};
+
+type BudgetSummary = {
+  total_budget: string;
+  allocated_amount: string;
+  remaining_buffer: string;
+  note: string;
+};
+
+type BudgetAllocation = {
+  category: string;
+  amount: string;
+  percentage: number;
 };
 
 export type AiPlannerInitialState = {
@@ -55,6 +70,13 @@ const emptyPlan: PlannerPlan = {
   suggested_cultural_elements: [],
   checklist: [],
   budget_breakdown: [],
+  budget_summary: {
+    total_budget: "",
+    allocated_amount: "",
+    remaining_buffer: "",
+    note: "",
+  },
+  budget_allocations: [],
   vendor_categories: [],
   timeline: [],
   next_steps: [],
@@ -104,6 +126,7 @@ export function AiPlannerChat({
       plan.suggested_cultural_elements.length ||
       plan.checklist.length ||
       plan.budget_breakdown.length ||
+      plan.budget_allocations.length ||
       plan.vendor_categories.length ||
       plan.timeline.length ||
       plan.next_steps.length,
@@ -180,6 +203,8 @@ export function AiPlannerChat({
         suggested_cultural_elements: data.suggested_cultural_elements ?? [],
         checklist: data.checklist ?? [],
         budget_breakdown: data.budget_breakdown ?? [],
+        budget_summary: normalizeBudgetSummary(data.budget_summary),
+        budget_allocations: normalizeBudgetAllocations(data.budget_allocations),
         vendor_categories: data.vendor_categories ?? [],
         timeline: data.timeline ?? [],
         next_steps: data.next_steps ?? [],
@@ -563,6 +588,8 @@ function normalizeInitialPlan(plan: Record<string, unknown> | undefined): Planne
     suggested_cultural_elements: stringArray(plan.suggested_cultural_elements),
     checklist: stringArray(plan.checklist),
     budget_breakdown: stringArray(plan.budget_breakdown),
+    budget_summary: normalizeBudgetSummary(plan.budget_summary),
+    budget_allocations: normalizeBudgetAllocations(plan.budget_allocations),
     vendor_categories: stringArray(plan.vendor_categories),
     timeline: stringArray(plan.timeline),
     next_steps: stringArray(plan.next_steps),
@@ -574,6 +601,43 @@ function stringArray(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+function normalizeBudgetSummary(value: unknown): BudgetSummary {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return emptyPlan.budget_summary;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return {
+    total_budget: stringValue(record.total_budget),
+    allocated_amount: stringValue(record.allocated_amount),
+    remaining_buffer: stringValue(record.remaining_buffer),
+    note: stringValue(record.note),
+  };
+}
+
+function normalizeBudgetAllocations(value: unknown): BudgetAllocation[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item && typeof item === "object" && !Array.isArray(item)),
+    )
+    .map((item) => ({
+      category: stringValue(item.category),
+      amount: stringValue(item.amount),
+      percentage: Number(item.percentage),
+    }))
+    .filter(
+      (item) =>
+        item.category &&
+        Number.isFinite(item.percentage) &&
+        item.percentage > 0,
+    );
 }
 
 function normalizeInitialIntake(intake: Record<string, unknown> | undefined) {
@@ -643,7 +707,11 @@ function PlannerResult({
         addedChecklistItems={addedChecklistItems}
         onAddChecklistItems={onAddChecklistItems}
       />
-      <ResultList title="Budget Breakdown" items={plan.budget_breakdown} />
+      <BudgetModule
+        summary={plan.budget_summary}
+        allocations={plan.budget_allocations}
+        fallbackItems={plan.budget_breakdown}
+      />
       <ResultList title="Vendor Categories" items={plan.vendor_categories} />
       <ResultList title="Timeline" items={plan.timeline} />
       <ResultList title="Next Steps" items={plan.next_steps} />
@@ -733,6 +801,112 @@ function ResultList({
         ))}
       </ul>
     </article>
+  );
+}
+
+function BudgetModule({
+  summary,
+  allocations,
+  fallbackItems,
+}: {
+  summary: BudgetSummary;
+  allocations: BudgetAllocation[];
+  fallbackItems: string[];
+}) {
+  if (!allocations.length && !fallbackItems.length) {
+    return null;
+  }
+
+  const allocatedTotal = allocations
+    .filter((item) => item.category.toLowerCase() !== "contingency")
+    .reduce((total, item) => total + item.percentage, 0);
+  const contingency = allocations.find(
+    (item) => item.category.toLowerCase() === "contingency",
+  );
+
+  return (
+    <article className="surface-soft rounded-[1.5rem] p-4 md:col-span-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
+            Budget Breakdown
+          </h3>
+          <p className="mt-1 text-xs leading-6 text-[color:var(--color-muted)]">
+            Starter estimates for planning. Confirm actual pricing with vendors and families.
+          </p>
+        </div>
+        {summary.total_budget ? (
+          <div className="rounded-[1rem] bg-white px-4 py-3 text-sm shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
+              Total budget
+            </p>
+            <p className="mt-1 font-semibold text-[color:var(--color-ink)]">
+              {summary.total_budget}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <BudgetMetric label="Allocated" value={summary.allocated_amount || `${allocatedTotal}%`} />
+        <BudgetMetric
+          label="Buffer / contingency"
+          value={summary.remaining_buffer || `${contingency?.percentage ?? 10}%`}
+        />
+        <BudgetMetric label="Categories" value={`${allocations.length || fallbackItems.length}`} />
+      </div>
+
+      {allocations.length ? (
+        <div className="mt-5 space-y-3">
+          {allocations.map((item) => (
+            <div key={item.category} className="rounded-[1rem] bg-white p-3 shadow-sm">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="font-semibold text-[color:var(--color-ink)]">
+                  {item.category}
+                </p>
+                <p className="shrink-0 text-right text-xs font-semibold text-[color:var(--color-muted)]">
+                  {item.amount || `${item.percentage}%`} · {item.percentage}%
+                </p>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[rgba(91,44,131,0.12)]">
+                <div
+                  className="h-full rounded-full bg-[color:var(--color-brand-primary)]"
+                  style={{ width: `${Math.min(Math.max(item.percentage, 0), 100)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-2 text-sm leading-7 text-[color:var(--color-muted)]">
+          {fallbackItems.map((item, index) => (
+            <li key={`budget-fallback-${index}`} className="flex gap-2">
+              <span className="mt-[0.58rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-brand-gold)]" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {summary.note ? (
+        <p className="mt-4 text-xs leading-6 text-[color:var(--color-muted)]">
+          {summary.note}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+function BudgetMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1rem] bg-white px-4 py-3 text-sm shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
+        {label}
+      </p>
+      <p className="mt-1 font-semibold text-[color:var(--color-ink)]">
+        {value}
+      </p>
+    </div>
   );
 }
 

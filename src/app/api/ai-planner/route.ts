@@ -29,6 +29,7 @@ If culture/tradition includes Hausa/Northern, Edo, Efik/Ibibio, intertribal, dia
 If the user says Nigerian diaspora, include remote vendor coordination, a family representative in Nigeria if relevant, currency/budget conversion, travel/accommodation, documentation, and communication timeline.
 Use language like "consider", "confirm with family", and "depending on family tradition" for cultural details.
 Budget breakdown should be by category. If a budget is provided, include rough estimated amounts and percentage allocations where possible, with a reminder to confirm with vendors and families.
+Also return structured budget_summary and budget_allocations for UI rendering. budget_allocations should include venue, catering, decor, photography/videography, attire, makeup/hair, music/MC, cultural ceremony items, transport/logistics, stationery/invitations, and contingency where relevant.
 Return strict JSON only.`;
 
 export async function POST(request: Request) {
@@ -309,6 +310,35 @@ async function requestPlannerResponse({
               type: "array",
               items: { type: "string" },
             },
+            budget_summary: {
+              type: "object",
+              properties: {
+                total_budget: { type: "string" },
+                allocated_amount: { type: "string" },
+                remaining_buffer: { type: "string" },
+                note: { type: "string" },
+              },
+              required: [
+                "total_budget",
+                "allocated_amount",
+                "remaining_buffer",
+                "note",
+              ],
+              additionalProperties: false,
+            },
+            budget_allocations: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  category: { type: "string" },
+                  amount: { type: "string" },
+                  percentage: { type: "number" },
+                },
+                required: ["category", "amount", "percentage"],
+                additionalProperties: false,
+              },
+            },
             vendor_categories: {
               type: "array",
               items: { type: "string" },
@@ -331,6 +361,8 @@ async function requestPlannerResponse({
               "suggested_cultural_elements",
               "checklist",
               "budget_breakdown",
+              "budget_summary",
+              "budget_allocations",
               "vendor_categories",
             "timeline",
             "next_steps",
@@ -559,6 +591,7 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
   const weddingDate = intake.weddingDate?.trim();
   const culture = intake.culture?.trim();
   const culturalElements = getSuggestedCulturalElements(culture, location, weddingType);
+  const budgetModule = getBudgetModule(budget, culture, weddingType);
   const guestPhrase = guestCount ? ` for about ${guestCount} guests` : "";
   const budgetPhrase = budget ? ` with a working budget of ${budget}` : "";
   const datePhrase = weddingDate ? ` ahead of ${weddingDate}` : "";
@@ -574,7 +607,9 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
       "Shortlist vendors for planning, venue, catering, decor, photography, fashion, beauty, music, and logistics.",
       "Collect quotes, compare packages, and confirm what each vendor includes before paying deposits.",
     ],
-    budget_breakdown: getBudgetBreakdown(budget),
+    budget_breakdown: budgetModule.breakdown,
+    budget_summary: budgetModule.summary,
+    budget_allocations: budgetModule.allocations,
     vendor_categories: [
       "Event planner or coordinator",
       "Venue and hospitality",
@@ -674,24 +709,90 @@ function getSuggestedCulturalElements(
   return elements;
 }
 
-function getBudgetBreakdown(budget: string | undefined) {
+function getBudgetModule(
+  budget: string | undefined,
+  culture: string | undefined,
+  weddingType: string,
+) {
   const amount = parseBudgetAmount(budget);
+  const allocations = getBudgetAllocationPercentages(culture, weddingType);
 
   if (!amount) {
-    return [
-      "Venue, rentals, decor, catering, and drinks are usually the largest cost areas; compare vendor quotes early.",
-      "Reserve budget for outfits, beauty, photography/video, music/MC, transport, stationery, gifts, and family logistics.",
-      "Keep a 10% to 15% contingency for guest-count changes, family additions, and last-minute logistics.",
-    ];
+    return {
+      summary: {
+        total_budget: "Not provided",
+        allocated_amount: "Use the percentages below as a planning guide",
+        remaining_buffer: "Keep 10% as contingency where possible",
+        note: "Add a budget to see estimated amounts. Confirm actual pricing with vendors and families.",
+      },
+      allocations: allocations.map((item) => ({
+        category: item.category,
+        percentage: item.percentage,
+        amount: "Estimate after budget is confirmed",
+      })),
+      breakdown: [
+        "Use the category percentages below as a starting point until your budget is confirmed.",
+        "Venue, catering, decor, photography/video, attire, beauty, music/MC, cultural ceremony items, logistics, stationery, and contingency should all be considered.",
+        "Keep a 10% contingency for guest-count changes, family additions, and last-minute logistics.",
+      ],
+    };
   }
 
   const formatAmount = (value: number) => `${amount.currency}${Math.round(value).toLocaleString()}`;
+  const allocatedPercentage = allocations
+    .filter((item) => item.category.toLowerCase() !== "contingency")
+    .reduce((total, item) => total + item.percentage, 0);
+  const contingency = allocations.find((item) => item.category.toLowerCase() === "contingency");
+  const allocatedAmount = amount.value * (allocatedPercentage / 100);
+  const bufferAmount = amount.value * ((contingency?.percentage ?? 0) / 100);
+
+  return {
+    summary: {
+      total_budget: `${amount.currency}${amount.value.toLocaleString()}`,
+      allocated_amount: formatAmount(allocatedAmount),
+      remaining_buffer: formatAmount(bufferAmount),
+      note: "These are starter estimates. Confirm actual pricing with vendors and families.",
+    },
+    allocations: allocations.map((item) => ({
+      category: item.category,
+      percentage: item.percentage,
+      amount: formatAmount(amount.value * (item.percentage / 100)),
+    })),
+    breakdown: [
+      `Total budget: ${amount.currency}${amount.value.toLocaleString()}. Estimated allocated amount: ${formatAmount(allocatedAmount)}.`,
+      `Recommended contingency/buffer: ${formatAmount(bufferAmount)} for guest-count changes, family additions, and last-minute logistics.`,
+      "Review each category with real vendor quotes before making deposits.",
+    ],
+  };
+}
+
+function getBudgetAllocationPercentages(
+  culture: string | undefined,
+  weddingType: string,
+) {
+  const normalizedCulture = (culture ?? "").toLowerCase();
+  const normalizedWeddingType = weddingType.toLowerCase();
+  const isTraditionalHeavy =
+    normalizedWeddingType.includes("traditional") ||
+    normalizedCulture.includes("yoruba") ||
+    normalizedCulture.includes("igbo") ||
+    normalizedCulture.includes("hausa") ||
+    normalizedCulture.includes("edo") ||
+    normalizedCulture.includes("efik") ||
+    normalizedCulture.includes("ibibio");
 
   return [
-    `Venue, rentals, decor, catering, and drinks: about 45% to 55% (${formatAmount(amount.value * 0.45)} to ${formatAmount(amount.value * 0.55)}).`,
-    `Photography/video, music, MC, beauty, outfits, and fashion: about 20% to 30% (${formatAmount(amount.value * 0.2)} to ${formatAmount(amount.value * 0.3)}).`,
-    `Stationery, transport, gifts, family logistics, and admin: about 10% to 15% (${formatAmount(amount.value * 0.1)} to ${formatAmount(amount.value * 0.15)}).`,
-    `Contingency: keep about 10% (${formatAmount(amount.value * 0.1)}) for changes. Confirm actual pricing with vendors and families.`,
+    { category: "Venue", percentage: normalizedWeddingType.includes("court") ? 8 : 14 },
+    { category: "Catering", percentage: 18 },
+    { category: "Decor", percentage: normalizedWeddingType.includes("court") ? 7 : 12 },
+    { category: "Photography/Videography", percentage: 10 },
+    { category: "Attire", percentage: isTraditionalHeavy ? 10 : 8 },
+    { category: "Makeup/Hair", percentage: 6 },
+    { category: "Music/MC", percentage: isTraditionalHeavy ? 8 : 7 },
+    { category: "Cultural Ceremony Items", percentage: isTraditionalHeavy ? 8 : 4 },
+    { category: "Transport/Logistics", percentage: 6 },
+    { category: "Stationery/Invitations", percentage: 3 },
+    { category: "Contingency", percentage: 10 },
   ];
 }
 
