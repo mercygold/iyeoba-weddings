@@ -375,32 +375,38 @@ export default async function PlannerDashboardPage(props: {
 
           <div className="mt-5 grid gap-2.5 sm:mt-6 sm:gap-3">
             {progressItems.map((item) => (
-              <form key={item.key} action={savePlannerProgressItemAction} className="surface-soft flex flex-col gap-2.5 rounded-[1.1rem] px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:rounded-[1.3rem] sm:px-4 sm:py-3">
+              <form
+                key={item.key}
+                action={savePlannerProgressItemAction}
+                className="surface-soft grid gap-3 rounded-[1.1rem] px-3 py-3 sm:grid-cols-[minmax(0,1fr)_11rem_7rem] sm:items-center sm:rounded-[1.3rem] sm:px-4 sm:py-3"
+              >
                 <input type="hidden" name="nextPath" value="/planner/dashboard" />
                 <input type="hidden" name="itemKey" value={item.key} />
                 <input type="hidden" name="itemLabel" value={item.label} />
-                <p className="text-sm font-medium text-[color:var(--color-ink)]">{item.label}</p>
-                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                  <select
-                    name="status"
-                    defaultValue={item.status}
-                    className="field-input rounded-[999px] px-3 py-1.5 text-[11px] font-semibold sm:text-xs"
-                  >
-                    <option value="not_done">Not done</option>
-                    <option value="ongoing">Ongoing</option>
-                    <option value="done">Done</option>
-                  </select>
-                  <button type="submit" className="btn-secondary w-full px-3 py-1.5 text-xs sm:w-auto sm:text-sm">
+                <p className="min-w-0 text-sm font-medium leading-snug text-[color:var(--color-ink)]">
+                  {item.label}
+                </p>
+                <select
+                  name="status"
+                  defaultValue={item.status}
+                  className="field-input w-full rounded-[999px] px-3 py-2 text-xs font-semibold"
+                >
+                  <option value="not_done">Not done</option>
+                  <option value="ongoing">Ongoing</option>
+                  <option value="done">Done</option>
+                </select>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
+                  <button type="submit" className="btn-secondary w-full px-3 py-1.5 text-xs sm:text-sm">
                     Save
                   </button>
+                  <button
+                    formAction={removePlannerProgressItemAction}
+                    type="submit"
+                    className="btn-secondary w-full px-3 py-1.5 text-xs sm:text-sm"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <button
-                  formAction={removePlannerProgressItemAction}
-                  type="submit"
-                  className="btn-secondary w-full px-3 py-1.5 text-xs sm:w-auto sm:text-sm"
-                >
-                  Remove
-                </button>
               </form>
             ))}
           </div>
