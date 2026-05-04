@@ -11,10 +11,6 @@ import { CommunicationRealtimeSync } from "@/components/communication-realtime-s
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
 import { PlannerBudgetFields } from "@/components/planner-budget-fields";
-import {
-  PlannerProgressSection,
-  WeddingBudgetSection,
-} from "@/components/planner-dashboard-inline-tools";
 import { PlannerInspirationFeed } from "@/components/planner-inspiration-feed";
 import { PlannerConversationCenter } from "@/components/planner-conversation-center";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
