@@ -114,11 +114,10 @@ export default async function Home() {
                 Approved vendors
               </p>
               <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)] sm:text-4xl">
-                Browse approved vendors with confidence
+                Discover trusted wedding vendors, curated for your celebration
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--color-muted)]">
-                Demo-ready vendor profiles now reflect category-appropriate visuals,
-                clear service positioning, and trust-first marketplace cues.
+                Approved vendor profiles reflect clear service positioning, relevant visuals, and trust-first marketplace cues to help you plan with confidence.
               </p>
             </div>
             <Link
