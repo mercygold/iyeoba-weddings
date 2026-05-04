@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 
+import { DashboardCollapsibleSection } from "@/components/dashboard-collapsible-section";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 
 type PlannerConversationCenterProps = {
@@ -73,16 +74,18 @@ export function PlannerConversationCenter({
     const bLast = getLastMessageTime(b.messages, b.createdAt);
     return bLast - aLast;
   });
+  const hasActiveConversation = Boolean(
+    initialVendorId &&
+      conversations.some((conversation) => conversation.vendor.id === initialVendorId),
+  );
 
   return (
-    <article className="surface-card rounded-[2rem] p-4 sm:p-7">
-      <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
-        Conversations
-      </p>
-      <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
-        Planner and vendor chat
-      </h2>
-
+    <DashboardCollapsibleSection
+      eyebrow="Conversations"
+      title="Planner and vendor chat"
+      defaultOpen={hasActiveConversation}
+      storageKey="iyeoba:planner-dashboard:conversations"
+    >
       {!sortedConversations.length ? (
         <p className="mt-4 text-sm leading-7 text-[color:var(--color-muted)]">
           No conversations yet.
@@ -273,7 +276,7 @@ export function PlannerConversationCenter({
           </div>
         </div>
       )}
-    </article>
+    </DashboardCollapsibleSection>
   );
 }
 
