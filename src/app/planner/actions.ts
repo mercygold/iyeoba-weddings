@@ -1203,11 +1203,267 @@ export async function removePlannerProgressItemAction(formData: FormData) {
   redirect(`${nextPath}?message=${encodeURIComponent("Planning progress updated.")}`);
 }
 
+export async function savePlannerBudgetAction(formData: FormData) {
+  const profile = await requirePlannerProfile("/planner/dashboard");
+  const supabase = await createSupabaseServerClient();
+  await ensurePlannerUserRow(supabase, profile);
+  const ownerId = await resolvePlannerOwnerId(supabase, profile.id);
+  const nextPath = normalizePlannerNextPath(
+    String(formData.get("nextPath") ?? "/planner/dashboard").trim(),
+  );
+  const intent = String(formData.get("intent") ?? "").trim();
+
+  const { data: blueprints, error: blueprintError } = await supabase
+    .from("blueprints")
+    .select("id, budget_json")
+    .eq("user_id", ownerId)
+    .order("created_at", { ascending: false });
+
+  if (blueprintError) {
+    console.error("Planner budget load failed", {
+      table: "blueprints",
+      plannerUserId: ownerId,
+      error: serializeSupabaseError(blueprintError),
+    });
+    redirect(`${nextPath}?error=${encodeURIComponent("We could not save this budget right now.")}`);
+  }
+
+  const blueprint = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
+  const currentBudget = normalizePlannerBudgetPayload(blueprint?.budget_json);
+  let nextBudget = currentBudget;
+
+  if (intent === "updateTotal") {
+    const currency = normalizeBudgetCurrency(formData.get("currency"));
+    const totalBudget = parseBudgetNumber(formData.get("totalBudget"));
+    nextBudget = recalculateBudget({
+      ...currentBudget,
+      currency,
+      totalBudget,
+      source: "manual",
+    });
+  } else if (intent === "updateCategory") {
+    const categoryId = String(formData.get("categoryId") ?? "").trim();
+    const categoryName = String(formData.get("categoryName") ?? "").trim();
+    const amount = parseBudgetNumber(formData.get("amount"));
+    const note = String(formData.get("note") ?? "").trim();
+
+    if (!categoryId || !categoryName) {
+      redirect(`${nextPath}?error=${encodeURIComponent("Add a category name before saving.")}`);
+    }
+
+    nextBudget = recalculateBudget({
+      ...currentBudget,
+      source: "manual",
+      categories: currentBudget.categories.map((category) =>
+        category.id === categoryId
+          ? {
+              ...category,
+              id: categoryId,
+              name: categoryName,
+              amount,
+              percentageMin: null,
+              percentageMax: null,
+              amountMin: null,
+              amountMax: null,
+              note,
+              source: "manual" as const,
+            }
+          : category,
+      ),
+    });
+  } else if (intent === "removeCategory") {
+    const categoryId = String(formData.get("categoryId") ?? "").trim();
+    nextBudget = recalculateBudget({
+      ...currentBudget,
+      source: "manual",
+      categories: currentBudget.categories.filter((category) => category.id !== categoryId),
+    });
+  } else if (intent === "addCategory") {
+    const categoryName = String(formData.get("categoryName") ?? "").trim();
+    const amount = parseBudgetNumber(formData.get("amount"));
+    const note = String(formData.get("note") ?? "").trim();
+
+    if (!categoryName) {
+      redirect(`${nextPath}?error=${encodeURIComponent("Add a category name before saving.")}`);
+    }
+
+    nextBudget = recalculateBudget({
+      ...currentBudget,
+      source: "manual",
+      categories: [
+        ...currentBudget.categories,
+        {
+          id: toProgressKey(categoryName),
+          name: categoryName,
+          amount,
+          percentage: null,
+          percentageMin: null,
+          percentageMax: null,
+          amountMin: null,
+          amountMax: null,
+          note,
+          source: "manual" as const,
+        },
+      ],
+    });
+  } else {
+    redirect(`${nextPath}?error=${encodeURIComponent("We could not save this budget right now.")}`);
+  }
+
+  const payload = {
+    ...nextBudget,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (blueprint?.id) {
+    const { error } = await supabase
+      .from("blueprints")
+      .update({ budget_json: payload })
+      .eq("id", blueprint.id);
+
+    if (error) {
+      console.error("Planner budget update failed", {
+        table: "blueprints",
+        plannerUserId: ownerId,
+        error: serializeSupabaseError(error),
+      });
+      redirect(`${nextPath}?error=${encodeURIComponent("We could not save this budget right now.")}`);
+    }
+  } else {
+    const weddingId = await getPlannerPrimaryWeddingId(ownerId);
+    const { error } = await supabase.from("blueprints").insert({
+      user_id: ownerId,
+      wedding_id: weddingId,
+      summary: null,
+      timeline_json: [],
+      checklist_json: [],
+      vendor_categories_json: [],
+      missing_items_json: [],
+      budget_json: payload,
+    });
+
+    if (error) {
+      console.error("Planner budget create failed", {
+        table: "blueprints",
+        plannerUserId: ownerId,
+        error: serializeSupabaseError(error),
+      });
+      redirect(`${nextPath}?error=${encodeURIComponent("We could not save this budget right now.")}`);
+    }
+  }
+
+  revalidatePath("/planner/dashboard");
+  redirect(`${nextPath}?message=${encodeURIComponent("Budget updated.")}`);
+}
+
 function toProgressKey(value: string) {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function normalizePlannerBudgetPayload(value: unknown) {
+  const record =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+  const categories = Array.isArray(record.categories)
+    ? record.categories
+        .filter((category): category is Record<string, unknown> =>
+          Boolean(category && typeof category === "object" && !Array.isArray(category)),
+        )
+        .map((category) => ({
+          id: String(category.id ?? toProgressKey(String(category.name ?? ""))),
+          name: String(category.name ?? ""),
+          amount: parseBudgetNumber(category.amount),
+          percentage: parseBudgetNumber(category.percentage),
+          percentageMin: parseBudgetNumber(category.percentageMin),
+          percentageMax: parseBudgetNumber(category.percentageMax),
+          amountMin: parseBudgetNumber(category.amountMin),
+          amountMax: parseBudgetNumber(category.amountMax),
+          note: String(category.note ?? ""),
+          source: category.source === "manual" ? "manual" as const : "ai" as const,
+        }))
+        .filter((category) => category.id && category.name)
+    : [];
+  const notes = Array.isArray(record.notes)
+    ? record.notes.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      )
+    : [];
+
+  return recalculateBudget({
+    currency: normalizeBudgetCurrency(record.currency),
+    totalBudget: parseBudgetNumber(record.totalBudget),
+    allocatedAmount: parseBudgetNumber(record.allocatedAmount),
+    remainingAmount: parseBudgetNumber(record.remainingAmount),
+    bufferPercentage: parseBudgetNumber(record.bufferPercentage),
+    categories,
+    notes,
+    source: record.source === "manual" ? "manual" as const : "ai" as const,
+    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
+  });
+}
+
+function recalculateBudget(budget: {
+  currency: "NGN" | "USD" | "GBP" | "EUR" | "UNKNOWN";
+  totalBudget: number | null;
+  allocatedAmount: number | null;
+  remainingAmount: number | null;
+  bufferPercentage: number | null;
+  categories: {
+    id: string;
+    name: string;
+    amount: number | null;
+    percentage: number | null;
+    percentageMin: number | null;
+    percentageMax: number | null;
+    amountMin: number | null;
+    amountMax: number | null;
+    note: string;
+    source: "ai" | "manual";
+  }[];
+  notes: string[];
+  source: "ai" | "manual";
+  updatedAt: string | null;
+}) {
+  const allocatedAmount = budget.categories.reduce(
+    (total, category) => total + (category.amount ?? category.amountMax ?? category.amountMin ?? 0),
+    0,
+  );
+
+  return {
+    ...budget,
+    allocatedAmount,
+    remainingAmount:
+      budget.totalBudget === null ? null : budget.totalBudget - allocatedAmount,
+    categories: budget.categories.map((category) => ({
+      ...category,
+      percentage:
+        budget.totalBudget && category.amount !== null
+          ? Math.round((category.amount / budget.totalBudget) * 1000) / 10
+          : category.percentage,
+    })),
+  };
+}
+
+function normalizeBudgetCurrency(value: unknown): "NGN" | "USD" | "GBP" | "EUR" | "UNKNOWN" {
+  const normalized = String(value ?? "").toUpperCase();
+  if (normalized === "NGN" || normalized.includes("₦")) return "NGN";
+  if (normalized === "USD" || normalized.includes("$")) return "USD";
+  if (normalized === "GBP" || normalized.includes("£")) return "GBP";
+  if (normalized === "EUR" || normalized.includes("€")) return "EUR";
+  return "UNKNOWN";
+}
+
+function parseBudgetNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  const parsed = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizePlannerProgressStatus(value: unknown): "not_done" | "ongoing" | "done" {

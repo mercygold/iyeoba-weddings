@@ -32,6 +32,11 @@ type BudgetAllocation = {
   category: string;
   amount: string;
   percentage: number;
+  percentageMin?: number | null;
+  percentageMax?: number | null;
+  amountMin?: number | null;
+  amountMax?: number | null;
+  note?: string;
 };
 
 export type AiPlannerInitialState = {
@@ -113,6 +118,9 @@ export function AiPlannerChat({
   const [saved, setSaved] = useState(Boolean(initialState));
   const [checklistFeedback, setChecklistFeedback] = useState("");
   const [checklistError, setChecklistError] = useState("");
+  const [budgetFeedback, setBudgetFeedback] = useState("");
+  const [budgetError, setBudgetError] = useState("");
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [savingChecklistItems, setSavingChecklistItems] = useState<Set<string>>(
     () => new Set(),
   );
@@ -290,6 +298,68 @@ export function AiPlannerChat({
     }
   }
 
+  async function saveBudgetToDashboard() {
+    if (!isPlanner || isSavingBudget) {
+      return;
+    }
+
+    setBudgetError("");
+    setBudgetFeedback("");
+    setIsSavingBudget(true);
+
+    try {
+      const budgetPayload = buildBudgetSavePayload(plan, budget);
+
+      console.info("AI planner budget save payload", {
+        hasBudgetSummary: Boolean(
+          plan.budget_summary.total_budget ||
+            plan.budget_summary.allocated_amount ||
+            plan.budget_summary.remaining_buffer ||
+            plan.budget_summary.note,
+        ),
+        budgetAllocationsCount: plan.budget_allocations.length,
+        visibleBudgetItemsCount: plan.budget_breakdown.length,
+        normalizedCategoriesCount: budgetPayload.categories.length,
+        budgetPayloadKeys: Object.keys(budgetPayload),
+      });
+
+      const response = await fetch("/api/ai-planner/budget", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          budget: budgetPayload,
+        }),
+      });
+      const rawText = await response.text();
+      const payload = rawText ? JSON.parse(rawText) : {};
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "We could not save this budget right now.");
+      }
+
+      console.info("AI planner budget save response", {
+        ok: payload.ok,
+        routeCalled: true,
+        blueprintId: payload.blueprintId ?? null,
+        categoriesSaved: payload.categoriesSaved ?? null,
+        totalBudget: payload.totalBudget ?? null,
+        currency: payload.currency ?? null,
+      });
+      setBudgetFeedback(payload.message ?? "Budget saved to dashboard.");
+    } catch (error) {
+      console.error("AI planner budget save failed", error);
+      setBudgetError(
+        error instanceof Error
+          ? error.message
+          : "We could not save this budget right now.",
+      );
+    } finally {
+      setIsSavingBudget(false);
+    }
+  }
+
   return (
     <section className="mt-8 grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
       <aside className="surface-card rounded-[2rem] p-5 sm:p-7">
@@ -447,6 +517,18 @@ export function AiPlannerChat({
             </div>
           ) : null}
 
+          {budgetFeedback ? (
+            <div className="surface-soft rounded-[1.5rem] border border-emerald-200 p-4 text-xs leading-6 text-emerald-800">
+              {budgetFeedback}
+            </div>
+          ) : null}
+
+          {budgetError ? (
+            <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-xs leading-6 text-red-700">
+              {budgetError}
+            </div>
+          ) : null}
+
           {hasPlan ? (
             <PlannerResult
               plan={plan}
@@ -455,6 +537,8 @@ export function AiPlannerChat({
               savingChecklistItems={savingChecklistItems}
               addedChecklistItems={addedChecklistItems}
               onAddChecklistItems={addChecklistItemsToDashboard}
+              isSavingBudget={isSavingBudget}
+              onSaveBudget={saveBudgetToDashboard}
             />
           ) : null}
         </div>
@@ -631,13 +715,26 @@ function normalizeBudgetAllocations(value: unknown): BudgetAllocation[] {
       category: stringValue(item.category),
       amount: stringValue(item.amount),
       percentage: Number(item.percentage),
+      percentageMin: nullableNumber(item.percentageMin),
+      percentageMax: nullableNumber(item.percentageMax),
+      amountMin: nullableNumber(item.amountMin),
+      amountMax: nullableNumber(item.amountMax),
+      note: stringValue(item.note),
     }))
     .filter(
       (item) =>
         item.category &&
-        Number.isFinite(item.percentage) &&
-        item.percentage > 0,
+        ((Number.isFinite(item.percentage) && item.percentage > 0) ||
+          item.percentageMin ||
+          item.percentageMax ||
+          item.note ||
+          item.amount),
     );
+}
+
+function nullableNumber(value: unknown) {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
 }
 
 function normalizeInitialIntake(intake: Record<string, unknown> | undefined) {
@@ -683,6 +780,8 @@ function PlannerResult({
   savingChecklistItems,
   addedChecklistItems,
   onAddChecklistItems,
+  isSavingBudget,
+  onSaveBudget,
 }: {
   plan: PlannerPlan;
   isAuthenticated: boolean;
@@ -690,6 +789,8 @@ function PlannerResult({
   savingChecklistItems: Set<string>;
   addedChecklistItems: Set<string>;
   onAddChecklistItems: (items: string[]) => void;
+  isSavingBudget: boolean;
+  onSaveBudget: () => void;
 }) {
   return (
     <div className="grid gap-4 pt-2 md:grid-cols-2">
@@ -711,6 +812,10 @@ function PlannerResult({
         summary={plan.budget_summary}
         allocations={plan.budget_allocations}
         fallbackItems={plan.budget_breakdown}
+        isAuthenticated={isAuthenticated}
+        isPlanner={isPlanner}
+        isSavingBudget={isSavingBudget}
+        onSaveBudget={onSaveBudget}
       />
       <ResultList title="Vendor Categories" items={plan.vendor_categories} />
       <ResultList title="Timeline" items={plan.timeline} />
@@ -808,10 +913,18 @@ function BudgetModule({
   summary,
   allocations,
   fallbackItems,
+  isAuthenticated,
+  isPlanner,
+  isSavingBudget,
+  onSaveBudget,
 }: {
   summary: BudgetSummary;
   allocations: BudgetAllocation[];
   fallbackItems: string[];
+  isAuthenticated: boolean;
+  isPlanner: boolean;
+  isSavingBudget: boolean;
+  onSaveBudget: () => void;
 }) {
   if (!allocations.length && !fallbackItems.length) {
     return null;
@@ -835,17 +948,34 @@ function BudgetModule({
             Starter estimates for planning. Confirm actual pricing with vendors and families.
           </p>
         </div>
-        {summary.total_budget ? (
-          <div className="rounded-[1rem] bg-white px-4 py-3 text-sm shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
-              Total budget
-            </p>
-            <p className="mt-1 font-semibold text-[color:var(--color-ink)]">
-              {summary.total_budget}
-            </p>
-          </div>
-        ) : null}
+        <div className="flex flex-col gap-2 sm:items-end">
+          {summary.total_budget ? (
+            <div className="rounded-[1rem] bg-white px-4 py-3 text-sm shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
+                Total budget
+              </p>
+              <p className="mt-1 font-semibold text-[color:var(--color-ink)]">
+                {summary.total_budget}
+              </p>
+            </div>
+          ) : null}
+          {isPlanner ? (
+            <button
+              type="button"
+              onClick={onSaveBudget}
+              disabled={isSavingBudget}
+              className="btn-secondary w-fit px-3 py-2 text-xs disabled:opacity-60"
+            >
+              {isSavingBudget ? "Saving..." : "Save budget to dashboard"}
+            </button>
+          ) : null}
+        </div>
       </div>
+      {!isAuthenticated ? (
+        <p className="mt-3 text-xs leading-6 text-[color:var(--color-muted)]">
+          Sign in as a planner to save this budget to your dashboard.
+        </p>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <BudgetMetric label="Allocated" value={summary.allocated_amount || `${allocatedTotal}%`} />
@@ -895,6 +1025,115 @@ function BudgetModule({
       ) : null}
     </article>
   );
+}
+
+function buildBudgetSavePayload(plan: PlannerPlan, budgetInput: string) {
+  const parsedInputBudget = parseMoneyText(budgetInput);
+  const parsedSummaryBudget = parseMoneyText(plan.budget_summary.total_budget);
+  const totalBudget = parsedSummaryBudget.amount ?? parsedInputBudget.amount;
+  const currency = parsedSummaryBudget.currency || parsedInputBudget.currency || "UNKNOWN";
+  const structuredCategories = plan.budget_allocations.map((item) => {
+    const parsedAmount = parseMoneyText(item.amount);
+    const percentage = Number.isFinite(item.percentage) ? item.percentage : null;
+    return {
+      id: toProgressKey(item.category),
+      name: item.category,
+      amount: parsedAmount.amount,
+      percentage,
+      percentageMin: item.percentageMin ?? null,
+      percentageMax: item.percentageMax ?? null,
+      amountMin: item.amountMin ?? null,
+      amountMax: item.amountMax ?? null,
+      note: item.note || item.amount || (percentage ? `${percentage}%` : ""),
+      source: "ai",
+    };
+  });
+  const categories = structuredCategories.length
+    ? structuredCategories
+    : deriveBudgetCategoriesFromText(plan.budget_breakdown, totalBudget, currency);
+  const allocatedAmount = categories.reduce(
+    (total, item) => total + (item.amount ?? item.amountMax ?? item.amountMin ?? 0),
+    0,
+  );
+  const bufferCategory = categories.find((item) =>
+    item.name.toLowerCase().includes("contingency"),
+  );
+
+  return {
+    currency,
+    totalBudget,
+    allocatedAmount: allocatedAmount || null,
+    remainingAmount:
+      totalBudget !== null && allocatedAmount ? totalBudget - allocatedAmount : null,
+    bufferPercentage:
+      bufferCategory?.percentage ?? bufferCategory?.percentageMax ?? bufferCategory?.percentageMin ?? null,
+    categories,
+    notes: plan.budget_breakdown,
+    summary: plan.budget_summary,
+    source: "ai",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function deriveBudgetCategoriesFromText(
+  items: string[],
+  totalBudget: number | null,
+  currency: string,
+) {
+  return items.map((item, index) => {
+    const [rawName, ...rest] = item.split(":");
+    const name = rest.length ? rawName.trim() : `Budget item ${index + 1}`;
+    const note = rest.length ? rest.join(":").trim() : item;
+    const percentages = [...item.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) =>
+      Number(match[1]),
+    );
+    const percentageMin = percentages.length ? Math.min(...percentages) : null;
+    const percentageMax = percentages.length ? Math.max(...percentages) : null;
+    const percentage =
+      percentageMin !== null && percentageMax !== null && percentageMin === percentageMax
+        ? percentageMin
+        : null;
+    const amountMin =
+      totalBudget !== null && percentageMin !== null
+        ? totalBudget * (percentageMin / 100)
+        : parseMoneyText(item).amount;
+    const amountMax =
+      totalBudget !== null && percentageMax !== null
+        ? totalBudget * (percentageMax / 100)
+        : amountMin;
+
+    return {
+      id: toProgressKey(name || `budget_item_${index + 1}`),
+      name,
+      amount: percentage !== null ? amountMin : null,
+      percentage,
+      percentageMin,
+      percentageMax,
+      amountMin,
+      amountMax,
+      note: note || item,
+      source: "ai",
+    };
+  });
+}
+
+function parseMoneyText(value: string) {
+  const text = value || "";
+  const currency = text.includes("₦") || /ngn|naira/i.test(text)
+    ? "NGN"
+    : text.includes("$") || /usd/i.test(text)
+      ? "USD"
+      : text.includes("£") || /gbp/i.test(text)
+        ? "GBP"
+        : text.includes("€") || /eur/i.test(text)
+          ? "EUR"
+          : "";
+  const numeric = Number(text.replace(/[^0-9.]/g, ""));
+
+  return {
+    currency,
+    amount: Number.isFinite(numeric) && numeric >= 0 ? numeric : null,
+  };
 }
 
 function BudgetMetric({ label, value }: { label: string; value: string }) {

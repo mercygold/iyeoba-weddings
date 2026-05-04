@@ -110,6 +110,7 @@ export async function POST(request: Request) {
 
     try {
       plan = JSON.parse(response.outputText);
+      plan = ensureSaveableBudget(plan, intake);
     } catch (error) {
       logPlannerError(requestId, "openai_response_parse", error, {
         model: response.model,
@@ -378,6 +379,92 @@ async function requestPlannerResponse({
     model,
     outputText: response.output_text ?? "",
   };
+}
+
+function ensureSaveableBudget(
+  plan: Record<string, unknown>,
+  intake: PlannerIntake,
+) {
+  const hasSummary = Boolean(
+    plan.budget_summary &&
+      typeof plan.budget_summary === "object" &&
+      !Array.isArray(plan.budget_summary),
+  );
+  const hasAllocations =
+    Array.isArray(plan.budget_allocations) && plan.budget_allocations.length > 0;
+
+  if (hasSummary && hasAllocations) {
+    return plan;
+  }
+
+  const fallback = getBudgetModule(intake.budget, intake.culture, intake.weddingType || "your wedding");
+  const budgetBreakdown = Array.isArray(plan.budget_breakdown)
+    ? plan.budget_breakdown.filter((item): item is string => typeof item === "string")
+    : fallback.breakdown;
+
+  return {
+    ...plan,
+    budget_breakdown: budgetBreakdown,
+    budget_summary: hasSummary ? plan.budget_summary : fallback.summary,
+    budget_allocations: hasAllocations
+      ? plan.budget_allocations
+      : deriveBudgetAllocationsFromBreakdown(
+          budgetBreakdown,
+          intake.budget,
+          fallback.allocations,
+        ),
+  };
+}
+
+function deriveBudgetAllocationsFromBreakdown(
+  items: string[],
+  budget: string | undefined,
+  fallbackAllocations: { category: string; percentage: number; amount: string }[],
+) {
+  if (!items.length) {
+    return fallbackAllocations;
+  }
+
+  const amount = parseBudgetAmount(budget);
+  const currency = amount?.currency ?? "";
+  return items.map((item, index) => {
+    const [rawName, ...rest] = item.split(":");
+    const category = rest.length ? rawName.trim() : `Budget item ${index + 1}`;
+    const note = rest.length ? rest.join(":").trim() : item;
+    const percentages = [...item.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) =>
+      Number(match[1]),
+    );
+    const percentageMin = percentages.length ? Math.min(...percentages) : null;
+    const percentageMax = percentages.length ? Math.max(...percentages) : null;
+    const percentage =
+      percentageMin !== null && percentageMax !== null && percentageMin === percentageMax
+        ? percentageMin
+        : percentageMax ?? percentageMin ?? 0;
+    const amountMin =
+      amount && percentageMin !== null
+        ? Math.round(amount.value * (percentageMin / 100))
+        : null;
+    const amountMax =
+      amount && percentageMax !== null
+        ? Math.round(amount.value * (percentageMax / 100))
+        : amountMin;
+
+    return {
+      category,
+      amount:
+        amountMin !== null && amountMax !== null && amountMin !== amountMax
+          ? `${currency}${amountMin.toLocaleString()} to ${currency}${amountMax.toLocaleString()}`
+          : amountMin !== null
+            ? `${currency}${amountMin.toLocaleString()}`
+            : note,
+      percentage,
+      percentageMin,
+      percentageMax,
+      amountMin,
+      amountMax,
+      note,
+    };
+  });
 }
 
 function normalizeMessages(messages: ChatMessage[] | undefined) {

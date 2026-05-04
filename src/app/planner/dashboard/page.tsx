@@ -4,6 +4,7 @@ import {
   createVendorInquiryAction,
   deleteWeddingEventAction,
   removePlannerProgressItemAction,
+  savePlannerBudgetAction,
   savePlannerProgressItemAction,
   saveWeddingEventAction,
   updatePlannerInquiryStatusAction,
@@ -37,6 +38,29 @@ type ProgressItem = {
   key: string;
   label: string;
   status: ProgressStatus;
+};
+type PlannerBudgetCategory = {
+  id: string;
+  name: string;
+  amount: number | null;
+  percentage: number | null;
+  percentageMin: number | null;
+  percentageMax: number | null;
+  amountMin: number | null;
+  amountMax: number | null;
+  note: string;
+  source: "ai" | "manual";
+};
+type PlannerBudget = {
+  currency: "NGN" | "USD" | "GBP" | "EUR" | "UNKNOWN";
+  totalBudget: number | null;
+  allocatedAmount: number | null;
+  remainingAmount: number | null;
+  bufferPercentage: number | null;
+  categories: PlannerBudgetCategory[];
+  notes: string[];
+  source: "ai" | "manual";
+  updatedAt: string | null;
 };
 
 const progressCatalog = [
@@ -75,6 +99,7 @@ export default async function PlannerDashboardPage(props: {
     typeof searchParams.editWedding === "string" ? searchParams.editWedding : null;
   const showAddWeddingForm = searchParams.addWedding === "1";
   const progressItems = await getPlannerProgressItems(ownerId);
+  const plannerBudget = await getPlannerBudget(ownerId);
 
   const savedVendors = await getPlannerSavedVendors(ownerId);
 
@@ -313,6 +338,8 @@ export default async function PlannerDashboardPage(props: {
         ) : null}
 
         <PlannerInspirationFeed items={inspirationItems} />
+
+        <WeddingBudgetSection budget={plannerBudget} />
 
         <section className="surface-card rounded-[2rem] p-4 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -953,6 +980,338 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
 
   console.log("checklist:", loaded);
   return loaded;
+}
+
+async function getPlannerBudget(userId: string): Promise<PlannerBudget | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data: blueprints, error } = await supabase
+    .from("blueprints")
+    .select("id, budget_json")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Planner budget read failed", {
+      table: "blueprints",
+      plannerUserId: userId,
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
+    return null;
+  }
+
+  const row = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
+  const rawBudget = row?.budget_json;
+  const budgetJsonExists = Boolean(
+    rawBudget && typeof rawBudget === "object" && !Array.isArray(rawBudget),
+  );
+  const budgetJsonCategoriesCount =
+    budgetJsonExists &&
+    Array.isArray((rawBudget as { categories?: unknown }).categories)
+      ? (rawBudget as { categories: unknown[] }).categories.length
+      : 0;
+
+  console.info("Planner dashboard budget read source", {
+    table: "blueprints",
+    plannerUserId: userId,
+    dashboardLoadedBlueprintId: row?.id ?? null,
+    dashboardBudgetJsonExists: budgetJsonExists,
+    budgetJsonCategoriesCount,
+    dataCount: blueprints?.length ?? 0,
+  });
+
+  return normalizePlannerBudget(row?.budget_json);
+}
+
+function normalizePlannerBudget(value: unknown): PlannerBudget | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const categories = Array.isArray(record.categories)
+    ? record.categories
+        .filter(
+          (category): category is Record<string, unknown> =>
+            Boolean(category && typeof category === "object" && !Array.isArray(category)),
+        )
+        .map((category) => ({
+          id: String(category.id ?? toPlannerBudgetKey(String(category.name ?? ""))),
+          name: String(category.name ?? ""),
+          amount: toNullableNumber(category.amount),
+          percentage: toNullableNumber(category.percentage),
+          percentageMin: toNullableNumber(category.percentageMin),
+          percentageMax: toNullableNumber(category.percentageMax),
+          amountMin: toNullableNumber(category.amountMin),
+          amountMax: toNullableNumber(category.amountMax),
+          note: String(category.note ?? ""),
+          source: category.source === "manual" ? "manual" as const : "ai" as const,
+        }))
+        .filter((category) => category.id && category.name)
+    : [];
+
+  const notes = Array.isArray(record.notes)
+    ? record.notes.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      )
+    : [];
+
+  if (!categories.length && !notes.length && toNullableNumber(record.totalBudget) === null) {
+    return null;
+  }
+
+  const totalBudget = toNullableNumber(record.totalBudget);
+  const allocatedAmount = categories.reduce(
+    (total, category) => total + (category.amount ?? 0),
+    0,
+  );
+
+  return {
+    currency: normalizePlannerBudgetCurrency(record.currency),
+    totalBudget,
+    allocatedAmount,
+    remainingAmount: totalBudget === null ? null : totalBudget - allocatedAmount,
+    bufferPercentage: toNullableNumber(record.bufferPercentage),
+    categories: categories.map((category) => ({
+      ...category,
+      percentage:
+        totalBudget && category.amount !== null
+          ? Math.round((category.amount / totalBudget) * 1000) / 10
+          : category.percentage,
+    })),
+    notes,
+    source: record.source === "manual" ? "manual" : "ai",
+    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
+  };
+}
+
+function toNullableNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  const parsed = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizePlannerBudgetCurrency(value: unknown): PlannerBudget["currency"] {
+  const normalized = String(value ?? "").toUpperCase();
+  if (normalized === "NGN" || normalized.includes("₦")) return "NGN";
+  if (normalized === "USD" || normalized.includes("$")) return "USD";
+  if (normalized === "GBP" || normalized.includes("£")) return "GBP";
+  if (normalized === "EUR" || normalized.includes("€")) return "EUR";
+  return "UNKNOWN";
+}
+
+function toPlannerBudgetKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function formatBudgetAmount(
+  amount: number | null,
+  currency: PlannerBudget["currency"],
+) {
+  if (amount === null) {
+    return "Not set";
+  }
+
+  const symbol =
+    currency === "NGN"
+      ? "₦"
+      : currency === "USD"
+        ? "$"
+        : currency === "GBP"
+          ? "£"
+          : currency === "EUR"
+            ? "€"
+            : "";
+
+  return `${symbol}${Math.round(amount).toLocaleString()}`;
+}
+
+function WeddingBudgetSection({ budget }: { budget: PlannerBudget | null }) {
+  const totalBudget = budget?.totalBudget ?? null;
+  const allocatedAmount =
+    budget?.categories.reduce((total, item) => total + (item.amount ?? 0), 0) ?? 0;
+  const remainingAmount = totalBudget === null ? null : totalBudget - allocatedAmount;
+  const isOverBudget = totalBudget !== null && allocatedAmount > totalBudget;
+
+  return (
+    <section className="surface-card rounded-[2rem] p-4 sm:p-7">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
+            Wedding Budget
+          </p>
+          <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+            Edit your starter budget and track where your money is going.
+          </h2>
+        </div>
+        {budget ? (
+          <p className="surface-soft rounded-full px-3 py-1.5 text-xs font-semibold text-[color:var(--color-brand-primary)]">
+            {budget.source === "ai" ? "Imported from AI Planner" : "Manual budget"}
+          </p>
+        ) : null}
+      </div>
+
+      {!budget ? (
+        <div className="mt-5 surface-soft rounded-[1.35rem] p-5 text-sm leading-7 text-[color:var(--color-muted)]">
+          No budget saved yet. Generate a plan in Iyeoba AI Planner and save the budget to your dashboard.
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Total budget" value={formatBudgetAmount(totalBudget, budget.currency)} />
+            <MetricCard label="Allocated" value={formatBudgetAmount(allocatedAmount, budget.currency)} />
+            <MetricCard label="Remaining / Buffer" value={formatBudgetAmount(remainingAmount, budget.currency)} />
+            <MetricCard label="Categories" value={String(budget.categories.length)} />
+          </div>
+          {isOverBudget ? (
+            <p className="mt-4 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              This budget is over your total estimate.
+            </p>
+          ) : null}
+
+          <form action={savePlannerBudgetAction} className="mt-5 surface-soft grid gap-3 rounded-[1.35rem] p-4 sm:grid-cols-[1fr_1fr_auto]">
+            <input type="hidden" name="intent" value="updateTotal" />
+            <input type="hidden" name="nextPath" value="/planner/dashboard" />
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Currency
+              <select name="currency" defaultValue={budget.currency} className="field-input rounded-[1rem]">
+                <option value="NGN">NGN</option>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+                <option value="UNKNOWN">Other</option>
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Total budget
+              <input
+                name="totalBudget"
+                type="number"
+                min="0"
+                defaultValue={totalBudget ?? ""}
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <button type="submit" className="btn-primary h-fit self-end px-4 py-2 text-sm">
+              Save total
+            </button>
+          </form>
+
+          <div className="mt-5 grid gap-3">
+            {budget.categories.map((category) => {
+              const percentage =
+                totalBudget && category.amount !== null
+                  ? Math.round((category.amount / totalBudget) * 1000) / 10
+                  : category.percentage ?? category.percentageMax ?? category.percentageMin ?? 0;
+              const amountDisplay = getBudgetCategoryAmountDisplay(category, budget.currency);
+              return (
+                <form key={category.id} action={savePlannerBudgetAction} className="surface-soft rounded-[1.35rem] p-4">
+                  <input type="hidden" name="intent" value="updateCategory" />
+                  <input type="hidden" name="nextPath" value="/planner/dashboard" />
+                  <input type="hidden" name="categoryId" value={category.id} />
+                  <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_1fr_auto_auto] lg:items-end">
+                    <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                      Category
+                      <input name="categoryName" defaultValue={category.name} className="field-input rounded-[1rem]" />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                      Amount
+                      <input name="amount" type="number" min="0" defaultValue={category.amount ?? ""} className="field-input rounded-[1rem]" />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                      Note
+                      <input name="note" defaultValue={category.note} className="field-input rounded-[1rem]" />
+                    </label>
+                    <button type="submit" className="btn-secondary px-3 py-2 text-sm">
+                      Save
+                    </button>
+                    <button
+                      type="submit"
+                      name="intent"
+                      value="removeCategory"
+                      className="btn-secondary px-3 py-2 text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-center gap-3 text-xs text-[color:var(--color-muted)]">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-[rgba(106,62,124,0.12)]">
+                      <div
+                        className="h-full rounded-full bg-[color:var(--color-brand-primary)]"
+                        style={{ width: `${Math.min(Math.max(percentage, 0), 100)}%` }}
+                      />
+                    </div>
+                    <span className="w-28 text-right font-semibold">{amountDisplay} · {percentage}%</span>
+                  </div>
+                  {category.note ? (
+                    <p className="mt-2 text-xs leading-6 text-[color:var(--color-muted)]">
+                      {category.note}
+                    </p>
+                  ) : null}
+                </form>
+              );
+            })}
+          </div>
+          {budget.notes.length ? (
+            <div className="mt-5 surface-soft rounded-[1.35rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]">
+              <p className="font-semibold text-[color:var(--color-ink)]">Budget notes</p>
+              <ul className="mt-2 space-y-2">
+                {budget.notes.map((note, index) => (
+                  <li key={`budget-note-${index}`}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <form action={savePlannerBudgetAction} className="mt-5 surface-soft grid gap-3 rounded-[1.35rem] p-4 lg:grid-cols-[1.2fr_0.8fr_1fr_auto] lg:items-end">
+            <input type="hidden" name="intent" value="addCategory" />
+            <input type="hidden" name="nextPath" value="/planner/dashboard" />
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Add category
+              <input name="categoryName" placeholder="e.g. Bridal party gifts" className="field-input rounded-[1rem]" />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Amount
+              <input name="amount" type="number" min="0" className="field-input rounded-[1rem]" />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Note
+              <input name="note" placeholder="Optional" className="field-input rounded-[1rem]" />
+            </label>
+            <button type="submit" className="btn-primary px-4 py-2 text-sm">
+              Add
+            </button>
+          </form>
+        </>
+      )}
+    </section>
+  );
+}
+
+function getBudgetCategoryAmountDisplay(
+  category: PlannerBudgetCategory,
+  currency: PlannerBudget["currency"],
+) {
+  if (category.amount !== null) {
+    return formatBudgetAmount(category.amount, currency);
+  }
+  if (category.amountMin !== null || category.amountMax !== null) {
+    return `${formatBudgetAmount(category.amountMin, currency)} - ${formatBudgetAmount(category.amountMax, currency)}`;
+  }
+  if (category.percentageMin !== null || category.percentageMax !== null) {
+    return `${category.percentageMin ?? category.percentageMax}% - ${category.percentageMax ?? category.percentageMin}%`;
+  }
+  if (category.percentage !== null) {
+    return `${category.percentage}%`;
+  }
+  return "Estimate";
 }
 
 function normalizePlannerProgressStatus(value: unknown): ProgressStatus {
