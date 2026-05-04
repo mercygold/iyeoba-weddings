@@ -18,9 +18,16 @@ type PlannerPlan = {
   questions: string[];
 };
 
+export type AiPlannerInitialState = {
+  messages?: unknown;
+  plan?: Record<string, unknown>;
+  intake?: Record<string, unknown>;
+};
+
 type AiPlannerChatProps = {
   isAuthenticated: boolean;
   initialName?: string;
+  initialState?: AiPlannerInitialState | null;
 };
 
 const starterPrompts = [
@@ -51,21 +58,33 @@ const emptyPlan: PlannerPlan = {
   questions: [],
 };
 
-export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatProps) {
-  const [weddingType, setWeddingType] = useState("");
-  const [customWeddingType, setCustomWeddingType] = useState("");
-  const [location, setLocation] = useState("");
-  const [guestCount, setGuestCount] = useState("");
-  const [budget, setBudget] = useState("");
-  const [weddingDate, setWeddingDate] = useState("");
-  const [culture, setCulture] = useState("");
+export function AiPlannerChat({
+  isAuthenticated,
+  initialName,
+  initialState,
+}: AiPlannerChatProps) {
+  const initialIntake = normalizeInitialIntake(initialState?.intake);
+  const initialWeddingType = resolveInitialWeddingType(initialIntake.weddingType);
+  const [weddingType, setWeddingType] = useState(initialWeddingType.weddingType);
+  const [customWeddingType, setCustomWeddingType] = useState(
+    initialWeddingType.customWeddingType,
+  );
+  const [location, setLocation] = useState(initialIntake.location);
+  const [guestCount, setGuestCount] = useState(initialIntake.guestCount);
+  const [budget, setBudget] = useState(initialIntake.budget);
+  const [weddingDate, setWeddingDate] = useState(initialIntake.weddingDate);
+  const [culture, setCulture] = useState(initialIntake.culture);
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [plan, setPlan] = useState<PlannerPlan>(emptyPlan);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    normalizeInitialMessages(initialState?.messages),
+  );
+  const [plan, setPlan] = useState<PlannerPlan>(
+    normalizeInitialPlan(initialState?.plan),
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(Boolean(initialState));
 
   const hasPlan = useMemo(
     () =>
@@ -241,11 +260,11 @@ export function AiPlannerChat({ isAuthenticated, initialName }: AiPlannerChatPro
         <div className="surface-soft mt-6 rounded-[1.5rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]">
           {isAuthenticated ? (
             <p>
-              {initialName ? `${initialName}, your` : "Your"} AI planner chats are saved to your account when Supabase is configured.
+              {initialName ? `${initialName}, your` : "Your"} AI planner chats and planning details are saved to your account.
             </p>
           ) : (
             <p>
-              You can draft a plan now. <Link href="/auth/sign-in?next=/ai-planner" className="font-semibold text-[color:var(--color-brand-primary)]">Sign in</Link> to save chat history.
+              You can draft a plan now. <Link href="/auth/sign-in?next=/ai-planner" className="font-semibold text-[color:var(--color-brand-primary)]">Sign in</Link> to save your plan, checklist, and chat history.
             </p>
           )}
         </div>
@@ -420,6 +439,90 @@ function PlannerSelectField({
       </select>
     </label>
   );
+}
+
+function normalizeInitialMessages(messages: unknown): ChatMessage[] {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages
+    .filter(isChatMessage)
+    .slice(-12)
+    .map((chatMessage) => ({
+      role: chatMessage.role,
+      content: chatMessage.content,
+    }));
+}
+
+function isChatMessage(message: unknown): message is ChatMessage {
+  return (
+    Boolean(message) &&
+    typeof message === "object" &&
+    (message as ChatMessage).role !== undefined &&
+    ((message as ChatMessage).role === "user" ||
+      (message as ChatMessage).role === "assistant") &&
+    typeof (message as ChatMessage).content === "string" &&
+    (message as ChatMessage).content.trim().length > 0
+  );
+}
+
+function normalizeInitialPlan(plan: Record<string, unknown> | undefined): PlannerPlan {
+  if (!plan) {
+    return emptyPlan;
+  }
+
+  return {
+    reply: typeof plan.reply === "string" ? plan.reply : "",
+    checklist: stringArray(plan.checklist),
+    budget_breakdown: stringArray(plan.budget_breakdown),
+    vendor_categories: stringArray(plan.vendor_categories),
+    timeline: stringArray(plan.timeline),
+    next_steps: stringArray(plan.next_steps),
+    questions: stringArray(plan.questions),
+  };
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function normalizeInitialIntake(intake: Record<string, unknown> | undefined) {
+  return {
+    weddingType: stringValue(intake?.weddingType),
+    location: stringValue(intake?.location),
+    guestCount: stringValue(intake?.guestCount),
+    budget: stringValue(intake?.budget),
+    weddingDate: stringValue(intake?.weddingDate),
+    culture: stringValue(intake?.culture ?? intake?.cultureOrTradition),
+  };
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function resolveInitialWeddingType(savedWeddingType: string) {
+  if (!savedWeddingType) {
+    return {
+      weddingType: "",
+      customWeddingType: "",
+    };
+  }
+
+  if (weddingTypeOptions.includes(savedWeddingType)) {
+    return {
+      weddingType: savedWeddingType,
+      customWeddingType: "",
+    };
+  }
+
+  return {
+    weddingType: "Other",
+    customWeddingType: savedWeddingType,
+  };
 }
 
 function PlannerResult({ plan }: { plan: PlannerPlan }) {

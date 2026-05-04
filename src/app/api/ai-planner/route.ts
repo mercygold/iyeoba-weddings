@@ -8,6 +8,16 @@ type ChatMessage = {
   content: string;
 };
 
+type PlannerIntake = {
+  weddingType?: string;
+  location?: string;
+  guestCount?: string;
+  budget?: string;
+  weddingDate?: string;
+  culture?: string;
+  cultureOrTradition?: string;
+};
+
 const systemPrompt = `You are Iyeoba AI Planner, a wedding planning assistant inside Iyeoba Weddings.
 Help Nigerian and diaspora users plan traditional, court/civil, white, and combined weddings.
 Ask for missing details when needed: wedding type, location, guest count, budget, wedding date/month, and culture/tradition.
@@ -38,7 +48,7 @@ export async function POST(request: Request) {
 
   let body: {
     messages?: ChatMessage[];
-    intake?: Record<string, string>;
+    intake?: PlannerIntake;
   };
 
   try {
@@ -52,6 +62,7 @@ export async function POST(request: Request) {
   }
 
   const messages = normalizeMessages(body.messages);
+  const intake = normalizeIntake(body.intake);
   const latestUserMessage = messages.findLast((message) => message.role === "user");
 
   if (!latestUserMessage) {
@@ -77,16 +88,16 @@ export async function POST(request: Request) {
       hasOpenAiKey: Boolean(apiKey),
       model,
       requestPayloadKeys: Object.keys(body),
-      intakeKeys: Object.keys(body.intake ?? {}),
+      intakeKeys: Object.keys(intake),
       normalizedMessageCount: messages.length,
-      hasIntake: Boolean(body.intake),
+      hasIntake: hasIntakeValues(intake),
     });
 
     const response = await createPlannerResponse({
       openai,
       model,
       requestId,
-      intake: body.intake ?? {},
+      intake,
       messages,
     });
 
@@ -116,7 +127,12 @@ export async function POST(request: Request) {
     logPlannerError(requestId, "openai", error);
 
     if (shouldReturnStarterPlan(error)) {
-      const fallbackPlan = createStarterPlan(body.intake ?? {}, latestUserMessage.content);
+      const fallbackPlan = createStarterPlan(intake, latestUserMessage.content);
+      const planWithMetadata = {
+        ...fallbackPlan,
+        intake,
+        providerFallback: true,
+      };
 
       console.warn("Iyeoba AI planner returned starter plan after OpenAI failure", {
         requestId,
@@ -125,12 +141,22 @@ export async function POST(request: Request) {
         ...getSafeErrorDetails(error),
       });
 
+      const saved = await saveChatForAuthenticatedUser(
+        requestId,
+        messages,
+        planWithMetadata,
+      );
+
       return NextResponse.json({
         ...fallbackPlan,
-        saved: false,
+        saved,
         providerFallback: true,
-        saveError:
-          "Iyeoba AI is temporarily unavailable, so this starter plan was not saved to chat history.",
+        ...(!saved
+          ? {
+              saveError:
+                "Starter plan shown. Full AI planning and saved chat history will resume shortly.",
+            }
+          : {}),
         ...(process.env.NODE_ENV !== "production"
           ? { diagnostics: getSafeErrorDetails(error) }
           : {}),
@@ -153,7 +179,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const saved = await saveChatForAuthenticatedUser(requestId, messages, plan);
+    const planWithIntake = {
+      ...plan,
+      intake,
+    };
+    const saved = await saveChatForAuthenticatedUser(requestId, messages, planWithIntake);
 
     return NextResponse.json({
       ...plan,
@@ -183,7 +213,7 @@ async function createPlannerResponse({
   openai: OpenAI;
   model: string;
   requestId: string;
-  intake: Record<string, string>;
+  intake: PlannerIntake;
   messages: ChatMessage[];
 }) {
   try {
@@ -226,7 +256,7 @@ async function requestPlannerResponse({
   openai: OpenAI;
   model: string;
   requestId: string;
-  intake: Record<string, string>;
+  intake: PlannerIntake;
   messages: ChatMessage[];
 }) {
   console.info("Iyeoba AI planner OpenAI request starting", {
@@ -324,6 +354,26 @@ function normalizeMessages(messages: ChatMessage[] | undefined) {
       role: message.role,
       content: message.content.trim().slice(0, 3000),
     }));
+}
+
+function normalizeIntake(intake: PlannerIntake | undefined): Required<PlannerIntake> {
+  return {
+    weddingType: sanitizeIntakeValue(intake?.weddingType),
+    location: sanitizeIntakeValue(intake?.location),
+    guestCount: sanitizeIntakeValue(intake?.guestCount),
+    budget: sanitizeIntakeValue(intake?.budget),
+    weddingDate: sanitizeIntakeValue(intake?.weddingDate),
+    culture: sanitizeIntakeValue(intake?.culture ?? intake?.cultureOrTradition),
+    cultureOrTradition: sanitizeIntakeValue(intake?.cultureOrTradition ?? intake?.culture),
+  };
+}
+
+function sanitizeIntakeValue(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 500) : "";
+}
+
+function hasIntakeValues(intake: PlannerIntake) {
+  return Object.values(intake).some((value) => typeof value === "string" && value.trim());
 }
 
 async function saveChatForAuthenticatedUser(
@@ -490,7 +540,7 @@ function shouldReturnStarterPlan(error: unknown) {
   );
 }
 
-function createStarterPlan(intake: Record<string, string>, prompt: string) {
+function createStarterPlan(intake: PlannerIntake, prompt: string) {
   const weddingType = intake.weddingType?.trim() || "your wedding";
   const location = intake.location?.trim() || "your chosen location";
   const guestCount = intake.guestCount?.trim();
