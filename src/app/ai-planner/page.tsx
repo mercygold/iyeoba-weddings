@@ -37,6 +37,7 @@ export default async function AiPlannerPage() {
 
         <AiPlannerChat
           isAuthenticated={Boolean(profile)}
+          isPlanner={Boolean(profile && profile.role !== "vendor")}
           initialName={profile?.full_name ?? undefined}
           initialState={initialPlannerState}
         />

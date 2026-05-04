@@ -565,7 +565,7 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
   const culturePhrase = culture ? ` while honoring ${culture} traditions` : "";
 
   return {
-    reply: `Iyeoba AI is temporarily unable to reach the planning engine, but here is a practical starter plan for ${weddingType} in ${location}${guestPhrase}${budgetPhrase}${datePhrase}${culturePhrase}. Use this as a first draft, then confirm details with your families and vendors.`,
+    reply: `Here is a practical starter wedding plan based on your details for ${weddingType} in ${location}${guestPhrase}${budgetPhrase}${datePhrase}${culturePhrase}. Use this as a first draft, then confirm details with your families and vendors.`,
     suggested_cultural_elements: culturalElements,
     checklist: [
       "Confirm wedding type, family priorities, ceremony flow, and any cultural requirements.",

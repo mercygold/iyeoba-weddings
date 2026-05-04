@@ -27,6 +27,7 @@ export type AiPlannerInitialState = {
 
 type AiPlannerChatProps = {
   isAuthenticated: boolean;
+  isPlanner: boolean;
   initialName?: string;
   initialState?: AiPlannerInitialState | null;
 };
@@ -62,6 +63,7 @@ const emptyPlan: PlannerPlan = {
 
 export function AiPlannerChat({
   isAuthenticated,
+  isPlanner,
   initialName,
   initialState,
 }: AiPlannerChatProps) {
@@ -87,6 +89,14 @@ export function AiPlannerChat({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saved, setSaved] = useState(Boolean(initialState));
+  const [checklistFeedback, setChecklistFeedback] = useState("");
+  const [checklistError, setChecklistError] = useState("");
+  const [savingChecklistItems, setSavingChecklistItems] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [addedChecklistItems, setAddedChecklistItems] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const hasPlan = useMemo(
     () =>
@@ -178,7 +188,7 @@ export function AiPlannerChat({
 
       setPlan(nextPlan);
       setSaved(Boolean(data.saved));
-      if (data.saveError) {
+      if (data.saveError && !data.providerFallback) {
         setNotice("Starter plan shown. Full AI planning and saved chat history will resume shortly.");
       }
       setMessages([
@@ -202,6 +212,57 @@ export function AiPlannerChat({
 
   function useStarterPrompt(prompt: string) {
     setMessage(prompt);
+  }
+
+  async function addChecklistItemsToDashboard(items: string[]) {
+    if (!isPlanner || !items.length) {
+      return;
+    }
+
+    const itemKeys = items.map(toProgressKey).filter(Boolean);
+    setChecklistError("");
+    setChecklistFeedback("");
+    setSavingChecklistItems((current) => new Set([...current, ...itemKeys]));
+
+    try {
+      const response = await fetch("/api/ai-planner/checklist", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ items }),
+      });
+      const rawText = await response.text();
+      const payload = rawText ? JSON.parse(rawText) : {};
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(
+          payload.error ?? "We could not add checklist items right now.",
+        );
+      }
+
+      const addedKeys = [
+        ...normalizeChecklistResponseItems(payload.added),
+        ...normalizeChecklistResponseItems(payload.skipped),
+      ];
+      setAddedChecklistItems((current) => new Set([...current, ...addedKeys]));
+      setChecklistFeedback(
+        payload.message ?? "Checklist item added to your planner dashboard.",
+      );
+    } catch (error) {
+      console.error("AI planner checklist save failed", error);
+      setChecklistError(
+        error instanceof Error
+          ? error.message
+          : "We could not add checklist items right now.",
+      );
+    } finally {
+      setSavingChecklistItems((current) => {
+        const next = new Set(current);
+        itemKeys.forEach((key) => next.delete(key));
+        return next;
+      });
+    }
   }
 
   return (
@@ -349,7 +410,28 @@ export function AiPlannerChat({
             </div>
           ) : null}
 
-          {hasPlan ? <PlannerResult plan={plan} /> : null}
+          {checklistFeedback ? (
+            <div className="surface-soft rounded-[1.5rem] border border-emerald-200 p-4 text-xs leading-6 text-emerald-800">
+              {checklistFeedback}
+            </div>
+          ) : null}
+
+          {checklistError ? (
+            <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-xs leading-6 text-red-700">
+              {checklistError}
+            </div>
+          ) : null}
+
+          {hasPlan ? (
+            <PlannerResult
+              plan={plan}
+              isAuthenticated={isAuthenticated}
+              isPlanner={isPlanner}
+              savingChecklistItems={savingChecklistItems}
+              addedChecklistItems={addedChecklistItems}
+              onAddChecklistItems={addChecklistItemsToDashboard}
+            />
+          ) : null}
         </div>
 
         <form onSubmit={submitPlannerMessage} className="mt-5">
@@ -530,14 +612,37 @@ function resolveInitialWeddingType(savedWeddingType: string) {
   };
 }
 
-function PlannerResult({ plan }: { plan: PlannerPlan }) {
+function PlannerResult({
+  plan,
+  isAuthenticated,
+  isPlanner,
+  savingChecklistItems,
+  addedChecklistItems,
+  onAddChecklistItems,
+}: {
+  plan: PlannerPlan;
+  isAuthenticated: boolean;
+  isPlanner: boolean;
+  savingChecklistItems: Set<string>;
+  addedChecklistItems: Set<string>;
+  onAddChecklistItems: (items: string[]) => void;
+}) {
   return (
     <div className="grid gap-4 pt-2 md:grid-cols-2">
       <ResultList
         title="Suggested Cultural Elements"
         items={plan.suggested_cultural_elements}
       />
-      <ResultList title="Checklist" items={plan.checklist} />
+      <ResultList
+        title="Checklist"
+        items={plan.checklist}
+        isChecklist
+        isAuthenticated={isAuthenticated}
+        isPlanner={isPlanner}
+        savingChecklistItems={savingChecklistItems}
+        addedChecklistItems={addedChecklistItems}
+        onAddChecklistItems={onAddChecklistItems}
+      />
       <ResultList title="Budget Breakdown" items={plan.budget_breakdown} />
       <ResultList title="Vendor Categories" items={plan.vendor_categories} />
       <ResultList title="Timeline" items={plan.timeline} />
@@ -547,24 +652,107 @@ function PlannerResult({ plan }: { plan: PlannerPlan }) {
   );
 }
 
-function ResultList({ title, items }: { title: string; items: string[] }) {
+function ResultList({
+  title,
+  items,
+  isChecklist = false,
+  isAuthenticated = false,
+  isPlanner = false,
+  savingChecklistItems = new Set<string>(),
+  addedChecklistItems = new Set<string>(),
+  onAddChecklistItems,
+}: {
+  title: string;
+  items: string[];
+  isChecklist?: boolean;
+  isAuthenticated?: boolean;
+  isPlanner?: boolean;
+  savingChecklistItems?: Set<string>;
+  addedChecklistItems?: Set<string>;
+  onAddChecklistItems?: (items: string[]) => void;
+}) {
   if (!items.length) {
     return null;
   }
 
   return (
     <article className="surface-soft rounded-[1.5rem] p-4">
-      <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
-        {title}
-      </h3>
-      <ul className="mt-3 space-y-2 text-sm leading-7 text-[color:var(--color-muted)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
+          {title}
+        </h3>
+        {isChecklist && isPlanner ? (
+          <button
+            type="button"
+            onClick={() => onAddChecklistItems?.(items)}
+            disabled={items.every((item) => addedChecklistItems.has(toProgressKey(item)))}
+            className="btn-secondary w-fit px-3 py-2 text-xs disabled:opacity-60"
+          >
+            Add all to dashboard
+          </button>
+        ) : null}
+      </div>
+      {isChecklist && !isAuthenticated ? (
+        <p className="mt-3 text-xs leading-6 text-[color:var(--color-muted)]">
+          Sign in as a planner to add checklist items to your dashboard.
+        </p>
+      ) : null}
+      {isChecklist && isAuthenticated && !isPlanner ? (
+        <p className="mt-3 text-xs leading-6 text-[color:var(--color-muted)]">
+          Planner accounts can add checklist items to the planner dashboard.
+        </p>
+      ) : null}
+      <ul className="mt-3 space-y-3 text-sm leading-7 text-[color:var(--color-muted)]">
         {items.map((item, index) => (
-          <li key={`${title}-${index}`} className="flex gap-2">
-            <span className="mt-[0.58rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-brand-gold)]" />
-            <span>{item}</span>
+          <li
+            key={`${title}-${index}`}
+            className="flex flex-col gap-2 sm:flex-row sm:items-start"
+          >
+            <div className="flex flex-1 gap-2">
+              <span className="mt-[0.58rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-brand-gold)]" />
+              <span>{item}</span>
+            </div>
+            {isChecklist && isPlanner ? (
+              <button
+                type="button"
+                onClick={() => onAddChecklistItems?.([item])}
+                disabled={
+                  savingChecklistItems.has(toProgressKey(item)) ||
+                  addedChecklistItems.has(toProgressKey(item))
+                }
+                className="btn-secondary h-fit w-fit shrink-0 px-3 py-1.5 text-[11px] disabled:opacity-60"
+              >
+                {addedChecklistItems.has(toProgressKey(item))
+                  ? "Already added"
+                  : savingChecklistItems.has(toProgressKey(item))
+                    ? "Adding..."
+                    : "Add"}
+              </button>
+            ) : null}
           </li>
         ))}
       </ul>
     </article>
   );
+}
+
+function normalizeChecklistResponseItems(items: unknown) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map((item) =>
+      typeof item === "object" && item !== null
+        ? toProgressKey(String((item as { label?: unknown }).label ?? ""))
+        : "",
+    )
+    .filter(Boolean);
+}
+
+function toProgressKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
