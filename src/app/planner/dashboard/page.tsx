@@ -3,6 +3,9 @@ import Link from "next/link";
 import {
   createVendorInquiryAction,
   deleteWeddingEventAction,
+  removePlannerProgressItemAction,
+  savePlannerBudgetAction,
+  savePlannerProgressItemAction,
   saveWeddingEventAction,
   updatePlannerInquiryStatusAction,
 } from "@/app/planner/actions";
@@ -120,6 +123,9 @@ export default async function PlannerDashboardPage(props: {
     .filter((vendor) => compareIds.includes(vendor.id));
   const { latestTikToks, topTikToks } = getHomepageTikTokSectionData();
   const inspirationItems = [...latestTikToks, ...topTikToks].slice(0, 8);
+  const availableProgressItems = progressCatalog.filter(
+    (label) => !progressItems.some((item) => item.label.toLowerCase() === label.toLowerCase()),
+  );
 
   console.log("Planner dashboard data source summary", {
     plannerUserId: profile.id,
@@ -332,18 +338,158 @@ export default async function PlannerDashboardPage(props: {
 
         <PlannerInspirationFeed items={inspirationItems} />
 
-        <WeddingBudgetSection initialBudget={plannerBudget} />
+        <details open className="surface-card rounded-[2rem] p-4 sm:p-7">
+          <summary className="cursor-pointer list-none">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
+              Wedding Budget
+            </p>
+            <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
+              <h2 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+                Edit your starter budget and track where your money is going.
+              </h2>
+              {plannerBudget ? (
+                <p className="surface-soft rounded-full px-3 py-1.5 text-xs font-semibold text-[color:var(--color-brand-primary)]">
+                  {plannerBudget.source === "ai" ? "Imported from AI Planner" : "Manual budget"}
+                </p>
+              ) : null}
+            </div>
+          </summary>
 
-        <PlannerProgressSection initialItems={progressItems} catalog={progressCatalog} />
+          {!plannerBudget ? (
+            <div className="mt-5 surface-soft rounded-[1.35rem] p-5 text-sm leading-7 text-[color:var(--color-muted)]">
+              No budget saved yet. Generate a plan in Iyeoba AI Planner and save the budget to your dashboard.
+            </div>
+          ) : (
+            <WeddingBudgetInline budget={plannerBudget} />
+          )}
+        </details>
+
+        <details open className="surface-card rounded-[2rem] p-4 sm:p-7">
+          <summary className="cursor-pointer list-none">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
+                  Planning Progress
+                </p>
+                <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+                  Track your planning items
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.12em]">
+                <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-700">
+                  {progressItems.filter((item) => item.status === "not_done").length} not done
+                </span>
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">
+                  {progressItems.filter((item) => item.status === "ongoing").length} ongoing
+                </span>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
+                  {progressItems.filter((item) => item.status === "done").length} done
+                </span>
+              </div>
+            </div>
+          </summary>
+
+          <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-[rgba(106,62,124,0.12)]">
+            <div
+              className="h-full rounded-full bg-[color:var(--color-brand-primary)]"
+              style={{
+                width: `${Math.round((progressItems.filter((item) => item.status === "done").length / Math.max(progressItems.length, 1)) * 100)}%`,
+              }}
+            />
+          </div>
+
+          <div className="mt-5 grid gap-2.5 sm:mt-6 sm:gap-3">
+            {progressItems.map((item) => (
+              <form
+                key={item.key}
+                action={savePlannerProgressItemAction}
+                className="surface-soft grid gap-3 rounded-[1.1rem] px-3 py-3 sm:grid-cols-[minmax(0,1fr)_11rem_7rem] sm:items-center sm:rounded-[1.3rem] sm:px-4 sm:py-3"
+              >
+                <input type="hidden" name="nextPath" value="/planner/dashboard" />
+                <input type="hidden" name="itemKey" value={item.key} />
+                <input type="hidden" name="itemLabel" value={item.label} />
+                <p className="min-w-0 text-sm font-medium leading-snug text-[color:var(--color-ink)]">
+                  {item.label}
+                </p>
+                <select
+                  name="status"
+                  defaultValue={item.status}
+                  className="field-input w-full rounded-[999px] px-3 py-2 text-xs font-semibold"
+                >
+                  <option value="not_done">Not done</option>
+                  <option value="ongoing">Ongoing</option>
+                  <option value="done">Done</option>
+                </select>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
+                  <button type="submit" className="btn-secondary w-full px-3 py-1.5 text-xs sm:text-sm">
+                    Save
+                  </button>
+                  <button
+                    formAction={removePlannerProgressItemAction}
+                    type="submit"
+                    className="btn-secondary w-full px-3 py-1.5 text-xs sm:text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </form>
+            ))}
+          </div>
+
+          <form action={savePlannerProgressItemAction} className="mt-4 flex flex-wrap items-end gap-2.5 sm:mt-5 sm:gap-3">
+            <input type="hidden" name="nextPath" value="/planner/dashboard" />
+            <div className="min-w-[220px] flex-1">
+              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-muted)]">
+                Add planning item
+              </label>
+              <select
+                name="itemLabel"
+                className="field-input mt-2 rounded-[1rem] px-3 py-2 text-sm"
+                defaultValue={availableProgressItems[0] ?? ""}
+              >
+                {availableProgressItems.length ? (
+                  availableProgressItems.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">All catalog items added</option>
+                )}
+              </select>
+            </div>
+            <div className="min-w-[220px] flex-1">
+              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-muted)]">
+                Or add custom item
+              </label>
+              <input
+                name="customItemLabel"
+                type="text"
+                placeholder="e.g. Traditional intro outfit"
+                className="field-input mt-2 rounded-[1rem] px-3 py-2 text-sm"
+              />
+            </div>
+            <input type="hidden" name="itemKey" value="" />
+            <input type="hidden" name="status" value="not_done" />
+            <button type="submit" className="btn-primary w-full px-4 py-2 sm:w-auto">
+              Add Item
+            </button>
+          </form>
+        </details>
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <article className="surface-card rounded-[2rem] p-5 sm:p-7">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
-              Saved Vendors
-            </p>
-            <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
-              Your shortlist
-            </h2>
+          <details className="surface-card rounded-[2rem] p-5 sm:p-7">
+            <summary className="cursor-pointer list-none">
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
+                Saved Vendors
+              </p>
+              <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+                Your shortlist
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[color:var(--color-muted)]">
+                Review saved vendors, compare options, and start inquiries.
+              </p>
+            </summary>
             {savedVendors.length ? (
               <div className="mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent] sm:grid sm:overflow-visible sm:pb-0 sm:[scrollbar-width:auto] sm:[scrollbar-color:auto] sm:gap-4">
                 {savedVendors.map((saved) => {
@@ -430,7 +576,7 @@ export default async function PlannerDashboardPage(props: {
                 Save vendors first to manage conversations and comparisons here.
               </p>
             )}
-          </article>
+          </details>
 
           <PlannerConversationCenter
             conversations={plannerConversations}
@@ -996,6 +1142,185 @@ function toPlannerBudgetKey(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function formatBudgetAmount(
+  amount: number | null,
+  currency: PlannerBudget["currency"],
+) {
+  if (amount === null) {
+    return "Not set";
+  }
+
+  const symbol =
+    currency === "NGN"
+      ? "₦"
+      : currency === "USD"
+        ? "$"
+        : currency === "GBP"
+          ? "£"
+          : currency === "EUR"
+            ? "€"
+            : "";
+
+  return `${symbol}${Math.round(amount).toLocaleString()}`;
+}
+
+function WeddingBudgetInline({ budget }: { budget: PlannerBudget }) {
+  const totalBudget = budget.totalBudget;
+  const allocatedAmount =
+    budget.categories.reduce((total, item) => total + (item.amount ?? 0), 0);
+  const remainingAmount = totalBudget === null ? null : totalBudget - allocatedAmount;
+  const isOverBudget = totalBudget !== null && allocatedAmount > totalBudget;
+
+  return (
+    <>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Total budget" value={formatBudgetAmount(totalBudget, budget.currency)} />
+        <MetricCard label="Allocated" value={formatBudgetAmount(allocatedAmount, budget.currency)} />
+        <MetricCard label="Remaining / Buffer" value={formatBudgetAmount(remainingAmount, budget.currency)} />
+        <MetricCard label="Categories" value={String(budget.categories.length)} />
+      </div>
+      {isOverBudget ? (
+        <p className="mt-4 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This budget is over your total estimate.
+        </p>
+      ) : null}
+
+      <form action={savePlannerBudgetAction} className="mt-5 surface-soft grid gap-3 rounded-[1.35rem] p-4 sm:grid-cols-[1fr_1fr_auto]">
+        <input type="hidden" name="intent" value="updateTotal" />
+        <input type="hidden" name="nextPath" value="/planner/dashboard" />
+        <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+          Currency
+          <select name="currency" defaultValue={budget.currency} className="field-input rounded-[1rem]">
+            <option value="NGN">NGN</option>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="EUR">EUR</option>
+            <option value="UNKNOWN">Other</option>
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+          Total budget
+          <input
+            name="totalBudget"
+            type="number"
+            min="0"
+            defaultValue={totalBudget ?? ""}
+            className="field-input rounded-[1rem]"
+          />
+        </label>
+        <button type="submit" className="btn-primary h-fit self-end px-4 py-2 text-sm">
+          Save total
+        </button>
+      </form>
+
+      <div className="mt-5 grid gap-3">
+        {budget.categories.map((category) => {
+          const percentage =
+            totalBudget && category.amount !== null
+              ? Math.round((category.amount / totalBudget) * 1000) / 10
+              : category.percentage ?? category.percentageMax ?? category.percentageMin ?? 0;
+          const amountDisplay = getBudgetCategoryAmountDisplay(category, budget.currency);
+          return (
+            <form key={category.id} action={savePlannerBudgetAction} className="surface-soft rounded-[1.35rem] p-4">
+              <input type="hidden" name="intent" value="updateCategory" />
+              <input type="hidden" name="nextPath" value="/planner/dashboard" />
+              <input type="hidden" name="categoryId" value={category.id} />
+              <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_1fr_auto_auto] lg:items-end">
+                <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                  Category
+                  <input name="categoryName" defaultValue={category.name} className="field-input rounded-[1rem]" />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                  Amount
+                  <input name="amount" type="number" min="0" defaultValue={category.amount ?? ""} className="field-input rounded-[1rem]" />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+                  Note
+                  <input name="note" defaultValue={category.note} className="field-input rounded-[1rem]" />
+                </label>
+                <button type="submit" className="btn-secondary px-3 py-2 text-sm">
+                  Save
+                </button>
+                <button
+                  type="submit"
+                  name="intent"
+                  value="removeCategory"
+                  className="btn-secondary px-3 py-2 text-sm"
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="mt-3 flex items-center gap-3 text-xs text-[color:var(--color-muted)]">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[rgba(106,62,124,0.12)]">
+                  <div
+                    className="h-full rounded-full bg-[color:var(--color-brand-primary)]"
+                    style={{ width: `${Math.min(Math.max(percentage, 0), 100)}%` }}
+                  />
+                </div>
+                <span className="w-28 text-right font-semibold">{amountDisplay} · {percentage}%</span>
+              </div>
+              {category.note ? (
+                <p className="mt-2 text-xs leading-6 text-[color:var(--color-muted)]">
+                  {category.note}
+                </p>
+              ) : null}
+            </form>
+          );
+        })}
+      </div>
+      {budget.notes.length ? (
+        <div className="mt-5 surface-soft rounded-[1.35rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]">
+          <p className="font-semibold text-[color:var(--color-ink)]">Budget notes</p>
+          <ul className="mt-2 space-y-2">
+            {budget.notes.map((note, index) => (
+              <li key={`budget-note-${index}`}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <form action={savePlannerBudgetAction} className="mt-5 surface-soft grid gap-3 rounded-[1.35rem] p-4 lg:grid-cols-[1.2fr_0.8fr_1fr_auto] lg:items-end">
+        <input type="hidden" name="intent" value="addCategory" />
+        <input type="hidden" name="nextPath" value="/planner/dashboard" />
+        <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+          Add category
+          <input name="categoryName" placeholder="e.g. Bridal party gifts" className="field-input rounded-[1rem]" />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+          Amount
+          <input name="amount" type="number" min="0" className="field-input rounded-[1rem]" />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+          Note
+          <input name="note" placeholder="Optional" className="field-input rounded-[1rem]" />
+        </label>
+        <button type="submit" className="btn-primary px-4 py-2 text-sm">
+          Add
+        </button>
+      </form>
+    </>
+  );
+}
+
+function getBudgetCategoryAmountDisplay(
+  category: PlannerBudgetCategory,
+  currency: PlannerBudget["currency"],
+) {
+  if (category.amount !== null) {
+    return formatBudgetAmount(category.amount, currency);
+  }
+  if (category.amountMin !== null || category.amountMax !== null) {
+    return `${formatBudgetAmount(category.amountMin, currency)} - ${formatBudgetAmount(category.amountMax, currency)}`;
+  }
+  if (category.percentageMin !== null || category.percentageMax !== null) {
+    return `${category.percentageMin ?? category.percentageMax}% - ${category.percentageMax ?? category.percentageMin}%`;
+  }
+  if (category.percentage !== null) {
+    return `${category.percentage}%`;
+  }
+  return "Estimate";
 }
 
 function normalizePlannerProgressStatus(value: unknown): ProgressStatus {
