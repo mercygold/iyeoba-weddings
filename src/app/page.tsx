@@ -122,7 +122,7 @@ export default async function Home() {
             </div>
             <Link
               href="/vendors"
-              className="text-sm font-semibold text-[color:var(--color-brand-primary)] underline decoration-[color:var(--color-brand-light)] underline-offset-4"
+              className="order-3 mt-2 inline-flex w-fit min-w-max flex-none items-center justify-center whitespace-nowrap rounded-full border-2 border-[#C9A15B] bg-white px-5 py-2.5 text-sm font-semibold text-[#5B2C83] shadow-sm transition hover:bg-[#5B2C83] hover:text-white sm:mt-0 sm:justify-self-end"
             >
               View all vendors
             </Link>
