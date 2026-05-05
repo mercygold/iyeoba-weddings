@@ -17,13 +17,21 @@ export async function MainNav() {
   return (
     <header className="sticky top-0 z-20 border-b border-[rgba(91,44,131,0.1)] bg-white/98 backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-1.5 px-4 py-1 sm:gap-3 sm:px-5 sm:py-[0.14rem] md:px-8 lg:px-10 lg:py-[0.24rem]">
-        <Link
-          href="/"
-          aria-label="Iyeoba home"
-          className="inline-flex items-center whitespace-nowrap rounded-[0.8rem] bg-white px-0.5 py-0 leading-none sm:px-1"
-        >
-          <IyeobaLogo priority className="gap-0" />
-        </Link>
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <Link
+            href="/"
+            aria-label="Iyeoba home"
+            className="inline-flex items-center whitespace-nowrap rounded-[0.8rem] bg-white px-0.5 py-0 leading-none sm:px-1"
+          >
+            <IyeobaLogo priority className="gap-0" />
+          </Link>
+          <span
+            title="Iyeoba Weddings is currently in beta. Features and vendor profiles are being improved as we onboard users."
+            className="inline-flex shrink-0 items-center rounded-full border border-[#C9A15B] bg-[rgba(201,161,91,0.08)] px-1.5 py-0.5 text-[0.55rem] font-bold uppercase leading-none tracking-[0.14em] text-[#5B2C83] sm:px-2 sm:text-[0.62rem]"
+          >
+            BETA
+          </span>
+        </div>
 
         <nav className="flex flex-nowrap items-center gap-1 text-[0.78rem] font-medium leading-none text-[color:var(--color-muted)] sm:gap-1.5 sm:text-[0.95rem] md:gap-2.5 lg:gap-3.5">
           <Link
