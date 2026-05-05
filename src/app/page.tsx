@@ -108,8 +108,8 @@ export default async function Home() {
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(250,249,247,0.9)_0%,rgba(255,255,255,0.88)_100%)]" />
           <div className="wedding-floral-texture absolute inset-0" />
           <div className="relative">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+          <div className="mb-10 grid gap-6 lg:mb-12 lg:grid-cols-[minmax(0,1fr)_max-content] lg:items-center">
+            <div className="max-w-3xl">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
                 Approved vendors
               </p>
@@ -122,7 +122,7 @@ export default async function Home() {
             </div>
             <Link
               href="/vendors"
-              className="order-3 mt-2 inline-flex w-fit min-w-max flex-none items-center justify-center whitespace-nowrap rounded-full border-2 border-[#C9A15B] bg-white px-5 py-2.5 text-sm font-semibold text-[#5B2C83] shadow-sm transition hover:bg-[#5B2C83] hover:text-white sm:mt-0 sm:justify-self-end"
+              className="mt-2 inline-flex w-fit min-w-max flex-none items-center justify-center whitespace-nowrap rounded-full border-2 border-[#C9A15B] bg-white px-5 py-2.5 text-sm font-semibold text-[#5B2C83] shadow-sm transition hover:bg-[#5B2C83] hover:text-white lg:mt-0 lg:justify-self-end lg:self-center"
             >
               View all vendors
             </Link>
