@@ -5,6 +5,7 @@ import {
   approveVendorAction,
   rejectVendorAction,
   setVendorPendingAction,
+  updateHomepageCarouselVendorAction,
   updateTikTokFeatureRequestAction,
 } from "@/app/manage/actions";
 import { MainNav } from "@/components/main-nav";
@@ -568,6 +569,46 @@ function VendorSection({
                     <button type="submit" className="btn-secondary px-3 py-1.5 text-sm">Mark Pending</button>
                   </form>
                 </div>
+
+                <form
+                  action={updateHomepageCarouselVendorAction}
+                  className="mt-4 grid gap-3 rounded-[1.25rem] border border-[rgba(106,62,124,0.1)] bg-white/70 p-4 md:grid-cols-[minmax(0,1fr)_11rem_auto] md:items-end"
+                >
+                  <input type="hidden" name="vendorId" value={vendor.id} />
+                  <input type="hidden" name="nextPath" value={nextPath} />
+                  <label className="flex items-center gap-2 text-sm font-semibold text-[color:var(--color-ink)]">
+                    <input
+                      type="checkbox"
+                      name="homepageCarousel"
+                      value="1"
+                      defaultChecked={vendor.homepageCarousel}
+                      disabled={vendor.status !== "approved"}
+                      className="h-4 w-4 rounded border-[rgba(91,44,131,0.28)] text-[#5B2C83] disabled:opacity-50"
+                    />
+                    Show in homepage carousel
+                  </label>
+                  <label className="grid gap-1 text-sm font-medium text-[color:var(--color-ink)]">
+                    Carousel position
+                    <input
+                      type="number"
+                      name="homepageOrder"
+                      min={1}
+                      max={10}
+                      step={1}
+                      defaultValue={vendor.homepageOrder ?? ""}
+                      disabled={vendor.status !== "approved"}
+                      placeholder="1-10"
+                      className="field-input rounded-[1rem] disabled:opacity-50"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={vendor.status !== "approved"}
+                    className="btn-secondary px-3 py-1.5 text-sm disabled:opacity-50"
+                  >
+                    Save carousel
+                  </button>
+                </form>
 
                 {isExpanded ? (
                   <div className="mt-5 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">

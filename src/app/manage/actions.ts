@@ -127,6 +127,59 @@ export async function addManageVendorNoteAction(formData: FormData) {
   redirect(withManageQueryParam(nextPath, "message", "Admin note saved."));
 }
 
+export async function updateHomepageCarouselVendorAction(formData: FormData) {
+  await requireAdmin("/manage");
+  const nextPath = normalizeManageNextPath(formData.get("nextPath"));
+  const vendorId = String(formData.get("vendorId") ?? "").trim();
+  const showInCarousel = formData.get("homepageCarousel") === "1";
+  const homepageOrder = parseHomepageOrder(formData.get("homepageOrder"));
+
+  if (!vendorId) {
+    redirect(withManageQueryParam(nextPath, "message", "Vendor record was not found."));
+  }
+
+  if (homepageOrder === false) {
+    redirect(withManageQueryParam(nextPath, "message", "Homepage carousel position must be blank or a number from 1 to 10."));
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const adminClient = createSupabaseAdminClient();
+  const writeClient = adminClient ?? supabase;
+
+  const { data: vendor, error: vendorError } = await writeClient
+    .from("vendors")
+    .select("id, status, profile_status, approved")
+    .eq("id", vendorId)
+    .maybeSingle();
+
+  if (vendorError || !vendor?.id) {
+    redirect(withManageQueryParam(nextPath, "message", vendorError?.message ?? "Vendor record was not found."));
+  }
+
+  const isApproved =
+    vendor.status === "approved" ||
+    vendor.profile_status === "approved" ||
+    vendor.approved === true;
+
+  const payload = {
+    homepage_carousel: isApproved ? showInCarousel : false,
+    homepage_order: isApproved && showInCarousel ? homepageOrder : null,
+  };
+
+  const { error } = await writeClient
+    .from("vendors")
+    .update(payload)
+    .eq("id", vendorId);
+
+  if (error) {
+    redirect(withManageQueryParam(nextPath, "message", formatHomepageCarouselSaveError(error.message)));
+  }
+
+  revalidatePath("/manage");
+  revalidatePath("/");
+  redirect(withManageQueryParam(nextPath, "message", "Homepage carousel settings saved."));
+}
+
 export async function updateTikTokFeatureRequestAction(formData: FormData) {
   await requireAdmin("/manage");
   const nextPath = normalizeManageNextPath(formData.get("nextPath"));
@@ -200,16 +253,31 @@ function normalizeTikTokFeatureRequestStatus(raw: FormDataEntryValue | null) {
 async function setVendorStatus(vendorId: string, status: "pending_review" | "approved" | "rejected") {
   const admin = await requireAdmin(MANAGE_PATH);
   const supabase = await createSupabaseServerClient();
+  const { data: existingVendor } = await supabase
+    .from("vendors")
+    .select("id, status, profile_status, approved, approved_at")
+    .eq("id", vendorId)
+    .maybeSingle();
+  const now = new Date().toISOString();
+  const isApproved = status === "approved";
+  const wasApproved =
+    existingVendor?.status === "approved" ||
+    existingVendor?.profile_status === "approved" ||
+    existingVendor?.approved === true;
+  const statusPayload = {
+    status,
+    profile_status: status,
+    approved: isApproved,
+    verified: isApproved,
+    ...(isApproved && !wasApproved && !existingVendor?.approved_at
+      ? { approved_at: now }
+      : {}),
+    last_reviewed_at: now,
+    reviewed_by: admin.userId,
+  };
   let result = await supabase
     .from("vendors")
-    .update({
-      status,
-      profile_status: status,
-      approved: status === "approved",
-      verified: status === "approved",
-      last_reviewed_at: new Date().toISOString(),
-      reviewed_by: admin.userId,
-    })
+    .update(statusPayload)
     .eq("id", vendorId);
 
   if (result.error && isMissingColumnError(result.error)) {
@@ -218,8 +286,8 @@ async function setVendorStatus(vendorId: string, status: "pending_review" | "app
       .update({
         status,
         profile_status: status,
-        approved: status === "approved",
-        verified: status === "approved",
+        approved: isApproved,
+        verified: isApproved,
       })
       .eq("id", vendorId);
   }
@@ -233,6 +301,23 @@ async function setVendorStatus(vendorId: string, status: "pending_review" | "app
   revalidatePath("/vendors");
   revalidatePath("/vendor/dashboard");
   revalidatePath("/");
+}
+
+function parseHomepageOrder(raw: FormDataEntryValue | null) {
+  const value = String(raw ?? "").trim();
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10 ? parsed : false;
+}
+
+function formatHomepageCarouselSaveError(message: string) {
+  if (message.includes("homepage_carousel") || message.includes("homepage_order")) {
+    return "Homepage carousel database columns are missing. Run the Supabase SQL migration, then save again.";
+  }
+
+  return message;
 }
 
 function normalizeManageNextPath(raw: FormDataEntryValue | null) {

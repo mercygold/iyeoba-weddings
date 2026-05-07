@@ -32,8 +32,12 @@ const vendorSelect = `
   profile_status,
   onboarding_completed,
   approved,
+  homepage_carousel,
+  homepage_order,
+  approved_at,
   last_reviewed_at,
   updated_at,
+  created_at,
   portfolio_image_urls,
   government_id_url,
   admin_notes,
@@ -71,6 +75,7 @@ const legacyVendorSelect = `
   approved,
   last_reviewed_at,
   updated_at,
+  created_at,
   portfolio_image_urls,
   government_id_url,
   admin_notes,
@@ -144,12 +149,16 @@ export type VendorDirectoryItem = {
   status?: string | null;
   onboardingCompleted?: boolean;
   approved?: boolean;
+  homepageCarousel?: boolean;
+  homepageOrder?: number | null;
+  approvedAt?: string | null;
   portfolioImageUrls?: readonly string[];
   governmentIdUrl?: string | null;
   cacCertificateUrl?: string | null;
   adminNotes?: string | null;
   lastReviewedAt?: string | null;
   updatedAt?: string | null;
+  createdAt?: string | null;
   availabilityStatus: string;
   verified: boolean;
   description: string;
@@ -174,7 +183,9 @@ const lifecycleStatuses = new Set([
   "archived",
 ]);
 
-export async function getVendorDirectory(filters: Filters = {}) {
+export async function getVendorDirectory(
+  filters: Filters = {},
+): Promise<VendorDirectoryItem[]> {
   const supabase = await createSupabaseServerClient();
 
   const dbConfigured = Boolean(
@@ -250,6 +261,13 @@ export async function getVendorDirectory(filters: Filters = {}) {
           rawApproved,
         );
         const isApproved = isVendorPubliclyApproved(status, rawApproved);
+        const hasVerificationProof = hasVendorVerificationProof({
+          governmentIdUrl: item.government_id_url ?? null,
+          cacCertificateUrl: itemRecord.cac_certificate_url ?? null,
+          registeredBusiness: itemRecord.registered_business ?? false,
+          primarySocialLink: item.primary_social_link ?? item.instagram ?? null,
+          website: item.website ?? null,
+        });
         return {
         id: item.id,
         userId: item.user_id,
@@ -306,6 +324,9 @@ export async function getVendorDirectory(filters: Filters = {}) {
         status,
         onboardingCompleted: item.onboarding_completed ?? false,
         approved: isApproved,
+        homepageCarousel: itemRecord.homepage_carousel === true,
+        homepageOrder: toNullableInteger(itemRecord.homepage_order),
+        approvedAt: itemRecord.approved_at ?? null,
         portfolioImageUrls:
           portfolioImages.length ? portfolioImages : item.portfolio_image_urls ?? [],
         governmentIdUrl: item.government_id_url ?? null,
@@ -313,8 +334,9 @@ export async function getVendorDirectory(filters: Filters = {}) {
         adminNotes: item.admin_notes ?? null,
         lastReviewedAt: item.last_reviewed_at ?? null,
         updatedAt: item.updated_at ?? null,
+        createdAt: itemRecord.created_at ?? null,
         availabilityStatus: item.availability_status ?? "Availability on request",
-        verified: item.verified ?? false,
+        verified: item.verified === true || (isApproved && hasVerificationProof),
         description: item.description ?? item.value_statement ?? "Vendor profile scaffolded.",
         servicesOffered: item.services_offered ?? [],
         valueStatement: item.value_statement ?? "Vendor profile scaffolded.",
@@ -325,9 +347,10 @@ export async function getVendorDirectory(filters: Filters = {}) {
         };
       }) satisfies VendorDirectoryItem[];
 
-      const publicVendors = mapped.filter(
-        (vendor) => vendor.status === "approved" && vendor.approved === true,
-      );
+      const publicVendors = mapped
+        .filter((vendor) => vendor.status === "approved" && vendor.approved === true)
+        .filter(dedupeVendorById)
+        .sort(comparePublicVendorRecency);
       console.log("Homepage/public vendor query", {
         filters,
         totalFetched: mapped.length,
@@ -389,6 +412,9 @@ export async function getVendorDirectory(filters: Filters = {}) {
       userId: null,
       onboardingCompleted: true,
       approved: vendor.verified,
+      homepageCarousel: false,
+      homepageOrder: null,
+      approvedAt: null,
       status: vendor.verified ? "approved" : "draft",
       portfolioImageUrls: [],
       governmentIdUrl: null,
@@ -405,22 +431,32 @@ export async function getVendorDirectory(filters: Filters = {}) {
       adminNotes: null,
       lastReviewedAt: null,
       updatedAt: null,
+      createdAt: null,
       imageUrl: getVendorPlaceholderImage(normalizedCategory.category),
     };
     });
 }
 
-export async function getFeaturedVendors() {
+export async function getFeaturedVendors(): Promise<VendorDirectoryItem[]> {
   const vendors = await getVendorDirectory();
-  return vendors.slice(0, 3);
+  const carouselVendors = vendors.filter((vendor) => vendor.homepageCarousel);
+  const fallbackVendors = vendors.filter(
+    (vendor) => !vendor.homepageCarousel && vendor.verified,
+  );
+
+  return [...carouselVendors, ...fallbackVendors].slice(0, 10);
 }
 
-export async function getVendorBySlug(slug: string) {
+export async function getVendorBySlug(
+  slug: string,
+): Promise<VendorDirectoryItem | null> {
   const vendors = await getVendorDirectory();
   return vendors.find((vendor) => vendor.slug === slug) ?? null;
 }
 
-export async function getVendorsBySlugs(slugs: string[]) {
+export async function getVendorsBySlugs(
+  slugs: string[],
+): Promise<VendorDirectoryItem[]> {
   if (!slugs.length) {
     return [];
   }
@@ -429,7 +465,9 @@ export async function getVendorsBySlugs(slugs: string[]) {
   return vendors.filter((vendor) => slugs.includes(vendor.slug));
 }
 
-export async function getVendorByUserId(userId: string) {
+export async function getVendorByUserId(
+  userId: string,
+): Promise<VendorDirectoryItem | null> {
   const supabase = await createSupabaseServerClient();
   const dbConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -612,6 +650,85 @@ function isVendorPubliclyApproved(
   approved: boolean,
 ) {
   return status === "approved" && approved === true;
+}
+
+function hasVendorVerificationProof({
+  governmentIdUrl,
+  cacCertificateUrl,
+  registeredBusiness,
+  primarySocialLink,
+  website,
+}: {
+  governmentIdUrl?: string | null;
+  cacCertificateUrl?: string | null;
+  registeredBusiness?: boolean | null;
+  primarySocialLink?: string | null;
+  website?: string | null;
+}) {
+  return Boolean(
+    governmentIdUrl ||
+      cacCertificateUrl ||
+      registeredBusiness ||
+      primarySocialLink ||
+      website,
+  );
+}
+
+function dedupeVendorById(
+  vendor: VendorDirectoryItem,
+  index: number,
+  vendors: VendorDirectoryItem[],
+) {
+  const key = vendor.id ?? vendor.slug;
+  return vendors.findIndex((item) => (item.id ?? item.slug) === key) === index;
+}
+
+function comparePublicVendorRecency(
+  a: VendorDirectoryItem,
+  b: VendorDirectoryItem,
+) {
+  const featuredDifference =
+    Number(b.homepageCarousel === true) - Number(a.homepageCarousel === true);
+  if (featuredDifference !== 0) {
+    return featuredDifference;
+  }
+
+  if (a.homepageCarousel && b.homepageCarousel) {
+    const aOrder = a.homepageOrder ?? Number.POSITIVE_INFINITY;
+    const bOrder = b.homepageOrder ?? Number.POSITIVE_INFINITY;
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+  }
+
+  return getPublicVendorRecencyTime(b) - getPublicVendorRecencyTime(a);
+}
+
+function getPublicVendorRecencyTime(vendor: VendorDirectoryItem) {
+  return Math.max(
+    toTimestamp(vendor.approvedAt),
+    toTimestamp(vendor.lastReviewedAt),
+    toTimestamp(vendor.createdAt),
+  );
+}
+
+function toTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function toNullableInteger(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function serializeSupabaseError(error: {

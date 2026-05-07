@@ -11,7 +11,7 @@ import {
   getSharedLocationOptions,
 } from "@/lib/vendor-filter-options";
 import { VendorCard } from "@/components/vendor-card";
-import { getFeaturedVendors } from "@/lib/vendors";
+import { getFeaturedVendors, type VendorDirectoryItem } from "@/lib/vendors";
 
 const trustPoints = [
   "Approved vendor profiles",
@@ -22,7 +22,7 @@ const trustPoints = [
 export default async function Home() {
   const profile = await getCurrentProfile();
   const featuredVendors = await getFeaturedVendors();
-  const vendorRailItems = ensureMinimumItems(featuredVendors, 10);
+  const vendorRailItems: VendorDirectoryItem[] = featuredVendors;
   const savedVendorIds =
     profile?.role === "planner"
       ? new Set((await getPlannerSavedVendors(profile.id)).map((item) => item.vendor.id))
@@ -129,9 +129,9 @@ export default async function Home() {
           </div>
 
           <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent]">
-            {vendorRailItems.map((vendor, index) => (
+            {vendorRailItems.map((vendor) => (
               <div
-                key={`${vendor.slug}-${index}`}
+                key={vendor.id ?? vendor.slug}
                 className="min-w-full snap-start sm:min-w-[48%] lg:min-w-[31%]"
               >
                 <VendorCard
@@ -504,22 +504,4 @@ function CategoryIcon({ category }: { category: string }) {
         </svg>
       );
   }
-}
-
-function ensureMinimumItems<U extends readonly unknown[]>(
-  items: U,
-  minimum: number,
-): Array<U[number]> {
-  if (!items.length || items.length >= minimum) {
-    return [...items] as Array<U[number]>;
-  }
-
-  const filled = [...items] as Array<U[number]>;
-  let index = 0;
-  while (filled.length < minimum) {
-    filled.push(items[index % items.length]);
-    index += 1;
-  }
-
-  return filled;
 }

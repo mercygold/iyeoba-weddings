@@ -23,6 +23,9 @@ const adminVendorSelect = `
   profile_status,
   onboarding_completed,
   approved,
+  homepage_carousel,
+  homepage_order,
+  approved_at,
   verified,
   government_id_url,
   admin_notes,
@@ -95,6 +98,9 @@ export type AdminVendorSubmission = {
   adminNotes: string | null;
   onboardingCompleted: boolean;
   approved: boolean;
+  homepageCarousel: boolean;
+  homepageOrder: number | null;
+  approvedAt: string | null;
   verified: boolean;
   governmentIdPath: string | null;
   governmentIdSignedUrl: string | null;
@@ -224,6 +230,9 @@ export async function getAdminVendorSubmissions() {
         adminNotes: item.admin_notes ?? null,
         onboardingCompleted: item.onboarding_completed ?? false,
         approved: isApproved,
+        homepageCarousel: itemRecord.homepage_carousel === true,
+        homepageOrder: toNullableInteger(itemRecord.homepage_order),
+        approvedAt: itemRecord.approved_at ?? null,
         verified: item.verified ?? false,
         governmentIdPath,
         governmentIdSignedUrl,
@@ -329,6 +338,17 @@ function logAdminVendorCounts(
     vendors,
     columns: data[0] ? Object.keys(data[0]) : [],
   });
+}
+
+function toNullableInteger(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function serializeSupabaseError(error: {

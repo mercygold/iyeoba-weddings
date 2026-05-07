@@ -38,7 +38,7 @@ export async function updateVendorReviewAction(formData: FormData) {
 
   const { data: existingVendor, error: existingVendorError } = await admin
     .from("vendors")
-    .select("id, business_name, status, approved, profile_status, verified")
+    .select("id, business_name, status, approved, profile_status, verified, approved_at")
     .eq("id", vendorId)
     .single();
 
@@ -55,11 +55,23 @@ export async function updateVendorReviewAction(formData: FormData) {
     );
   }
 
+  const reviewedAt = new Date().toISOString();
+  const isApproved = status === "approved";
+  const wasApproved =
+    existingVendor.status === "approved" ||
+    existingVendor.profile_status === "approved" ||
+    existingVendor.approved === true;
   const payload = {
     status,
     profile_status: status,
     admin_notes: adminNotes || null,
-    approved: status === "approved",
+    approved: isApproved,
+    verified: isApproved,
+    approved_at:
+      isApproved && !wasApproved && !existingVendor.approved_at
+        ? reviewedAt
+        : existingVendor.approved_at,
+    last_reviewed_at: reviewedAt,
   };
 
   console.log("Admin vendor review write attempt", {
@@ -79,7 +91,7 @@ export async function updateVendorReviewAction(formData: FormData) {
     .from("vendors")
     .update(payload)
     .eq("id", vendorId)
-    .select("id, business_name, status, approved, profile_status, admin_notes")
+    .select("id, business_name, status, approved, profile_status, verified, approved_at, admin_notes, last_reviewed_at")
     .single();
 
   if (error) {
