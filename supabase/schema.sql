@@ -419,6 +419,23 @@ create table if not exists public.blueprints (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.ai_planner_chats (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  wedding_id uuid references public.weddings(id) on delete cascade,
+  title text,
+  messages jsonb not null default '[]'::jsonb,
+  plan jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.ai_planner_chats
+  add column if not exists wedding_id uuid references public.weddings(id) on delete cascade;
+
+create index if not exists ai_planner_chats_user_wedding_updated_idx
+  on public.ai_planner_chats(user_id, wedding_id, updated_at desc);
+
 create table if not exists public.tiktok_videos (
   id uuid primary key default gen_random_uuid(),
   post_id text not null unique,

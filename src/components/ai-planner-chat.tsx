@@ -40,9 +40,34 @@ type BudgetAllocation = {
 };
 
 export type AiPlannerInitialState = {
+  id?: string | null;
+  title?: string | null;
+  weddingId?: string | null;
   messages?: unknown;
   plan?: Record<string, unknown>;
   intake?: Record<string, unknown>;
+};
+
+export type AiPlannerWeddingEvent = {
+  id: string;
+  title: string;
+  weddingType: string;
+  culture: string;
+  location: string;
+  guestCount: number | null;
+  budgetRange: string;
+  weddingDate: string | null;
+  createdAt: string | null;
+};
+
+export type AiPlannerChatHistoryItem = {
+  id: string;
+  title: string;
+  weddingId: string | null;
+  messages: unknown;
+  plan: Record<string, unknown>;
+  updatedAt: string | null;
+  createdAt: string | null;
 };
 
 type AiPlannerChatProps = {
@@ -50,6 +75,10 @@ type AiPlannerChatProps = {
   isPlanner: boolean;
   initialName?: string;
   initialState?: AiPlannerInitialState | null;
+  weddingEvents?: AiPlannerWeddingEvent[];
+  chatHistory?: AiPlannerChatHistoryItem[];
+  selectedWeddingId?: string | null;
+  selectedChatId?: string | null;
 };
 
 const starterPrompts = [
@@ -93,6 +122,10 @@ export function AiPlannerChat({
   isPlanner,
   initialName,
   initialState,
+  weddingEvents: initialWeddingEvents = [],
+  chatHistory: initialChatHistory = [],
+  selectedWeddingId,
+  selectedChatId,
 }: AiPlannerChatProps) {
   const initialIntake = normalizeInitialIntake(initialState?.intake);
   const initialWeddingType = resolveInitialWeddingType(initialIntake.weddingType);
@@ -105,6 +138,14 @@ export function AiPlannerChat({
   const [budget, setBudget] = useState(initialIntake.budget);
   const [weddingDate, setWeddingDate] = useState(initialIntake.weddingDate);
   const [culture, setCulture] = useState(initialIntake.culture);
+  const [weddingEvents, setWeddingEvents] = useState(initialWeddingEvents);
+  const [chatHistory, setChatHistory] = useState(initialChatHistory);
+  const [activeWeddingId, setActiveWeddingId] = useState(
+    selectedWeddingId ?? initialState?.weddingId ?? initialWeddingEvents[0]?.id ?? "",
+  );
+  const [activeChatId, setActiveChatId] = useState(
+    selectedChatId ?? initialState?.id ?? null,
+  );
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(
     normalizeInitialMessages(initialState?.messages),
@@ -120,6 +161,9 @@ export function AiPlannerChat({
   const [checklistError, setChecklistError] = useState("");
   const [budgetFeedback, setBudgetFeedback] = useState("");
   const [budgetError, setBudgetError] = useState("");
+  const [historyFeedback, setHistoryFeedback] = useState("");
+  const [historyError, setHistoryError] = useState("");
+  const [isManagingChat, setIsManagingChat] = useState(false);
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [savingChecklistItems, setSavingChecklistItems] = useState<Set<string>>(
     () => new Set(),
@@ -140,6 +184,8 @@ export function AiPlannerChat({
       plan.next_steps.length,
     [plan],
   );
+  const activeWedding = weddingEvents.find((event) => event.id === activeWeddingId) ?? null;
+  const activeChat = chatHistory.find((chat) => chat.id === activeChatId) ?? null;
 
   async function submitPlannerMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,6 +214,8 @@ export function AiPlannerChat({
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          chatId: activeChatId,
+          weddingId: activeWeddingId || null,
           messages: nextMessages,
           intake: {
             weddingType:
@@ -221,6 +269,44 @@ export function AiPlannerChat({
 
       setPlan(nextPlan);
       setSaved(Boolean(data.saved));
+      if (typeof data.chatId === "string") {
+        setActiveChatId(data.chatId);
+      }
+      if (typeof data.weddingId === "string") {
+        setActiveWeddingId(data.weddingId);
+      }
+      if (typeof data.chatId === "string") {
+        upsertChatHistory({
+          id: data.chatId,
+          title: nextMessages.find((item) => item.role === "user")?.content.slice(0, 90) || "Iyeoba AI Planner chat",
+          weddingId: typeof data.weddingId === "string" ? data.weddingId : activeWeddingId || null,
+          messages: [
+            ...nextMessages,
+            {
+              role: "assistant",
+              content: nextPlan.reply || "I created a first planning draft below.",
+            },
+          ],
+          plan: {
+            ...nextPlan,
+            intake: {
+              weddingType:
+                weddingType === "Other" ? customWeddingType.trim() || "Other" : weddingType,
+              location,
+              guestCount,
+              budget,
+              weddingDate,
+              culture,
+            },
+          },
+          updatedAt: new Date().toISOString(),
+          createdAt: activeChat?.createdAt ?? new Date().toISOString(),
+        });
+        updateAiPlannerUrl(
+          typeof data.weddingId === "string" ? data.weddingId : activeWeddingId || null,
+          data.chatId,
+        );
+      }
       if (data.saveError && !data.providerFallback) {
         setNotice("Starter plan shown. Full AI planning and saved chat history will resume shortly.");
       }
@@ -245,6 +331,166 @@ export function AiPlannerChat({
 
   function useStarterPrompt(prompt: string) {
     setMessage(prompt);
+  }
+
+  function startNewChat() {
+    setActiveChatId(null);
+    setMessages([]);
+    setPlan(emptyPlan);
+    setSaved(false);
+    setError("");
+    setNotice("");
+    setHistoryFeedback("New chat started.");
+    updateAiPlannerUrl(activeWeddingId || null, null);
+  }
+
+  function openChat(chat: AiPlannerChatHistoryItem) {
+    const chatIntake = normalizeInitialIntake(chat.plan?.intake as Record<string, unknown> | undefined);
+    const nextWeddingType = resolveInitialWeddingType(chatIntake.weddingType);
+    setActiveChatId(chat.id);
+    setActiveWeddingId(chat.weddingId ?? "");
+    setWeddingType(nextWeddingType.weddingType);
+    setCustomWeddingType(nextWeddingType.customWeddingType);
+    setLocation(chatIntake.location);
+    setGuestCount(chatIntake.guestCount);
+    setBudget(chatIntake.budget);
+    setWeddingDate(chatIntake.weddingDate);
+    setCulture(chatIntake.culture);
+    setMessages(normalizeInitialMessages(chat.messages));
+    setPlan(normalizeInitialPlan(chat.plan));
+    setSaved(true);
+    setError("");
+    setNotice("");
+    setHistoryFeedback("");
+    updateAiPlannerUrl(chat.weddingId, chat.id);
+  }
+
+  async function createWeddingEventFromDetails() {
+    if (!isAuthenticated || isManagingChat) {
+      return;
+    }
+
+    setIsManagingChat(true);
+    setHistoryError("");
+    setHistoryFeedback("");
+
+    try {
+      const response = await fetch("/api/ai-planner/chats", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          intent: "createWedding",
+          intake: {
+            weddingType:
+              weddingType === "Other" ? customWeddingType.trim() || "Other" : weddingType,
+            location,
+            guestCount,
+            budget,
+            weddingDate,
+            culture,
+          },
+        }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        ok?: boolean;
+        error?: string;
+        wedding?: AiPlannerWeddingEvent;
+      } | null;
+
+      if (!response.ok || !payload?.ok || !payload.wedding) {
+        throw new Error(payload?.error || "We could not create this wedding event right now.");
+      }
+
+      setWeddingEvents((current) => [payload.wedding!, ...current]);
+      setActiveWeddingId(payload.wedding.id);
+      setHistoryFeedback("Wedding event created.");
+      updateAiPlannerUrl(payload.wedding.id, activeChatId);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "We could not create this wedding event right now.");
+    } finally {
+      setIsManagingChat(false);
+    }
+  }
+
+  async function clearCurrentChat() {
+    if (!activeChatId) {
+      setMessages([]);
+      setPlan(emptyPlan);
+      setSaved(false);
+      setHistoryFeedback("Current draft cleared.");
+      return;
+    }
+
+    await manageCurrentChat("clear");
+  }
+
+  async function deleteCurrentChat() {
+    if (!activeChatId) {
+      startNewChat();
+      return;
+    }
+
+    await manageCurrentChat("delete");
+  }
+
+  async function manageCurrentChat(intent: "clear" | "delete") {
+    if (isManagingChat || !activeChatId) {
+      return;
+    }
+
+    setIsManagingChat(true);
+    setHistoryError("");
+    setHistoryFeedback("");
+
+    try {
+      const response = await fetch("/api/ai-planner/chats", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ intent, chatId: activeChatId }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "We could not update this chat right now.");
+      }
+
+      if (intent === "clear") {
+        setMessages([]);
+        setPlan(emptyPlan);
+        setSaved(true);
+        setChatHistory((current) =>
+          current.map((chat) =>
+            chat.id === activeChatId
+              ? { ...chat, messages: [], plan: {}, updatedAt: new Date().toISOString() }
+              : chat,
+          ),
+        );
+        setHistoryFeedback("Chat cleared.");
+      } else {
+        setChatHistory((current) => current.filter((chat) => chat.id !== activeChatId));
+        setActiveChatId(null);
+        setMessages([]);
+        setPlan(emptyPlan);
+        setSaved(false);
+        setHistoryFeedback("Chat deleted.");
+        updateAiPlannerUrl(activeWeddingId || null, null);
+      }
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "We could not update this chat right now.");
+    } finally {
+      setIsManagingChat(false);
+    }
+  }
+
+  function upsertChatHistory(chat: AiPlannerChatHistoryItem) {
+    setChatHistory((current) => {
+      const existing = current.filter((item) => item.id !== chat.id);
+      return [chat, ...existing].sort((a, b) => toTime(b.updatedAt) - toTime(a.updatedAt));
+    });
   }
 
   async function addChecklistItemsToDashboard(items: string[]) {
@@ -366,6 +612,38 @@ export function AiPlannerChat({
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
           Planning Details
         </p>
+        {isAuthenticated ? (
+          <div className="mt-5 rounded-[1.35rem] border border-[rgba(91,44,131,0.1)] bg-white/70 p-4">
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+                Wedding event
+              </span>
+              <select
+                value={activeWeddingId}
+                onChange={(event) => {
+                  setActiveWeddingId(event.target.value);
+                  updateAiPlannerUrl(event.target.value || null, activeChatId);
+                }}
+                className="field-input mt-2 rounded-[1.25rem] text-sm"
+              >
+                <option value="">General planning</option>
+                {weddingEvents.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={createWeddingEventFromDetails}
+              disabled={isManagingChat}
+              className="btn-secondary mt-3 w-full px-3 py-2 text-xs disabled:opacity-60"
+            >
+              {isManagingChat ? "Saving..." : "Create wedding/event from details"}
+            </button>
+          </div>
+        ) : null}
         <div className="mt-5 space-y-4">
           <PlannerSelectField
             label="Wedding type"
@@ -417,6 +695,54 @@ export function AiPlannerChat({
           />
         </div>
 
+        {isAuthenticated ? (
+          <div className="mt-6 rounded-[1.5rem] border border-[rgba(91,44,131,0.1)] bg-white/70 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
+                Chat history
+              </p>
+              <button
+                type="button"
+                onClick={startNewChat}
+                className="btn-secondary px-3 py-1.5 text-xs"
+              >
+                New chat
+              </button>
+            </div>
+            {chatHistory.length ? (
+              <div className="mt-3 max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                {chatHistory.map((chat) => {
+                  const wedding = weddingEvents.find((event) => event.id === chat.weddingId);
+                  const isActive = chat.id === activeChatId;
+                  return (
+                    <button
+                      key={chat.id}
+                      type="button"
+                      onClick={() => openChat(chat)}
+                      className={`w-full rounded-[1rem] px-3 py-2.5 text-left transition ${
+                        isActive
+                          ? "bg-[rgba(91,44,131,0.12)]"
+                          : "hover:bg-[rgba(91,44,131,0.06)]"
+                      }`}
+                    >
+                      <span className="block truncate text-sm font-semibold text-[color:var(--color-ink)]">
+                        {chat.title || "Iyeoba AI Planner chat"}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-[color:var(--color-muted)]">
+                        {wedding?.title ?? "General planning"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-[color:var(--color-muted)]">
+                Your saved AI Planner chats will appear here.
+              </p>
+            )}
+          </div>
+        ) : null}
+
         <div className="surface-soft mt-6 rounded-[1.5rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]">
           {isAuthenticated ? (
             <p>
@@ -439,12 +765,40 @@ export function AiPlannerChat({
             <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
               Wedding plan draft
             </h2>
+            <p className="mt-1 text-xs leading-5 text-[color:var(--color-muted)]">
+              {activeWedding?.title ?? "General planning"}
+            </p>
           </div>
-          {saved ? (
-            <span className="surface-soft w-fit rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-brand-primary)]">
-              Saved
-            </span>
-          ) : null}
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={startNewChat}
+              className="btn-secondary px-3 py-1.5 text-xs"
+            >
+              New chat
+            </button>
+            <button
+              type="button"
+              onClick={clearCurrentChat}
+              disabled={isManagingChat}
+              className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
+            >
+              Clear chat
+            </button>
+            <button
+              type="button"
+              onClick={deleteCurrentChat}
+              disabled={isManagingChat || !activeChatId}
+              className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
+            >
+              Delete chat
+            </button>
+            {saved ? (
+              <span className="surface-soft w-fit rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-brand-primary)]">
+                Saved
+              </span>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-5 min-h-[320px] space-y-4">
@@ -502,6 +856,18 @@ export function AiPlannerChat({
           {notice ? (
             <div className="surface-soft rounded-[1.5rem] border border-[rgba(91,44,131,0.12)] p-4 text-xs leading-6 text-[color:var(--color-muted)]">
               {notice}
+            </div>
+          ) : null}
+
+          {historyFeedback ? (
+            <div className="surface-soft rounded-[1.5rem] border border-emerald-200 p-4 text-xs leading-6 text-emerald-800">
+              {historyFeedback}
+            </div>
+          ) : null}
+
+          {historyError ? (
+            <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-xs leading-6 text-red-700">
+              {historyError}
             </div>
           ) : null}
 
@@ -750,6 +1116,33 @@ function normalizeInitialIntake(intake: Record<string, unknown> | undefined) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function updateAiPlannerUrl(weddingId: string | null, chatId: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  if (weddingId) {
+    url.searchParams.set("weddingId", weddingId);
+  } else {
+    url.searchParams.delete("weddingId");
+  }
+  if (chatId) {
+    url.searchParams.set("chatId", chatId);
+  } else {
+    url.searchParams.delete("chatId");
+  }
+  window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+}
+
+function toTime(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 function resolveInitialWeddingType(savedWeddingType: string) {

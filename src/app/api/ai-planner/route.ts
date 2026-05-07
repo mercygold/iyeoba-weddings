@@ -56,6 +56,8 @@ export async function POST(request: Request) {
   let body: {
     messages?: ChatMessage[];
     intake?: PlannerIntake;
+    weddingId?: string | null;
+    chatId?: string | null;
   };
 
   try {
@@ -70,6 +72,8 @@ export async function POST(request: Request) {
 
   const messages = normalizeMessages(body.messages);
   const intake = normalizeIntake(body.intake);
+  const requestedWeddingId = normalizeUuid(body.weddingId);
+  const requestedChatId = normalizeUuid(body.chatId);
   const latestUserMessage = messages.findLast((message) => message.role === "user");
 
   if (!latestUserMessage) {
@@ -153,13 +157,20 @@ export async function POST(request: Request) {
         requestId,
         messages,
         planWithMetadata,
+        {
+          weddingId: requestedWeddingId,
+          chatId: requestedChatId,
+          intake,
+        },
       );
 
       return NextResponse.json({
         ...fallbackPlan,
-        saved,
+        saved: saved.saved,
+        chatId: saved.chatId,
+        weddingId: saved.weddingId,
         providerFallback: true,
-        ...(!saved
+        ...(!saved.saved
           ? {
               saveError:
                 "Starter plan shown. Full AI planning and saved chat history will resume shortly.",
@@ -191,11 +202,17 @@ export async function POST(request: Request) {
       ...plan,
       intake,
     };
-    const saved = await saveChatForAuthenticatedUser(requestId, messages, planWithIntake);
+    const saved = await saveChatForAuthenticatedUser(requestId, messages, planWithIntake, {
+      weddingId: requestedWeddingId,
+      chatId: requestedChatId,
+      intake,
+    });
 
     return NextResponse.json({
       ...plan,
-      saved,
+      saved: saved.saved,
+      chatId: saved.chatId,
+      weddingId: saved.weddingId,
     });
   } catch (error) {
     logPlannerError(requestId, "supabase_insert", error);
@@ -510,7 +527,12 @@ async function saveChatForAuthenticatedUser(
   requestId: string,
   messages: ChatMessage[],
   plan: Record<string, unknown>,
-) {
+  options: {
+    weddingId: string | null;
+    chatId: string | null;
+    intake: PlannerIntake;
+  },
+): Promise<{ saved: boolean; chatId: string | null; weddingId: string | null }> {
   const supabase = await createSupabaseServerClient();
   const { data, error: authError } = await supabase.auth.getUser();
 
@@ -531,26 +553,68 @@ async function saveChatForAuthenticatedUser(
       layer: "auth_session",
       reason: "no_authenticated_user",
     });
-    return false;
+    return { saved: false, chatId: null, weddingId: options.weddingId };
   }
 
   const assistantMessage = typeof plan.reply === "string" ? plan.reply : "";
+  const aiPlannerChats = supabase.from("ai_planner_chats") as any;
   const title =
     messages.find((message) => message.role === "user")?.content.slice(0, 90) ??
     "Iyeoba AI Planner chat";
+  const weddingId = options.weddingId ?? await ensureWeddingForChat(user.id, options.intake);
+  const savedMessages = [
+    ...messages,
+    {
+      role: "assistant",
+      content: assistantMessage,
+    },
+  ];
 
-  const { error } = await supabase.from("ai_planner_chats").insert({
+  if (options.chatId) {
+    const { data: updatedChat, error } = await aiPlannerChats
+      .update({
+        wedding_id: weddingId,
+        title,
+        messages: savedMessages,
+        plan,
+      })
+      .eq("id", options.chatId)
+      .eq("user_id", user.id)
+      .select("id, wedding_id")
+      .maybeSingle();
+
+    if (!error && updatedChat?.id) {
+      console.info("Iyeoba AI planner chat updated", {
+        requestId,
+        layer: "supabase_update",
+        chatId: updatedChat.id,
+        weddingId: updatedChat.wedding_id ?? null,
+      });
+      return {
+        saved: true,
+        chatId: updatedChat.id,
+        weddingId: updatedChat.wedding_id ?? weddingId,
+      };
+    }
+
+    if (error) {
+      console.warn("Iyeoba AI planner chat update failed; creating new chat", {
+        requestId,
+        layer: "supabase_update",
+        chatId: options.chatId,
+        code: "code" in error ? error.code : undefined,
+        message: error.message,
+      });
+    }
+  }
+
+  const { data: insertedChat, error } = await aiPlannerChats.insert({
     user_id: user.id,
+    wedding_id: weddingId,
     title,
-    messages: [
-      ...messages,
-      {
-        role: "assistant",
-        content: assistantMessage,
-      },
-    ],
+    messages: savedMessages,
     plan,
-  });
+  }).select("id, wedding_id").maybeSingle();
 
   if (error) {
     console.warn("Iyeoba AI planner chat was not saved", {
@@ -561,16 +625,85 @@ async function saveChatForAuthenticatedUser(
       details: "details" in error ? error.details : undefined,
       hint: "hint" in error ? error.hint : undefined,
     });
-    return false;
+    return { saved: false, chatId: options.chatId, weddingId };
   }
 
   console.info("Iyeoba AI planner chat saved", {
     requestId,
     layer: "supabase_insert",
     saved: true,
+    chatId: insertedChat?.id ?? null,
+    weddingId: insertedChat?.wedding_id ?? weddingId,
   });
 
-  return true;
+  return {
+    saved: true,
+    chatId: insertedChat?.id ?? null,
+    weddingId: insertedChat?.wedding_id ?? weddingId,
+  };
+}
+
+async function ensureWeddingForChat(userId: string, intake: PlannerIntake) {
+  const supabase = await createSupabaseServerClient();
+  const weddings = supabase.from("weddings") as any;
+  const { data: latestWedding } = await weddings
+    .select("id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestWedding?.id) {
+    return latestWedding.id as string;
+  }
+
+  const weddingType = intake.weddingType || "Wedding plan";
+  const { data: insertedWedding, error } = await weddings
+    .insert({
+      user_id: userId,
+      event_name: buildWeddingEventName(intake),
+      wedding_type: weddingType,
+      culture: intake.culture || "Not set",
+      location: intake.location || "Not set",
+      guest_count: parseGuestCount(intake.guestCount),
+      budget_range: intake.budget || "Not set",
+      wedding_date: intake.weddingDate || null,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Iyeoba AI planner wedding auto-create failed", {
+      userId,
+      error: {
+        code: error.code ?? null,
+        message: error.message ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+      },
+    });
+    return null;
+  }
+
+  return insertedWedding?.id ?? null;
+}
+
+function buildWeddingEventName(intake: PlannerIntake) {
+  const culture = intake.culture || "Wedding";
+  const weddingType = intake.weddingType || "plan";
+  return `${culture} ${weddingType}`.trim();
+}
+
+function parseGuestCount(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
+}
+
+function normalizeUuid(value: unknown) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)
+    ? raw
+    : null;
 }
 
 function logPlannerError(
