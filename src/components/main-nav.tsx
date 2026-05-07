@@ -48,9 +48,53 @@ export async function MainNav() {
           </Link>
           <Link
             href="/ai-planner"
-            className="whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268]"
+            className="group relative inline-flex whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A15B]"
           >
-            AI Planner
+            <span className="relative">AI Planner</span>
+            <span
+              aria-hidden="true"
+              className="ai-planner-sparkle ai-planner-sparkle-main pointer-events-none absolute -right-1.5 -top-2 h-[1.25rem] w-[1.25rem] text-[#E4C27A] motion-safe:will-change-transform"
+            >
+              <svg viewBox="0 0 20 20" className="h-full w-full">
+                <path
+                  fill="currentColor"
+                  d="M10 1.8l1.7 5.4L17.1 9l-5.4 1.8L10 16.2l-1.7-5.4L2.9 9l5.4-1.8L10 1.8z"
+                />
+              </svg>
+            </span>
+            <span
+              aria-hidden="true"
+              className="ai-planner-sparkle ai-planner-sparkle-small-one pointer-events-none absolute right-3 -top-2.5 h-3 w-3 text-[#D4AF6A] motion-safe:will-change-transform"
+            >
+              <svg viewBox="0 0 20 20" className="h-full w-full">
+                <path
+                  fill="currentColor"
+                  d="M10 2.8l1.2 4 4 1.2-4 1.2-1.2 4-1.2-4-4-1.2 4-1.2 1.2-4z"
+                />
+              </svg>
+            </span>
+            <span
+              aria-hidden="true"
+              className="ai-planner-sparkle ai-planner-sparkle-small-two pointer-events-none absolute -right-3 top-0.5 h-3.5 w-3.5 text-[#C9A15B] motion-safe:will-change-transform"
+            >
+              <svg viewBox="0 0 20 20" className="h-full w-full">
+                <path
+                  fill="currentColor"
+                  d="M10 3.2l1.1 3.7 3.7 1.1-3.7 1.1-1.1 3.7-1.1-3.7-3.7-1.1 3.7-1.1 1.1-3.7z"
+                />
+              </svg>
+            </span>
+            <span
+              aria-hidden="true"
+              className="ai-planner-sparkle ai-planner-sparkle-small-three pointer-events-none absolute right-0 -top-3 h-2.5 w-2.5 text-[#F0D48B] motion-safe:will-change-transform"
+            >
+              <svg viewBox="0 0 20 20" className="h-full w-full">
+                <path
+                  fill="currentColor"
+                  d="M10 4.1l.9 3 3 .9-3 .9-.9 3-.9-3-3-.9 3-.9.9-3z"
+                />
+              </svg>
+            </span>
           </Link>
           <Link
             href="/#categories"
@@ -101,6 +145,99 @@ export async function MainNav() {
           )}
         </nav>
       </div>
+      <style>
+        {`
+          .ai-planner-sparkle {
+            opacity: 0.98;
+            filter:
+              drop-shadow(0 0 2px rgba(255, 246, 207, 0.95))
+              drop-shadow(0 0 9px rgba(201, 161, 91, 0.7))
+              drop-shadow(0 0 14px rgba(228, 194, 122, 0.32));
+            transform-origin: center;
+          }
+
+          @media (prefers-reduced-motion: no-preference) {
+            .ai-planner-sparkle {
+              will-change: transform, opacity, filter;
+            }
+
+            .ai-planner-sparkle-main {
+              animation: iyeobaAiPlannerTwinkleMain 2.7s ease-in-out infinite;
+            }
+
+            .ai-planner-sparkle-small-one {
+              animation: iyeobaAiPlannerTwinkleDriftOne 3.4s ease-in-out 0.35s infinite;
+            }
+
+            .ai-planner-sparkle-small-two {
+              animation: iyeobaAiPlannerTwinkleDriftTwo 3.9s ease-in-out 0.78s infinite;
+            }
+
+            .ai-planner-sparkle-small-three {
+              animation: iyeobaAiPlannerTwinkleDriftThree 3.15s ease-in-out 1.12s infinite;
+            }
+          }
+
+          @keyframes iyeobaAiPlannerTwinkleMain {
+            0%, 100% {
+              opacity: 0.82;
+              transform: translate3d(0, 0, 0) scale(0.92) rotate(0deg);
+              filter:
+                drop-shadow(0 0 2px rgba(255, 246, 207, 0.95))
+                drop-shadow(0 0 8px rgba(201, 161, 91, 0.62));
+            }
+            50% {
+              opacity: 1;
+              transform: translate3d(0.7px, -1.3px, 0) scale(1.18) rotate(4deg);
+              filter:
+                drop-shadow(0 0 3px rgba(255, 247, 210, 1))
+                drop-shadow(0 0 14px rgba(228, 194, 122, 0.9))
+                drop-shadow(0 0 20px rgba(212, 175, 106, 0.42));
+            }
+          }
+
+          @keyframes iyeobaAiPlannerTwinkleDriftOne {
+            0%, 100% {
+              opacity: 0.76;
+              transform: translate3d(0, 0, 0) scale(0.86);
+            }
+            48% {
+              opacity: 1;
+              transform: translate3d(0.8px, -1px, 0) scale(1.2);
+            }
+          }
+
+          @keyframes iyeobaAiPlannerTwinkleDriftTwo {
+            0%, 100% {
+              opacity: 0.74;
+              transform: translate3d(0, 0, 0) scale(0.88) rotate(0deg);
+            }
+            52% {
+              opacity: 1;
+              transform: translate3d(-0.9px, -0.8px, 0) scale(1.17) rotate(-5deg);
+            }
+          }
+
+          @keyframes iyeobaAiPlannerTwinkleDriftThree {
+            0%, 100% {
+              opacity: 0.72;
+              transform: translate3d(0, 0, 0) scale(0.84);
+            }
+            45% {
+              opacity: 1;
+              transform: translate3d(0.6px, -1px, 0) scale(1.16);
+            }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .ai-planner-sparkle {
+              animation: none;
+              opacity: 0.96;
+              transform: none;
+            }
+          }
+        `}
+      </style>
     </header>
   );
 }
