@@ -40,12 +40,12 @@ export default async function Home() {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(31,31,31,0.12)_0%,rgba(31,31,31,0.02)_34%,rgba(31,31,31,0.06)_100%)]" />
         <div className="relative mx-auto flex h-full max-w-6xl flex-col justify-end">
           <h1 className="mx-auto mb-1 max-w-4xl rounded-[1rem] bg-[linear-gradient(180deg,rgba(74,34,104,0.22)_0%,rgba(74,34,104,0.1)_64%,rgba(74,34,104,0)_100%)] px-3 py-1 text-center text-[1.28rem] font-semibold leading-tight tracking-[-0.03em] text-white/95 drop-shadow-[0_4px_20px_rgba(74,34,104,0.45)] sm:mb-3 sm:px-5 sm:py-2 sm:text-3xl md:mb-4 md:text-5xl">
-            Plan Your Nigerian Wedding Anywhere in the World
+            Your Wedding Village Starts Here 💜
           </h1>
           <div className="mx-auto w-full max-w-5xl rounded-[1.1rem] border border-[rgba(106,62,124,0.1)] bg-white/86 p-2 shadow-[0_20px_50px_-40px_rgba(106,62,124,0.24)] backdrop-blur-[1px] sm:rounded-[1.4rem] sm:p-3.5 md:p-4">
             <form action="/vendors" method="get" className="space-y-1.5 sm:space-y-2">
               <p className="px-0.5 text-center text-[0.72rem] leading-4 text-[color:var(--color-brand-primary-dark)] sm:hidden">
-                Search by category, location, and cultural fit.
+                Verified vendors, AI planning tools, and real inspiration for Nigerian, African, and diaspora celebrations.
               </p>
               <div className="grid gap-1.5 md:grid-cols-3 md:items-end md:gap-2">
                 <SearchField
@@ -69,7 +69,7 @@ export default async function Home() {
               </div>
               <div className="grid gap-1.5 sm:flex sm:flex-row sm:items-center sm:justify-between sm:gap-2.5">
                 <p className="order-1 hidden text-center text-[0.78rem] leading-5 text-[color:var(--color-brand-primary-dark)] sm:order-2 sm:block sm:max-w-2xl sm:px-3 sm:text-[0.86rem]">
-                  Discover trusted Nigerian wedding vendors across Nigeria and the diaspora. Browse by category, location, and cultural fit.
+                  Verified vendors, AI planning tools, and real inspiration for Nigerian, African, and diaspora celebrations.
                 </p>
                 <button type="submit" className="btn-primary order-2 w-full min-w-[145px] px-4 py-2 text-sm sm:order-1 sm:w-auto sm:py-2.5">
                   Find Vendors
