@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { DashboardCollapsibleSection } from "@/components/dashboard-collapsible-section";
 
@@ -67,6 +67,65 @@ const inviteStatusOptions = [
   "Confirmed",
   "Declined",
   "Maybe",
+];
+
+const defaultPhoneCode = "+234";
+
+const countryCallingCodes = [
+  { country: "Nigeria", code: "+234" },
+  { country: "United Kingdom", code: "+44" },
+  { country: "United States", code: "+1" },
+  { country: "Canada", code: "+1" },
+  { country: "Ghana", code: "+233" },
+  { country: "South Africa", code: "+27" },
+  { country: "Kenya", code: "+254" },
+  { country: "Uganda", code: "+256" },
+  { country: "Tanzania", code: "+255" },
+  { country: "Rwanda", code: "+250" },
+  { country: "Ethiopia", code: "+251" },
+  { country: "Egypt", code: "+20" },
+  { country: "Morocco", code: "+212" },
+  { country: "Cameroon", code: "+237" },
+  { country: "Senegal", code: "+221" },
+  { country: "Ivory Coast", code: "+225" },
+  { country: "Benin", code: "+229" },
+  { country: "Togo", code: "+228" },
+  { country: "Sierra Leone", code: "+232" },
+  { country: "Liberia", code: "+231" },
+  { country: "Gambia", code: "+220" },
+  { country: "Zimbabwe", code: "+263" },
+  { country: "Zambia", code: "+260" },
+  { country: "Botswana", code: "+267" },
+  { country: "Namibia", code: "+264" },
+  { country: "Australia", code: "+61" },
+  { country: "New Zealand", code: "+64" },
+  { country: "Ireland", code: "+353" },
+  { country: "France", code: "+33" },
+  { country: "Germany", code: "+49" },
+  { country: "Italy", code: "+39" },
+  { country: "Spain", code: "+34" },
+  { country: "Netherlands", code: "+31" },
+  { country: "Belgium", code: "+32" },
+  { country: "Switzerland", code: "+41" },
+  { country: "Sweden", code: "+46" },
+  { country: "Norway", code: "+47" },
+  { country: "Denmark", code: "+45" },
+  { country: "Finland", code: "+358" },
+  { country: "United Arab Emirates", code: "+971" },
+  { country: "Saudi Arabia", code: "+966" },
+  { country: "Qatar", code: "+974" },
+  { country: "India", code: "+91" },
+  { country: "Pakistan", code: "+92" },
+  { country: "China", code: "+86" },
+  { country: "Japan", code: "+81" },
+  { country: "South Korea", code: "+82" },
+  { country: "Singapore", code: "+65" },
+  { country: "Malaysia", code: "+60" },
+  { country: "Philippines", code: "+63" },
+  { country: "Brazil", code: "+55" },
+  { country: "Mexico", code: "+52" },
+  { country: "Jamaica", code: "+1" },
+  { country: "Trinidad and Tobago", code: "+1" },
 ];
 
 export function PlannerProgressSection({
@@ -637,14 +696,35 @@ export function GuestListSection({
     inviteStatus: "Not invited",
     notes: "",
   });
+  const [phoneCode, setPhoneCode] = useState(defaultPhoneCode);
   const [selectedGuestId, setSelectedGuestId] = useState(initialGuests[0]?.id ?? "");
+  const [inviteMessage, setInviteMessage] = useState(() =>
+    buildInviteMessage(wedding, initialGuests[0]?.name || ""),
+  );
+  const [inviteMessageEdited, setInviteMessageEdited] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const selectedGuest = guests.find((guest) => guest.id === selectedGuestId) ?? null;
-  const inviteMessage = buildInviteMessage(wedding, selectedGuest);
+  const inviteGuestName = draft.name.trim() || selectedGuest?.name || "";
+  const generatedInviteMessage = useMemo(
+    () => buildInviteMessage(wedding, inviteGuestName),
+    [wedding, inviteGuestName],
+  );
   const confirmedCount = guests.filter((guest) => guest.inviteStatus === "Confirmed").length;
   const invitedCount = guests.filter((guest) => guest.inviteStatus !== "Not invited").length;
+
+  useEffect(() => {
+    if (!inviteMessageEdited) {
+      setInviteMessage(generatedInviteMessage);
+      return;
+    }
+
+    setInviteMessage((current) =>
+      replaceInviteGreeting(current, getInviteGreetingLine(wedding, inviteGuestName)),
+    );
+  }, [generatedInviteMessage, inviteGuestName, inviteMessageEdited, wedding]);
 
   async function saveGuest(intent: "add" | "update" | "delete" | "status", payload: Record<string, unknown>) {
     setFeedback(null);
@@ -654,7 +734,12 @@ export function GuestListSection({
       const response = await fetch("/api/planner/guests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ intent, weddingId: weddingId ?? null, ...payload }),
+        body: JSON.stringify({
+          intent,
+          weddingId: weddingId ?? null,
+          ...payload,
+          phone: intent === "add" || intent === "update" ? composePhone(phoneCode, draft.phone) : payload.phone,
+        }),
       });
       const result = await response.json().catch(() => null) as {
         ok?: boolean;
@@ -679,6 +764,7 @@ export function GuestListSection({
           inviteStatus: "Not invited",
           notes: "",
         });
+        setPhoneCode(defaultPhoneCode);
       }
       if (intent === "delete" && selectedGuestId === payload.guestId) {
         setSelectedGuestId(result.guests[0]?.id ?? "");
@@ -694,23 +780,27 @@ export function GuestListSection({
   }
 
   function editGuest(guest: PlannerGuest) {
+    const parsedPhone = splitPhoneForDisplay(guest.phone);
     setDraft({
       guestId: guest.id,
       name: guest.name,
-      phone: guest.phone,
+      phone: parsedPhone.phone,
       email: guest.email,
       guestGroup: guest.guestGroup || "Other",
       inviteStatus: guest.inviteStatus || "Not invited",
       notes: guest.notes,
     });
+    setPhoneCode(parsedPhone.phoneCode);
     setSelectedGuestId(guest.id);
   }
 
   async function copyInviteMessage() {
     try {
       await navigator.clipboard.writeText(inviteMessage);
-      setFeedback({ type: "success", text: "Invite message copied." });
+      setCopyStatus("Copied");
+      window.setTimeout(() => setCopyStatus(""), 2200);
     } catch {
+      setCopyStatus("");
       setFeedback({ type: "error", text: "Copy failed. You can select and copy the message manually." });
     }
   }
@@ -777,12 +867,26 @@ export function GuestListSection({
             </label>
             <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
               Phone
-              <input
-                value={draft.phone}
-                onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
-                placeholder="+1..."
-                className="field-input rounded-[1rem]"
-              />
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+                <select
+                  aria-label="Phone country code"
+                  value={phoneCode}
+                  onChange={(event) => setPhoneCode(event.target.value)}
+                  className="field-input rounded-[1rem]"
+                >
+                  {countryCallingCodes.map((option) => (
+                    <option key={`${option.country}-${option.code}`} value={option.code}>
+                      {option.country} ({option.code})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={draft.phone}
+                  onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
+                  placeholder="Phone number"
+                  className="field-input rounded-[1rem]"
+                />
+              </div>
             </label>
             <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
               Email
@@ -831,7 +935,7 @@ export function GuestListSection({
               {draft.guestId ? (
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
                     setDraft({
                       guestId: "",
                       name: "",
@@ -840,8 +944,9 @@ export function GuestListSection({
                       guestGroup: "Other",
                       inviteStatus: "Not invited",
                       notes: "",
-                    })
-                  }
+                    });
+                    setPhoneCode(defaultPhoneCode);
+                  }}
                   className="btn-secondary px-4 py-2 text-sm"
                 >
                   Cancel edit
@@ -914,20 +1019,28 @@ export function GuestListSection({
                 Invite Message
               </p>
               <p className="mt-1 text-sm text-[color:var(--color-muted)]">
-                {selectedGuest ? `Personalized for ${selectedGuest.name}` : "Generic message"}
+                {inviteGuestName ? `Personalized for ${inviteGuestName}` : "Generic message"}
               </p>
             </div>
-            <button type="button" onClick={copyInviteMessage} className="btn-secondary px-3 py-2 text-xs">
-              Copy message
-            </button>
+            <div className="flex items-center gap-2">
+              {copyStatus ? (
+                <span className="text-xs font-semibold text-[color:var(--color-brand-primary)]">{copyStatus}</span>
+              ) : null}
+              <button type="button" onClick={copyInviteMessage} className="btn-secondary px-3 py-2 text-xs">
+                Copy message
+              </button>
+            </div>
           </div>
           <textarea
-            readOnly
             value={inviteMessage}
+            onChange={(event) => {
+              setInviteMessage(event.target.value);
+              setInviteMessageEdited(true);
+            }}
             className="field-input mt-4 min-h-[220px] rounded-[1.25rem] text-sm leading-7"
           />
           <p className="mt-3 text-xs leading-6 text-[color:var(--color-muted)]">
-            Beta invite helper only. RSVP links, QR codes, and designed invitation cards are not included yet.
+            Beta invite helper only. Invitation card upload, WhatsApp sharing, SMS, email sending, RSVP links, and QR codes are coming later.
           </p>
           <div className="mt-4 grid gap-2 text-sm text-[color:var(--color-muted)] sm:grid-cols-2">
             <MetricCard label="Invited or replied" value={String(invitedCount)} />
@@ -952,22 +1065,64 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 
 function buildInviteMessage(
   wedding: PlannerGuestWedding | null,
-  guest: PlannerGuest | null,
+  guestNameValue: string,
 ) {
-  const guestName = guest?.name || "[Guest Name]";
-  const eventName = wedding?.title || "our wedding";
-  const weddingType = wedding?.weddingType || "wedding";
-  const location = wedding?.location || "";
-  const date = wedding?.weddingDate ? formatInviteDate(wedding.weddingDate) : "";
-
   return [
-    `Hi ${guestName}, you're warmly invited to ${eventName}'s ${weddingType} celebration.`,
+    getInviteGreetingLine(wedding, guestNameValue),
     "",
-    `Date: ${date || ""}`,
-    `Location: ${location || ""}`,
+    `Date: ${wedding?.weddingDate ? formatInviteDate(wedding.weddingDate) : ""}`,
+    `Location: ${wedding?.location || ""}`,
     "",
     "We would love to celebrate with you. Please confirm if you'll be attending.",
   ].join("\n");
+}
+
+function getInviteGreetingLine(wedding: PlannerGuestWedding | null, guestNameValue: string) {
+  const guestName = guestNameValue.trim() || "[Guest Name]";
+  const eventName = wedding?.title || "our wedding";
+  const weddingType = wedding?.weddingType || "wedding";
+
+  return `Hi ${guestName}, you're warmly invited to ${eventName}'s ${weddingType} celebration.`;
+}
+
+function replaceInviteGreeting(current: string, nextGreeting: string) {
+  const lines = current.split("\n");
+  if (!lines.length || /^Hi .+?, you're warmly invited/.test(lines[0])) {
+    return [nextGreeting, ...lines.slice(1)].join("\n");
+  }
+  return current;
+}
+
+function composePhone(phoneCode: string, phone: string) {
+  const trimmedPhone = phone.trim();
+  if (!trimmedPhone) {
+    return "";
+  }
+  if (trimmedPhone.startsWith("+")) {
+    return trimmedPhone;
+  }
+  return `${phoneCode} ${trimmedPhone.replace(/^0+/, "")}`.trim();
+}
+
+function splitPhoneForDisplay(value: string) {
+  const trimmedPhone = value.trim();
+  if (!trimmedPhone.startsWith("+")) {
+    return { phoneCode: defaultPhoneCode, phone: trimmedPhone };
+  }
+
+  const match = countryCallingCodes
+    .slice()
+    .sort((left, right) => right.code.length - left.code.length)
+    .find((option) => trimmedPhone === option.code || trimmedPhone.startsWith(`${option.code} `));
+
+  if (!match) {
+    return { phoneCode: defaultPhoneCode, phone: trimmedPhone };
+  }
+
+  return {
+    phoneCode: match.code,
+    phone: trimmedPhone.slice(match.code.length).trim(),
+  };
 }
 
 function formatInviteDate(value: string) {
