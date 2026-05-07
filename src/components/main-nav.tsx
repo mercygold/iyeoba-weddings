@@ -48,9 +48,9 @@ export async function MainNav() {
           </Link>
           <Link
             href="/ai-planner"
-            className="group relative inline-flex whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#B88A2A] [text-shadow:0_1px_8px_rgba(201,161,91,0.24)] transition-all duration-200 ease-in-out hover:bg-[rgba(201,161,91,0.08)] hover:text-[#9E7422] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A15B]"
+            className="group relative inline-flex whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold !text-[#C6922E] [text-shadow:0_1px_7px_rgba(198,146,46,0.26)] transition-all duration-200 ease-in-out hover:bg-[rgba(201,161,91,0.08)] hover:!text-[#B87918] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A15B]"
           >
-            <span className="relative">AI Planner</span>
+            <span className="relative !text-[#C6922E] group-hover:!text-[#B87918]">AI Planner</span>
             <span
               aria-hidden="true"
               className="ai-planner-sparkle ai-planner-sparkle-main pointer-events-none absolute -right-1.5 -top-2 h-[1.25rem] w-[1.25rem] text-[#5B2C83] motion-safe:will-change-transform"
