@@ -416,8 +416,15 @@ create table if not exists public.blueprints (
   checklist_json jsonb not null default '[]'::jsonb,
   vendor_categories_json jsonb not null default '[]'::jsonb,
   missing_items_json jsonb not null default '[]'::jsonb,
+  budget_json jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.blueprints
+  add column if not exists budget_json jsonb not null default '{}'::jsonb;
+
+create index if not exists blueprints_user_wedding_created_idx
+  on public.blueprints(user_id, wedding_id, created_at desc);
 
 create table if not exists public.ai_planner_chats (
   id uuid primary key default gen_random_uuid(),

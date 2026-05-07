@@ -338,6 +338,7 @@ export function AiPlannerChat({
     setMessages([]);
     setPlan(emptyPlan);
     setSaved(false);
+    setAddedChecklistItems(new Set());
     setError("");
     setNotice("");
     setHistoryFeedback("New chat started.");
@@ -359,6 +360,7 @@ export function AiPlannerChat({
     setMessages(normalizeInitialMessages(chat.messages));
     setPlan(normalizeInitialPlan(chat.plan));
     setSaved(true);
+    setAddedChecklistItems(new Set());
     setError("");
     setNotice("");
     setHistoryFeedback("");
@@ -509,7 +511,7 @@ export function AiPlannerChat({
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, weddingId: activeWeddingId || null }),
       });
       const rawText = await response.text();
       const payload = rawText ? JSON.parse(rawText) : {};
@@ -576,6 +578,7 @@ export function AiPlannerChat({
         },
         body: JSON.stringify({
           budget: budgetPayload,
+          weddingId: activeWeddingId || null,
         }),
       });
       const rawText = await response.text();
@@ -622,6 +625,7 @@ export function AiPlannerChat({
                 value={activeWeddingId}
                 onChange={(event) => {
                   setActiveWeddingId(event.target.value);
+                  setAddedChecklistItems(new Set());
                   updateAiPlannerUrl(event.target.value || null, activeChatId);
                 }}
                 className="field-input mt-2 rounded-[1.25rem] text-sm"

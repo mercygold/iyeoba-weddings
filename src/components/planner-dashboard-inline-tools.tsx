@@ -37,9 +37,11 @@ type PlannerBudget = {
 export function PlannerProgressSection({
   initialItems,
   catalog,
+  weddingId,
 }: {
   initialItems: ProgressItem[];
   catalog: string[];
+  weddingId?: string | null;
 }) {
   const [items, setItems] = useState(initialItems);
   const [draftStatuses, setDraftStatuses] = useState<Record<string, ProgressStatus>>({});
@@ -66,7 +68,7 @@ export function PlannerProgressSection({
       const response = await fetch("/api/planner/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, weddingId: weddingId ?? null }),
       });
       const result = await response.json().catch(() => null) as {
         ok?: boolean;
@@ -257,7 +259,13 @@ export function PlannerProgressSection({
   );
 }
 
-export function WeddingBudgetSection({ initialBudget }: { initialBudget: PlannerBudget | null }) {
+export function WeddingBudgetSection({
+  initialBudget,
+  weddingId,
+}: {
+  initialBudget: PlannerBudget | null;
+  weddingId?: string | null;
+}) {
   const [budget, setBudget] = useState(initialBudget);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
@@ -278,7 +286,7 @@ export function WeddingBudgetSection({ initialBudget }: { initialBudget: Planner
       const response = await fetch("/api/planner/budget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, weddingId: weddingId ?? null }),
       });
       const result = await response.json().catch(() => null) as {
         ok?: boolean;

@@ -40,6 +40,8 @@ export async function POST(request: Request) {
   }
 
   const intent = String(body.intent ?? "").trim();
+  const requestedWeddingId = normalizeUuid((body as { weddingId?: unknown }).weddingId);
+  const weddingId = requestedWeddingId ?? await getPlannerPrimaryWeddingId(user.id);
   const itemLabel = String(body.itemLabel ?? "").trim();
   const itemKey = String(body.itemKey ?? "").trim() || toProgressKey(itemLabel);
   const status = normalizePlannerProgressStatus(body.status);
@@ -58,11 +60,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: blueprints, error: loadError } = await supabase
-    .from("blueprints")
-    .select("id, checklist_json")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const { blueprint, error: loadError } = await getBlueprintForWedding({
+    supabase,
+    userId: user.id,
+    weddingId,
+    includeFallback: !requestedWeddingId,
+  });
 
   if (loadError) {
     console.error("Planner progress API load failed", {
@@ -75,7 +78,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const blueprint = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
   const currentItems = normalizeProgressItems(blueprint?.checklist_json);
   let nextItems: ProgressItem[];
 
@@ -109,7 +111,6 @@ export async function POST(request: Request) {
       );
     }
   } else {
-    const weddingId = await getPlannerPrimaryWeddingId(user.id);
     const { error } = await supabase.from("blueprints").insert({
       user_id: user.id,
       wedding_id: weddingId,
@@ -137,8 +138,59 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     message: "Planning progress updated.",
+    weddingId,
     items: nextItems,
   });
+}
+
+async function getBlueprintForWedding({
+  supabase,
+  userId,
+  weddingId,
+  includeFallback,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  weddingId: string | null;
+  includeFallback: boolean;
+}) {
+  const blueprints = supabase.from("blueprints") as any;
+
+  if (weddingId) {
+    const scoped = await blueprints
+      .select("id, wedding_id, checklist_json")
+      .eq("user_id", userId)
+      .eq("wedding_id", weddingId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (scoped.error || scoped.data?.[0]) {
+      return { blueprint: scoped.data?.[0] ?? null, error: scoped.error };
+    }
+  }
+
+  if (!includeFallback) {
+    return { blueprint: null, error: null };
+  }
+
+  let fallbackQuery = blueprints
+    .select("id, wedding_id, checklist_json")
+    .eq("user_id", userId);
+  if (weddingId) {
+    fallbackQuery = fallbackQuery.is("wedding_id", null);
+  }
+  const fallback = await fallbackQuery
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  return { blueprint: fallback.data?.[0] ?? null, error: fallback.error };
+}
+
+function normalizeUuid(value: unknown) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)
+    ? raw
+    : null;
 }
 
 function normalizeProgressItems(value: unknown): ProgressItem[] {

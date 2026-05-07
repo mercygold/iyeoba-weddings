@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { items?: unknown };
+  let body: { items?: unknown; weddingId?: unknown };
 
   try {
     body = await request.json();
@@ -74,6 +74,8 @@ export async function POST(request: Request) {
   }
 
   const requestedItems = normalizeRequestedItems(body.items);
+  const requestedWeddingId = normalizeUuid(body.weddingId);
+  const weddingId = requestedWeddingId ?? await getPlannerPrimaryWeddingId(user.id);
 
   console.info("AI planner checklist add request", {
     hasUserId: Boolean(user.id),
@@ -89,11 +91,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: blueprints, error: blueprintError } = await supabase
-    .from("blueprints")
-    .select("id, checklist_json")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const { blueprint, error: blueprintError } = await getBlueprintForWedding({
+    supabase,
+    userId: user.id,
+    weddingId,
+    includeFallback: !requestedWeddingId,
+  });
 
   if (blueprintError) {
     console.error("AI planner checklist blueprint load failed", {
@@ -108,7 +111,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const blueprint = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
   const currentItems = normalizeProgressItems(blueprint?.checklist_json);
   const existingKeys = new Set(currentItems.map((item) => item.key));
   const added: ProgressItem[] = [];
@@ -157,7 +159,6 @@ export async function POST(request: Request) {
       );
     }
   } else {
-    const weddingId = await getPlannerPrimaryWeddingId(user.id);
     const { error } = await supabase.from("blueprints").insert({
       user_id: user.id,
       wedding_id: weddingId,
@@ -189,6 +190,7 @@ export async function POST(request: Request) {
     userRole,
     addedCount: added.length,
     skippedCount: skipped.length,
+    weddingId,
     status: 200,
   });
 
@@ -203,6 +205,56 @@ export async function POST(request: Request) {
           ? "New checklist items added. Some were already in your dashboard."
           : "Checklist item added to your planner dashboard.",
   });
+}
+
+async function getBlueprintForWedding({
+  supabase,
+  userId,
+  weddingId,
+  includeFallback,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  weddingId: string | null;
+  includeFallback: boolean;
+}) {
+  const blueprints = supabase.from("blueprints") as any;
+
+  if (weddingId) {
+    const scoped = await blueprints
+      .select("id, wedding_id, checklist_json")
+      .eq("user_id", userId)
+      .eq("wedding_id", weddingId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (scoped.error || scoped.data?.[0]) {
+      return { blueprint: scoped.data?.[0] ?? null, error: scoped.error };
+    }
+  }
+
+  if (!includeFallback) {
+    return { blueprint: null, error: null };
+  }
+
+  let fallbackQuery = blueprints
+    .select("id, wedding_id, checklist_json")
+    .eq("user_id", userId);
+  if (weddingId) {
+    fallbackQuery = fallbackQuery.is("wedding_id", null);
+  }
+  const fallback = await fallbackQuery
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  return { blueprint: fallback.data?.[0] ?? null, error: fallback.error };
+}
+
+function normalizeUuid(value: unknown) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)
+    ? raw
+    : null;
 }
 
 function normalizeRequestedItems(items: unknown) {

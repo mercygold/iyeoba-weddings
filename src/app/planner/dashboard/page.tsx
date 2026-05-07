@@ -97,11 +97,19 @@ export default async function PlannerDashboardPage(props: {
   const feedbackError = message ? undefined : error;
 
   const { weddingEvents, loadError: weddingEventsLoadError } = await getWeddingEvents(ownerId);
+  const requestedWeddingId =
+    typeof searchParams.weddingId === "string" ? searchParams.weddingId : null;
+  const selectedWeddingId =
+    requestedWeddingId && weddingEvents.some((event) => event.id === requestedWeddingId)
+      ? requestedWeddingId
+      : weddingEvents[0]?.id ?? null;
+  const selectedWeddingEvent =
+    weddingEvents.find((event) => event.id === selectedWeddingId) ?? null;
   const editWeddingId =
     typeof searchParams.editWedding === "string" ? searchParams.editWedding : null;
   const showAddWeddingForm = searchParams.addWedding === "1";
-  const progressItems = await getPlannerProgressItems(ownerId);
-  const plannerBudget = await getPlannerBudget(ownerId);
+  const progressItems = await getPlannerProgressItems(ownerId, selectedWeddingId);
+  const plannerBudget = await getPlannerBudget(ownerId, selectedWeddingId);
 
   const savedVendors = await getPlannerSavedVendors(ownerId);
 
@@ -132,6 +140,7 @@ export default async function PlannerDashboardPage(props: {
     readSources: {
       weddingOverview: "weddings",
       progressItems: "blueprints.checklist_json",
+      selectedWeddingId,
       savedVendors: "saved_vendors",
       inquiries: "leads + lead_messages",
     },
@@ -193,6 +202,12 @@ export default async function PlannerDashboardPage(props: {
                           className="btn-secondary px-3 py-1.5 text-xs"
                         >
                           Edit
+                        </Link>
+                        <Link
+                          href={`/planner/dashboard?weddingId=${encodeURIComponent(event.id)}`}
+                          className={event.id === selectedWeddingId ? "btn-primary px-3 py-1.5 text-xs" : "btn-secondary px-3 py-1.5 text-xs"}
+                        >
+                          {event.id === selectedWeddingId ? "Selected" : "Use"}
                         </Link>
                         <form action={deleteWeddingEventAction}>
                           <input type="hidden" name="weddingId" value={event.id} />
@@ -336,11 +351,23 @@ export default async function PlannerDashboardPage(props: {
 
         <PlannerInspirationFeed items={inspirationItems} />
 
-        <WeddingBudgetSection initialBudget={plannerBudget} />
+        {selectedWeddingEvent ? (
+          <p className="surface-soft rounded-[1.25rem] px-4 py-3 text-sm text-[color:var(--color-brand-primary)]">
+            Showing planner tools for {selectedWeddingEvent.eventName || `${selectedWeddingEvent.culture} ${selectedWeddingEvent.weddingType}`.trim()}.
+          </p>
+        ) : null}
+
+        <WeddingBudgetSection
+          key={`budget-${selectedWeddingId ?? "general"}`}
+          initialBudget={plannerBudget}
+          weddingId={selectedWeddingId}
+        />
 
         <PlannerProgressSection
+          key={`progress-${selectedWeddingId ?? "general"}`}
           initialItems={progressItems}
           catalog={progressCatalog}
+          weddingId={selectedWeddingId}
         />
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -822,21 +849,24 @@ function isWeddingSchemaDriftError(error: {
   );
 }
 
-async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> {
+async function getPlannerProgressItems(
+  userId: string,
+  weddingId: string | null,
+): Promise<ProgressItem[]> {
   const supabase = await createSupabaseServerClient();
-  const { data: blueprints, error } = await supabase
-    .from("blueprints")
-    .select("id, checklist_json")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  const data = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
+  const { blueprint: data, error } = await getBlueprintForWedding({
+    supabase,
+    userId,
+    weddingId,
+    includeFallback: true,
+    select: "id, wedding_id, checklist_json",
+  });
 
   console.log("Planner progress read source", {
     table: "blueprints",
     plannerUserId: userId,
+    selectedWeddingId: weddingId,
     hasBlueprintRow: Boolean(data?.id),
-    dataCount: blueprints?.length ?? 0,
     error: error
       ? {
           code: error.code ?? null,
@@ -861,7 +891,7 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
     return [];
   }
 
-  const loaded = data.checklist_json
+  const loaded = (data.checklist_json as unknown[])
     .filter(
       (item): item is { key?: string; label?: string; status?: string } =>
         typeof item === "object" && item !== null,
@@ -877,13 +907,18 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
   return loaded;
 }
 
-async function getPlannerBudget(userId: string): Promise<PlannerBudget | null> {
+async function getPlannerBudget(
+  userId: string,
+  weddingId: string | null,
+): Promise<PlannerBudget | null> {
   const supabase = await createSupabaseServerClient();
-  const { data: blueprints, error } = await supabase
-    .from("blueprints")
-    .select("id, budget_json")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const { blueprint: row, error } = await getBlueprintForWedding({
+    supabase,
+    userId,
+    weddingId,
+    includeFallback: true,
+    select: "id, wedding_id, budget_json",
+  });
 
   if (error) {
     console.warn("Planner budget read failed", {
@@ -897,7 +932,6 @@ async function getPlannerBudget(userId: string): Promise<PlannerBudget | null> {
     return null;
   }
 
-  const row = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
   const rawBudget = row?.budget_json;
   const budgetJsonExists = Boolean(
     rawBudget && typeof rawBudget === "object" && !Array.isArray(rawBudget),
@@ -911,13 +945,58 @@ async function getPlannerBudget(userId: string): Promise<PlannerBudget | null> {
   console.info("Planner dashboard budget read source", {
     table: "blueprints",
     plannerUserId: userId,
+    selectedWeddingId: weddingId,
     dashboardLoadedBlueprintId: row?.id ?? null,
     dashboardBudgetJsonExists: budgetJsonExists,
     budgetJsonCategoriesCount,
-    dataCount: blueprints?.length ?? 0,
   });
 
   return normalizePlannerBudget(row?.budget_json);
+}
+
+async function getBlueprintForWedding({
+  supabase,
+  userId,
+  weddingId,
+  includeFallback,
+  select,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  weddingId: string | null;
+  includeFallback: boolean;
+  select: string;
+}) {
+  const blueprints = supabase.from("blueprints") as any;
+
+  if (weddingId) {
+    const scoped = await blueprints
+      .select(select)
+      .eq("user_id", userId)
+      .eq("wedding_id", weddingId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (scoped.error || scoped.data?.[0]) {
+      return { blueprint: scoped.data?.[0] ?? null, error: scoped.error };
+    }
+  }
+
+  if (!includeFallback) {
+    return { blueprint: null, error: null };
+  }
+
+  let fallbackQuery = blueprints
+    .select(select)
+    .eq("user_id", userId);
+  if (weddingId) {
+    fallbackQuery = fallbackQuery.is("wedding_id", null);
+  }
+  const fallback = await fallbackQuery
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  return { blueprint: fallback.data?.[0] ?? null, error: fallback.error };
 }
 
 function normalizePlannerBudget(value: unknown): PlannerBudget | null {

@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { budget?: unknown };
+  let body: { budget?: unknown; weddingId?: unknown };
 
   try {
     body = await request.json();
@@ -76,6 +76,8 @@ export async function POST(request: Request) {
   }
 
   const budget = normalizeBudgetPayload(body.budget);
+  const requestedWeddingId = normalizeUuid(body.weddingId);
+  const weddingId = requestedWeddingId ?? await getPlannerPrimaryWeddingId(user.id);
 
   console.info("AI planner budget save request", {
     hasUserId: Boolean(user.id),
@@ -92,11 +94,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: blueprints, error: blueprintError } = await supabase
-    .from("blueprints")
-    .select("id, user_id, budget_json")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const { blueprint, error: blueprintError } = await getBlueprintForWedding({
+    supabase,
+    userId: user.id,
+    weddingId,
+    includeFallback: !requestedWeddingId,
+  });
 
   if (blueprintError) {
     console.error("AI planner budget blueprint load failed", {
@@ -111,13 +114,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const blueprint = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
   let savedBlueprintId = blueprint?.id ?? null;
 
   console.info("AI planner budget blueprint selected", {
     hasUserId: Boolean(user.id),
     userRole,
     blueprintId: savedBlueprintId,
+    selectedWeddingId: weddingId,
     blueprintUserMatches: blueprint?.user_id === user.id,
     existingBudgetJsonExists: Boolean(
       blueprint?.budget_json &&
@@ -153,7 +156,6 @@ export async function POST(request: Request) {
     }
     savedBlueprintId = blueprint.id;
   } else {
-    const weddingId = await getPlannerPrimaryWeddingId(user.id);
     const { error } = await supabase
       .from("blueprints")
       .insert({
@@ -179,11 +181,15 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-    const latestResult = await supabase
-      .from("blueprints")
+    const blueprints = supabase.from("blueprints") as any;
+    let latestQuery = blueprints
       .select("id")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+    if (weddingId) {
+      latestQuery = latestQuery.eq("wedding_id", weddingId);
+    }
+    const latestResult = await latestQuery;
     savedBlueprintId = Array.isArray(latestResult.data)
       ? latestResult.data[0]?.id ?? null
       : null;
@@ -209,6 +215,7 @@ export async function POST(request: Request) {
     hasUserId: Boolean(user.id),
     userRole,
     blueprintId: savedBlueprintId,
+    weddingId,
     budgetJsonExists: Boolean(persistedBudget),
     budgetJsonCategoriesCount: persistedCategoriesCount,
     error: persistedResult.error ? serializeSupabaseError(persistedResult.error) : null,
@@ -228,6 +235,7 @@ export async function POST(request: Request) {
     userRole,
     saved: true,
     blueprintId: savedBlueprintId,
+    weddingId,
     budgetJsonCategoriesCount: persistedCategoriesCount,
   });
 
@@ -245,6 +253,56 @@ export async function POST(request: Request) {
       categoryCount: budget.categories.length,
     },
   });
+}
+
+async function getBlueprintForWedding({
+  supabase,
+  userId,
+  weddingId,
+  includeFallback,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  weddingId: string | null;
+  includeFallback: boolean;
+}) {
+  const blueprints = supabase.from("blueprints") as any;
+
+  if (weddingId) {
+    const scoped = await blueprints
+      .select("id, user_id, wedding_id, budget_json")
+      .eq("user_id", userId)
+      .eq("wedding_id", weddingId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (scoped.error || scoped.data?.[0]) {
+      return { blueprint: scoped.data?.[0] ?? null, error: scoped.error };
+    }
+  }
+
+  if (!includeFallback) {
+    return { blueprint: null, error: null };
+  }
+
+  let fallbackQuery = blueprints
+    .select("id, user_id, wedding_id, budget_json")
+    .eq("user_id", userId);
+  if (weddingId) {
+    fallbackQuery = fallbackQuery.is("wedding_id", null);
+  }
+  const fallback = await fallbackQuery
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  return { blueprint: fallback.data?.[0] ?? null, error: fallback.error };
+}
+
+function normalizeUuid(value: unknown) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)
+    ? raw
+    : null;
 }
 
 function normalizeBudgetPayload(value: unknown): SavedBudget {
