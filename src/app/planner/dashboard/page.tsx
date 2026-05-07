@@ -15,8 +15,10 @@ import { PlannerBudgetFields } from "@/components/planner-budget-fields";
 import { PlannerInspirationFeed } from "@/components/planner-inspiration-feed";
 import { PlannerConversationCenter } from "@/components/planner-conversation-center";
 import {
+  GuestListSection,
   PlannerProgressSection,
   WeddingBudgetSection,
+  type PlannerGuest,
 } from "@/components/planner-dashboard-inline-tools";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 import { requirePlannerProfile } from "@/lib/auth";
@@ -110,6 +112,7 @@ export default async function PlannerDashboardPage(props: {
   const showAddWeddingForm = searchParams.addWedding === "1";
   const progressItems = await getPlannerProgressItems(ownerId, selectedWeddingId);
   const plannerBudget = await getPlannerBudget(ownerId, selectedWeddingId);
+  const plannerGuests = await getPlannerGuests(ownerId, selectedWeddingId);
 
   const savedVendors = await getPlannerSavedVendors(ownerId);
 
@@ -146,6 +149,7 @@ export default async function PlannerDashboardPage(props: {
     },
     counts: {
       progressItems: progressItems.length,
+      guests: plannerGuests.length,
       savedVendors: savedVendors.length,
       inquiries: inquiries.length,
       conversationsByVendor: conversationsByVendor.size,
@@ -368,6 +372,25 @@ export default async function PlannerDashboardPage(props: {
           initialItems={progressItems}
           catalog={progressCatalog}
           weddingId={selectedWeddingId}
+        />
+
+        <GuestListSection
+          key={`guests-${selectedWeddingId ?? "general"}`}
+          initialGuests={plannerGuests}
+          weddingId={selectedWeddingId}
+          wedding={
+            selectedWeddingEvent
+              ? {
+                  title:
+                    selectedWeddingEvent.eventName ||
+                    `${selectedWeddingEvent.culture} ${selectedWeddingEvent.weddingType}`.trim() ||
+                    "Wedding event",
+                  weddingType: selectedWeddingEvent.weddingType,
+                  location: selectedWeddingEvent.location,
+                  weddingDate: selectedWeddingEvent.weddingDate,
+                }
+              : null
+          }
         />
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -715,6 +738,7 @@ type WeddingEvent = {
   guestCount: number;
   budgetCurrency: string;
   budgetRange: string;
+  weddingDate: string | null;
   createdAt: string | null;
 };
 
@@ -723,7 +747,8 @@ async function getWeddingEvents(
 ): Promise<{ weddingEvents: WeddingEvent[]; loadError: boolean }> {
   const supabase = await createSupabaseServerClient();
   const selectAttempts = [
-    "id, event_name, culture, wedding_type, location, guest_count, budget_range, budget_currency, created_at",
+    "id, event_name, culture, wedding_type, location, guest_count, budget_range, budget_currency, wedding_date, created_at",
+    "id, event_name, culture, wedding_type, location, guest_count, budget_range, wedding_date, created_at",
     "id, event_name, culture, wedding_type, location, guest_count, budget_range, created_at",
     "id, title, culture, wedding_type, location, guest_count, budget_range, created_at",
     "id, title, culture, wedding_type, location, guest_count, budget, created_at",
@@ -832,6 +857,7 @@ async function getWeddingEvents(
           : typeof row["budget"] === "string"
             ? String(row["budget"]).trim() || "Not set"
             : "Not set",
+      weddingDate: typeof row["wedding_date"] === "string" ? String(row["wedding_date"]) : null,
       createdAt: typeof row["created_at"] === "string" ? String(row["created_at"]) : null,
     })),
   };
@@ -952,6 +978,48 @@ async function getPlannerBudget(
   });
 
   return normalizePlannerBudget(row?.budget_json);
+}
+
+async function getPlannerGuests(
+  userId: string,
+  weddingId: string | null,
+): Promise<PlannerGuest[]> {
+  if (!weddingId) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const guestsTable = supabase.from("guests") as any;
+  const { data, error } = await guestsTable
+    .select("id, name, phone, email, guest_group, invite_status, notes, created_at, updated_at")
+    .eq("user_id", userId)
+    .eq("wedding_id", weddingId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Planner guests read failed", {
+      table: "guests",
+      plannerUserId: userId,
+      weddingId,
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
+    return [];
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((guest) => ({
+    id: String(guest.id),
+    name: stringValue(guest.name),
+    phone: stringValue(guest.phone),
+    email: stringValue(guest.email),
+    guestGroup: stringValue(guest.guest_group) || "Other",
+    inviteStatus: stringValue(guest.invite_status) || "Not invited",
+    notes: stringValue(guest.notes),
+    createdAt: stringValue(guest.created_at) || null,
+    updatedAt: stringValue(guest.updated_at) || null,
+  }));
 }
 
 async function getBlueprintForWedding({
@@ -1094,6 +1162,10 @@ function normalizePlannerProgressStatus(value: unknown): ProgressStatus {
     return "ongoing";
   }
   return "not_done";
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function SelectInput({

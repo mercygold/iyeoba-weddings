@@ -33,6 +33,41 @@ type PlannerBudget = {
   source: "ai" | "manual";
   updatedAt: string | null;
 };
+export type PlannerGuest = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  guestGroup: string;
+  inviteStatus: string;
+  notes: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+type PlannerGuestWedding = {
+  title: string;
+  weddingType: string;
+  location: string;
+  weddingDate: string | null;
+};
+
+const guestGroupOptions = [
+  "Bride family",
+  "Groom family",
+  "Couple friend",
+  "Colleague",
+  "Vendor / support",
+  "VIP",
+  "Other",
+];
+
+const inviteStatusOptions = [
+  "Not invited",
+  "Invited",
+  "Confirmed",
+  "Declined",
+  "Maybe",
+];
 
 export function PlannerProgressSection({
   initialItems,
@@ -583,6 +618,327 @@ export function WeddingBudgetSection({
   );
 }
 
+export function GuestListSection({
+  initialGuests,
+  weddingId,
+  wedding,
+}: {
+  initialGuests: PlannerGuest[];
+  weddingId?: string | null;
+  wedding: PlannerGuestWedding | null;
+}) {
+  const [guests, setGuests] = useState(initialGuests);
+  const [draft, setDraft] = useState({
+    guestId: "",
+    name: "",
+    phone: "",
+    email: "",
+    guestGroup: "Other",
+    inviteStatus: "Not invited",
+    notes: "",
+  });
+  const [selectedGuestId, setSelectedGuestId] = useState(initialGuests[0]?.id ?? "");
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+  const selectedGuest = guests.find((guest) => guest.id === selectedGuestId) ?? null;
+  const inviteMessage = buildInviteMessage(wedding, selectedGuest);
+  const confirmedCount = guests.filter((guest) => guest.inviteStatus === "Confirmed").length;
+  const invitedCount = guests.filter((guest) => guest.inviteStatus !== "Not invited").length;
+
+  async function saveGuest(intent: "add" | "update" | "delete" | "status", payload: Record<string, unknown>) {
+    setFeedback(null);
+    setPendingKey(`${intent}-${String(payload.guestId ?? "new")}`);
+
+    try {
+      const response = await fetch("/api/planner/guests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intent, weddingId: weddingId ?? null, ...payload }),
+      });
+      const result = await response.json().catch(() => null) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        guests?: PlannerGuest[];
+      } | null;
+
+      if (!response.ok || !result?.ok || !Array.isArray(result.guests)) {
+        throw new Error(result?.error || "We could not update this guest list right now.");
+      }
+
+      setGuests(result.guests);
+      setFeedback({ type: "success", text: result.message || "Guest list updated." });
+      if (intent === "add" || intent === "update") {
+        setDraft({
+          guestId: "",
+          name: "",
+          phone: "",
+          email: "",
+          guestGroup: "Other",
+          inviteStatus: "Not invited",
+          notes: "",
+        });
+      }
+      if (intent === "delete" && selectedGuestId === payload.guestId) {
+        setSelectedGuestId(result.guests[0]?.id ?? "");
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        text: error instanceof Error ? error.message : "We could not update this guest list right now.",
+      });
+    } finally {
+      setPendingKey(null);
+    }
+  }
+
+  function editGuest(guest: PlannerGuest) {
+    setDraft({
+      guestId: guest.id,
+      name: guest.name,
+      phone: guest.phone,
+      email: guest.email,
+      guestGroup: guest.guestGroup || "Other",
+      inviteStatus: guest.inviteStatus || "Not invited",
+      notes: guest.notes,
+    });
+    setSelectedGuestId(guest.id);
+  }
+
+  async function copyInviteMessage() {
+    try {
+      await navigator.clipboard.writeText(inviteMessage);
+      setFeedback({ type: "success", text: "Invite message copied." });
+    } catch {
+      setFeedback({ type: "error", text: "Copy failed. You can select and copy the message manually." });
+    }
+  }
+
+  return (
+    <DashboardCollapsibleSection
+      eyebrow="Guest List"
+      title="Guest list and invite message"
+      subtitle="Beta tools for tracking guests for the selected wedding event."
+      defaultOpen={false}
+      storageKey={`iyeoba:planner-dashboard:guest-list:${weddingId ?? "general"}`}
+      badge={
+        <div className="flex flex-wrap justify-end gap-2 text-xs font-semibold uppercase tracking-[0.12em]">
+          <span className="rounded-full bg-[rgba(106,62,124,0.08)] px-3 py-1 text-[color:var(--color-brand-primary)]">
+            {guests.length} guests
+          </span>
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
+            {confirmedCount} confirmed
+          </span>
+        </div>
+      }
+    >
+      {feedback ? (
+        <p
+          className={`mt-4 rounded-[1.25rem] px-4 py-3 text-sm ${
+            feedback.type === "success"
+              ? "surface-soft text-[color:var(--color-brand-primary)]"
+              : "border border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {feedback.text}
+        </p>
+      ) : null}
+
+      {!weddingId ? (
+        <p className="mt-4 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Create or select a wedding event before adding guests.
+        </p>
+      ) : null}
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_0.95fr]">
+        <div className="grid gap-4">
+          <div className="surface-soft grid gap-3 rounded-[1.35rem] p-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Guest name
+              <input
+                value={draft.name}
+                onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Guest name"
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Guest group
+              <select
+                value={draft.guestGroup}
+                onChange={(event) => setDraft((current) => ({ ...current, guestGroup: event.target.value }))}
+                className="field-input rounded-[1rem]"
+              >
+                {guestGroupOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Phone
+              <input
+                value={draft.phone}
+                onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
+                placeholder="+1..."
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Email
+              <input
+                type="email"
+                value={draft.email}
+                onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
+                placeholder="guest@example.com"
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Invite status
+              <select
+                value={draft.inviteStatus}
+                onChange={(event) => setDraft((current) => ({ ...current, inviteStatus: event.target.value }))}
+                className="field-input rounded-[1rem]"
+              >
+                {inviteStatusOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)] sm:col-span-2">
+              Notes
+              <input
+                value={draft.notes}
+                onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                placeholder="Dietary needs, family side, travel notes..."
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <div className="flex flex-wrap gap-2 sm:col-span-2">
+              <button
+                type="button"
+                disabled={!weddingId || !draft.name.trim() || Boolean(pendingKey)}
+                onClick={() =>
+                  startTransition(() =>
+                    void saveGuest(draft.guestId ? "update" : "add", draft),
+                  )
+                }
+                className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+              >
+                {draft.guestId ? "Update guest" : "Add guest"}
+              </button>
+              {draft.guestId ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft({
+                      guestId: "",
+                      name: "",
+                      phone: "",
+                      email: "",
+                      guestGroup: "Other",
+                      inviteStatus: "Not invited",
+                      notes: "",
+                    })
+                  }
+                  className="btn-secondary px-4 py-2 text-sm"
+                >
+                  Cancel edit
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {guests.length ? guests.map((guest) => (
+              <div key={guest.id} className="surface-soft rounded-[1.2rem] p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="font-semibold text-[color:var(--color-ink)]">{guest.name}</p>
+                    <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+                      {[guest.guestGroup, guest.phone, guest.email].filter(Boolean).join(" · ") || "No contact details yet"}
+                    </p>
+                    {guest.notes ? (
+                      <p className="mt-1 text-sm text-[color:var(--color-muted)]">{guest.notes}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <select
+                      value={guest.inviteStatus}
+                      onChange={(event) =>
+                        startTransition(() =>
+                          void saveGuest("status", {
+                            guestId: guest.id,
+                            inviteStatus: event.target.value,
+                          }),
+                        )
+                      }
+                      className="field-input min-h-10 rounded-full px-3 py-1.5 text-xs font-semibold"
+                    >
+                      {inviteStatusOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => editGuest(guest)} className="btn-secondary px-3 py-1.5 text-xs">
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(pendingKey)}
+                      onClick={() =>
+                        startTransition(() => void saveGuest("delete", { guestId: guest.id }))
+                      }
+                      className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
+                    >
+                      Remove
+                    </button>
+                    <button type="button" onClick={() => setSelectedGuestId(guest.id)} className="btn-secondary px-3 py-1.5 text-xs">
+                      Use for invite
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <p className="surface-soft rounded-[1.25rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]">
+                No guests added for this wedding event yet.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="surface-soft rounded-[1.35rem] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-brand-primary)]">
+                Invite Message
+              </p>
+              <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+                {selectedGuest ? `Personalized for ${selectedGuest.name}` : "Generic message"}
+              </p>
+            </div>
+            <button type="button" onClick={copyInviteMessage} className="btn-secondary px-3 py-2 text-xs">
+              Copy message
+            </button>
+          </div>
+          <textarea
+            readOnly
+            value={inviteMessage}
+            className="field-input mt-4 min-h-[220px] rounded-[1.25rem] text-sm leading-7"
+          />
+          <p className="mt-3 text-xs leading-6 text-[color:var(--color-muted)]">
+            Beta invite helper only. RSVP links, QR codes, and designed invitation cards are not included yet.
+          </p>
+          <div className="mt-4 grid gap-2 text-sm text-[color:var(--color-muted)] sm:grid-cols-2">
+            <MetricCard label="Invited or replied" value={String(invitedCount)} />
+            <MetricCard label="Confirmed" value={String(confirmedCount)} />
+          </div>
+        </div>
+      </div>
+    </DashboardCollapsibleSection>
+  );
+}
+
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="surface-soft rounded-[1.25rem] p-4">
@@ -592,6 +948,38 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-lg font-semibold text-[color:var(--color-ink)]">{value}</p>
     </div>
   );
+}
+
+function buildInviteMessage(
+  wedding: PlannerGuestWedding | null,
+  guest: PlannerGuest | null,
+) {
+  const guestName = guest?.name || "[Guest Name]";
+  const eventName = wedding?.title || "our wedding";
+  const weddingType = wedding?.weddingType || "wedding";
+  const location = wedding?.location || "";
+  const date = wedding?.weddingDate ? formatInviteDate(wedding.weddingDate) : "";
+
+  return [
+    `Hi ${guestName}, you're warmly invited to ${eventName}'s ${weddingType} celebration.`,
+    "",
+    `Date: ${date || ""}`,
+    `Location: ${location || ""}`,
+    "",
+    "We would love to celebrate with you. Please confirm if you'll be attending.",
+  ].join("\n");
+}
+
+function formatInviteDate(value: string) {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(parsed));
 }
 
 function formatBudgetAmount(amount: number | null, currency: PlannerBudget["currency"]) {
