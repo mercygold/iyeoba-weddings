@@ -48,12 +48,12 @@ export async function MainNav() {
           </Link>
           <Link
             href="/ai-planner"
-            className="group relative inline-flex whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A15B]"
+            className="group relative inline-flex whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#B88A2A] [text-shadow:0_1px_8px_rgba(201,161,91,0.24)] transition-all duration-200 ease-in-out hover:bg-[rgba(201,161,91,0.08)] hover:text-[#9E7422] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A15B]"
           >
             <span className="relative">AI Planner</span>
             <span
               aria-hidden="true"
-              className="ai-planner-sparkle ai-planner-sparkle-main pointer-events-none absolute -right-1.5 -top-2 h-[1.25rem] w-[1.25rem] text-[#E4C27A] motion-safe:will-change-transform"
+              className="ai-planner-sparkle ai-planner-sparkle-main pointer-events-none absolute -right-1.5 -top-2 h-[1.25rem] w-[1.25rem] text-[#5B2C83] motion-safe:will-change-transform"
             >
               <svg viewBox="0 0 20 20" className="h-full w-full">
                 <path
@@ -64,7 +64,7 @@ export async function MainNav() {
             </span>
             <span
               aria-hidden="true"
-              className="ai-planner-sparkle ai-planner-sparkle-small-one pointer-events-none absolute right-3 -top-2.5 h-3 w-3 text-[#D4AF6A] motion-safe:will-change-transform"
+              className="ai-planner-sparkle ai-planner-sparkle-small-one pointer-events-none absolute right-3 -top-2.5 h-3 w-3 text-[#6A3E7C] motion-safe:will-change-transform"
             >
               <svg viewBox="0 0 20 20" className="h-full w-full">
                 <path
@@ -75,7 +75,7 @@ export async function MainNav() {
             </span>
             <span
               aria-hidden="true"
-              className="ai-planner-sparkle ai-planner-sparkle-small-two pointer-events-none absolute -right-3 top-0.5 h-3.5 w-3.5 text-[#C9A15B] motion-safe:will-change-transform"
+              className="ai-planner-sparkle ai-planner-sparkle-small-two pointer-events-none absolute -right-3 top-0.5 h-3.5 w-3.5 text-[#5B2C83] motion-safe:will-change-transform"
             >
               <svg viewBox="0 0 20 20" className="h-full w-full">
                 <path
@@ -86,7 +86,7 @@ export async function MainNav() {
             </span>
             <span
               aria-hidden="true"
-              className="ai-planner-sparkle ai-planner-sparkle-small-three pointer-events-none absolute right-0 -top-3 h-2.5 w-2.5 text-[#F0D48B] motion-safe:will-change-transform"
+              className="ai-planner-sparkle ai-planner-sparkle-small-three pointer-events-none absolute right-0 -top-3 h-2.5 w-2.5 text-[#6A3E7C] motion-safe:will-change-transform"
             >
               <svg viewBox="0 0 20 20" className="h-full w-full">
                 <path
@@ -150,9 +150,9 @@ export async function MainNav() {
           .ai-planner-sparkle {
             opacity: 0.98;
             filter:
-              drop-shadow(0 0 2px rgba(255, 246, 207, 0.95))
-              drop-shadow(0 0 9px rgba(201, 161, 91, 0.7))
-              drop-shadow(0 0 14px rgba(228, 194, 122, 0.32));
+              drop-shadow(0 0 2px rgba(245, 235, 250, 0.92))
+              drop-shadow(0 0 8px rgba(91, 44, 131, 0.5))
+              drop-shadow(0 0 13px rgba(106, 62, 124, 0.28));
             transform-origin: center;
           }
 
@@ -183,16 +183,16 @@ export async function MainNav() {
               opacity: 0.82;
               transform: translate3d(0, 0, 0) scale(0.92) rotate(0deg);
               filter:
-                drop-shadow(0 0 2px rgba(255, 246, 207, 0.95))
-                drop-shadow(0 0 8px rgba(201, 161, 91, 0.62));
+                drop-shadow(0 0 2px rgba(245, 235, 250, 0.9))
+                drop-shadow(0 0 8px rgba(91, 44, 131, 0.48));
             }
             50% {
               opacity: 1;
               transform: translate3d(0.7px, -1.3px, 0) scale(1.18) rotate(4deg);
               filter:
-                drop-shadow(0 0 3px rgba(255, 247, 210, 1))
-                drop-shadow(0 0 14px rgba(228, 194, 122, 0.9))
-                drop-shadow(0 0 20px rgba(212, 175, 106, 0.42));
+                drop-shadow(0 0 3px rgba(250, 244, 253, 1))
+                drop-shadow(0 0 13px rgba(91, 44, 131, 0.72))
+                drop-shadow(0 0 19px rgba(106, 62, 124, 0.38));
             }
           }
 
