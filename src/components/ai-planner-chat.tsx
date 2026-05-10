@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import Link from "next/link";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -747,18 +746,6 @@ export function AiPlannerChat({
           </div>
         ) : null}
 
-        <div className="surface-soft mt-6 rounded-[1.5rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]">
-          {isAuthenticated ? (
-            <p>
-              {initialName ? `${initialName}, your` : "Your"} AI planner chats and planning details are saved to your account.
-            </p>
-          ) : (
-            <p>
-              You can draft a plan now. <Link href="/auth/sign-in?next=/ai-planner" className="font-semibold text-[color:var(--color-brand-primary)]">Sign in</Link> to save your plan, checklist, and chat history.
-            </p>
-          )}
-        </div>
-
       </aside>
 
       <div className="surface-card min-w-0 rounded-[2rem] p-5 sm:p-7 lg:p-8">
@@ -901,20 +888,22 @@ export function AiPlannerChat({
           ) : null}
 
           {hasPlan ? (
-            <PlannerResult
-              plan={plan}
-              isAuthenticated={isAuthenticated}
-              isPlanner={isPlanner}
-              savingChecklistItems={savingChecklistItems}
-              addedChecklistItems={addedChecklistItems}
-              onAddChecklistItems={addChecklistItemsToDashboard}
-              isSavingBudget={isSavingBudget}
-              onSaveBudget={saveBudgetToDashboard}
-              onUseQuestion={(question) => {
-                setMessage(question);
-                setNotice("Question added to the planning prompt.");
-              }}
-            />
+            <div className="rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] bg-white/45 p-4 sm:p-5">
+              <PlannerResult
+                plan={plan}
+                isAuthenticated={isAuthenticated}
+                isPlanner={isPlanner}
+                savingChecklistItems={savingChecklistItems}
+                addedChecklistItems={addedChecklistItems}
+                onAddChecklistItems={addChecklistItemsToDashboard}
+                isSavingBudget={isSavingBudget}
+                onSaveBudget={saveBudgetToDashboard}
+                onUseQuestion={(question) => {
+                  setMessage(question);
+                  setNotice("Question added to the planning prompt.");
+                }}
+              />
+            </div>
           ) : null}
 
         </div>
@@ -1202,23 +1191,20 @@ function PlannerResult({
       {plan.reply ? (
         <article className="surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
-            Plan summary
+            Planning Summary
           </p>
           <p className="mt-3 break-words text-sm leading-8 text-[color:var(--color-muted)] sm:text-base">
             {plan.reply}
           </p>
         </article>
       ) : null}
-      <div className="grid gap-5 xl:grid-cols-2">
-        <BudgetModule
-          summary={plan.budget_summary}
-          allocations={plan.budget_allocations}
-          fallbackItems={plan.budget_breakdown}
-          isAuthenticated={isAuthenticated}
-          isPlanner={isPlanner}
-          isSavingBudget={isSavingBudget}
-          onSaveBudget={onSaveBudget}
-        />
+      <ResultList
+        title="Suggested Cultural Elements"
+        items={plan.suggested_cultural_elements}
+        description="Traditions and cultural details to discuss with your families, planner, and vendors."
+        featured
+      />
+      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
         <ResultList
           title="Checklist"
           items={plan.checklist}
@@ -1230,16 +1216,20 @@ function PlannerResult({
           addedChecklistItems={addedChecklistItems}
           onAddChecklistItems={onAddChecklistItems}
         />
-        <ResultList
-          title="Suggested Cultural Elements"
-          items={plan.suggested_cultural_elements}
-          description="Traditions and cultural details to discuss with your families, planner, and vendors."
+        <BudgetModule
+          summary={plan.budget_summary}
+          allocations={plan.budget_allocations}
+          fallbackItems={plan.budget_breakdown}
+          isAuthenticated={isAuthenticated}
+          isPlanner={isPlanner}
+          isSavingBudget={isSavingBudget}
+          onSaveBudget={onSaveBudget}
         />
         <ResultList title="Vendor Categories" items={plan.vendor_categories} compact />
         <ResultList title="Timeline" items={plan.timeline} compact />
         <ResultList title="Next Steps" items={plan.next_steps} compact />
+        <QuestionList items={plan.questions} onUseQuestion={onUseQuestion} />
       </div>
-      <QuestionList items={plan.questions} onUseQuestion={onUseQuestion} />
     </div>
   );
 }
@@ -1250,6 +1240,7 @@ function ResultList({
   description,
   isChecklist = false,
   compact = false,
+  featured = false,
   isAuthenticated = false,
   isPlanner = false,
   savingChecklistItems = new Set<string>(),
@@ -1261,6 +1252,7 @@ function ResultList({
   description?: string;
   isChecklist?: boolean;
   compact?: boolean;
+  featured?: boolean;
   isAuthenticated?: boolean;
   isPlanner?: boolean;
   savingChecklistItems?: Set<string>;
@@ -1272,14 +1264,14 @@ function ResultList({
   }
 
   return (
-    <article className={`surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] ${compact ? "p-4 sm:p-5" : "p-5 sm:p-6"}`}>
+    <article className={`surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] ${compact ? "p-4 sm:p-5" : "p-5 sm:p-6"} ${featured ? "bg-white/70" : ""}`}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
-          <h3 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+          <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
             {title}
           </h3>
           {description ? (
-            <p className="mt-1 max-w-2xl text-xs leading-6 text-[color:var(--color-muted)] sm:text-sm">
+            <p className="mt-1 max-w-3xl text-xs leading-6 text-[color:var(--color-muted)] sm:text-sm">
               {description}
             </p>
           ) : null}
@@ -1357,20 +1349,20 @@ function QuestionList({
   return (
     <article className="surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
       <div className="min-w-0">
-        <h3 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+        <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
           Questions to Confirm
         </h3>
         <p className="mt-1 max-w-3xl text-xs leading-6 text-[color:var(--color-muted)] sm:text-sm">
           Tap a question to place it into the Planning Assistant prompt for a follow-up.
         </p>
       </div>
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-5 grid gap-2">
         {items.map((item, index) => (
           <button
             key={`question-${index}`}
             type="button"
             onClick={() => onUseQuestion(item)}
-            className="rounded-full border border-[rgba(201,161,91,0.55)] bg-white/75 px-4 py-2 text-left text-xs font-semibold leading-5 text-[color:var(--color-brand-primary)] transition hover:border-[color:var(--color-brand-primary)] hover:bg-white"
+            className="rounded-[1rem] border border-[rgba(201,161,91,0.55)] bg-white/75 px-3 py-2 text-left text-xs font-semibold leading-5 text-[color:var(--color-brand-primary)] transition hover:border-[color:var(--color-brand-primary)] hover:bg-white"
           >
             <span className="break-words">{item}</span>
           </button>
@@ -1448,7 +1440,7 @@ function BudgetModule({
         </p>
       ) : null}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid gap-3">
         <BudgetMetric label="Allocated" value={summary.allocated_amount || `${allocatedTotal}%`} />
         <BudgetMetric
           label="Buffer / contingency"
