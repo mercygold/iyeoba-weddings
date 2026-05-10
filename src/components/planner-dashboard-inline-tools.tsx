@@ -44,6 +44,24 @@ export type PlannerGuest = {
   createdAt: string | null;
   updatedAt: string | null;
 };
+export type PlannerGuestInvite = {
+  id: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone: string;
+  guestGroup: string;
+  coupleName: string;
+  weddingDate: string;
+  weddingTime: string;
+  venue: string;
+  customMessage: string;
+  inviteStatus: string;
+  rsvpStatus: string;
+  rsvpToken: string;
+  sentAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
 type PlannerGuestWedding = {
   title: string;
   weddingType: string;
@@ -54,10 +72,9 @@ type PlannerGuestWedding = {
 const guestGroupOptions = [
   "Bride family",
   "Groom family",
-  "Couple friend",
+  "Friend",
   "Colleague",
-  "Vendor / support",
-  "VIP",
+  "Vendor",
   "Other",
 ];
 
@@ -679,22 +696,32 @@ export function WeddingBudgetSection({
 
 export function GuestListSection({
   initialGuests,
+  initialInvites,
   weddingId,
   wedding,
 }: {
   initialGuests: PlannerGuest[];
+  initialInvites: PlannerGuestInvite[];
   weddingId?: string | null;
   wedding: PlannerGuestWedding | null;
 }) {
   const [guests, setGuests] = useState(initialGuests);
+  const [invites, setInvites] = useState(initialInvites);
   const [draft, setDraft] = useState({
     guestId: "",
     name: "",
     phone: "",
     email: "",
-    guestGroup: "Other",
+    guestGroup: "Friend",
     inviteStatus: "Not invited",
     notes: "",
+  });
+  const [inviteDetails, setInviteDetails] = useState({
+    inviteId: "",
+    coupleName: wedding?.title || "",
+    weddingDate: wedding?.weddingDate || "",
+    weddingTime: "",
+    venue: wedding?.location || "",
   });
   const [phoneCode, setPhoneCode] = useState(defaultPhoneCode);
   const [selectedGuestId, setSelectedGuestId] = useState(initialGuests[0]?.id ?? "");
@@ -703,7 +730,8 @@ export function GuestListSection({
   );
   const [inviteMessageEdited, setInviteMessageEdited] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [guestFeedback, setGuestFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [inviteFeedback, setInviteFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const selectedGuest = guests.find((guest) => guest.id === selectedGuestId) ?? null;
@@ -727,7 +755,7 @@ export function GuestListSection({
   }, [generatedInviteMessage, inviteGuestName, inviteMessageEdited, wedding]);
 
   async function saveGuest(intent: "add" | "update" | "delete" | "status", payload: Record<string, unknown>) {
-    setFeedback(null);
+    setGuestFeedback(null);
     setPendingKey(`${intent}-${String(payload.guestId ?? "new")}`);
 
     try {
@@ -753,14 +781,15 @@ export function GuestListSection({
       }
 
       setGuests(result.guests);
-      setFeedback({ type: "success", text: result.message || "Guest list updated." });
+      setInviteFeedback(null);
+      setGuestFeedback({ type: "success", text: result.message || "Guest saved." });
       if (intent === "add" || intent === "update") {
         setDraft({
           guestId: "",
           name: "",
           phone: "",
           email: "",
-          guestGroup: "Other",
+          guestGroup: "Friend",
           inviteStatus: "Not invited",
           notes: "",
         });
@@ -770,9 +799,9 @@ export function GuestListSection({
         setSelectedGuestId(result.guests[0]?.id ?? "");
       }
     } catch (error) {
-      setFeedback({
+      setGuestFeedback({
         type: "error",
-        text: error instanceof Error ? error.message : "We could not update this guest list right now.",
+        text: error instanceof Error ? error.message : "We could not save this guest right now.",
       });
     } finally {
       setPendingKey(null);
@@ -786,12 +815,26 @@ export function GuestListSection({
       name: guest.name,
       phone: parsedPhone.phone,
       email: guest.email,
-      guestGroup: guest.guestGroup || "Other",
+      guestGroup: guest.guestGroup || "Friend",
       inviteStatus: guest.inviteStatus || "Not invited",
       notes: guest.notes,
     });
     setPhoneCode(parsedPhone.phoneCode);
     setSelectedGuestId(guest.id);
+    const invite = findInviteForGuest(invites, guest.email);
+    if (invite) {
+      setInviteDetails({
+        inviteId: invite.id,
+        coupleName: invite.coupleName,
+        weddingDate: invite.weddingDate,
+        weddingTime: invite.weddingTime,
+        venue: invite.venue,
+      });
+      if (invite.customMessage) {
+        setInviteMessage(invite.customMessage);
+        setInviteMessageEdited(true);
+      }
+    }
   }
 
   async function copyInviteMessage() {
@@ -801,15 +844,83 @@ export function GuestListSection({
       window.setTimeout(() => setCopyStatus(""), 2200);
     } catch {
       setCopyStatus("");
-      setFeedback({ type: "error", text: "Copy failed. You can select and copy the message manually." });
+      setInviteFeedback({ type: "error", text: "Copy failed. You can select and copy the message manually." });
     }
+  }
+
+  async function saveInvite(intent: "save" | "send", guest?: PlannerGuest) {
+    const sourceName = guest?.name || draft.name;
+    const sourceEmail = guest?.email || draft.email;
+    const sourcePhone = guest?.phone || composePhone(phoneCode, draft.phone);
+    const sourceGroup = guest?.guestGroup || draft.guestGroup;
+    const existingInvite = findInviteForGuest(invites, sourceEmail);
+
+    setInviteFeedback(null);
+    setCopyStatus("");
+    setPendingKey(`${intent}-invite-${guest?.id || draft.guestId || "draft"}`);
+
+    try {
+      const response = await fetch("/api/planner/guest-invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent,
+          weddingId: weddingId ?? null,
+          guestId: guest?.id || draft.guestId || null,
+          inviteId: inviteDetails.inviteId || existingInvite?.id || null,
+          guestName: sourceName,
+          guestEmail: sourceEmail,
+          guestPhone: sourcePhone,
+          guestGroup: sourceGroup,
+          coupleName: inviteDetails.coupleName || wedding?.title || "",
+          weddingDate: inviteDetails.weddingDate,
+          weddingTime: inviteDetails.weddingTime,
+          venue: inviteDetails.venue || wedding?.location || "",
+          customMessage: inviteMessage,
+        }),
+      });
+      const result = await response.json().catch(() => null) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        guests?: PlannerGuest[];
+        invites?: PlannerGuestInvite[];
+      } | null;
+
+      if (!response.ok || !result?.ok) {
+        if (Array.isArray(result?.invites)) setInvites(result.invites);
+        if (Array.isArray(result?.guests)) setGuests(result.guests);
+        throw new Error(result?.error || (intent === "send" ? "We could not send this invite right now." : "We could not save this invite right now."));
+      }
+
+      if (Array.isArray(result.guests)) setGuests(result.guests);
+      if (Array.isArray(result.invites)) setInvites(result.invites);
+      setGuestFeedback(null);
+      setInviteFeedback({ type: "success", text: result.message || (intent === "send" ? "Invite email sent." : "Guest invite saved.") });
+    } catch (error) {
+      setInviteFeedback({
+        type: "error",
+        text: error instanceof Error
+          ? error.message
+          : intent === "send"
+            ? "We could not send this invite right now."
+            : "We could not save this invite right now.",
+      });
+    } finally {
+      setPendingKey(null);
+    }
+  }
+
+  function useInviteForGuest(guest: PlannerGuest) {
+    editGuest(guest);
+    setSelectedGuestId(guest.id);
   }
 
   return (
     <DashboardCollapsibleSection
       eyebrow="Guest List"
-      title="Guest list and invite message"
-      subtitle="Beta tools for tracking guests for the selected wedding event."
+      title="Guest List & Invites"
+      subtitle="Add guests, send invitations, and track RSVP responses."
       defaultOpen={false}
       storageKey={`iyeoba:planner-dashboard:guest-list:${weddingId ?? "general"}`}
       badge={
@@ -823,15 +934,27 @@ export function GuestListSection({
         </div>
       }
     >
-      {feedback ? (
+      {guestFeedback ? (
         <p
           className={`mt-4 rounded-[1.25rem] px-4 py-3 text-sm ${
-            feedback.type === "success"
+            guestFeedback.type === "success"
               ? "surface-soft text-[color:var(--color-brand-primary)]"
               : "border border-red-200 bg-red-50 text-red-700"
           }`}
         >
-          {feedback.text}
+          {guestFeedback.text}
+        </p>
+      ) : null}
+
+      {inviteFeedback ? (
+        <p
+          className={`mt-4 rounded-[1.25rem] px-4 py-3 text-sm ${
+            inviteFeedback.type === "success"
+              ? "surface-soft text-[color:var(--color-brand-primary)]"
+              : "border border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {inviteFeedback.text}
         </p>
       ) : null}
 
@@ -910,6 +1033,42 @@ export function GuestListSection({
                 ))}
               </select>
             </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Couple name
+              <input
+                value={inviteDetails.coupleName}
+                onChange={(event) => setInviteDetails((current) => ({ ...current, coupleName: event.target.value }))}
+                placeholder="Ashaake & Copy"
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Wedding date
+              <input
+                type="date"
+                value={inviteDetails.weddingDate}
+                onChange={(event) => setInviteDetails((current) => ({ ...current, weddingDate: event.target.value }))}
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Wedding time
+              <input
+                type="time"
+                value={inviteDetails.weddingTime}
+                onChange={(event) => setInviteDetails((current) => ({ ...current, weddingTime: event.target.value }))}
+                className="field-input rounded-[1rem]"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)]">
+              Venue/location
+              <input
+                value={inviteDetails.venue}
+                onChange={(event) => setInviteDetails((current) => ({ ...current, venue: event.target.value }))}
+                placeholder="Venue or city"
+                className="field-input rounded-[1rem]"
+              />
+            </label>
             <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)] sm:col-span-2">
               Notes
               <input
@@ -930,7 +1089,15 @@ export function GuestListSection({
                 }
                 className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
               >
-                {draft.guestId ? "Update guest" : "Add guest"}
+                Save guest
+              </button>
+              <button
+                type="button"
+                disabled={!weddingId || !draft.name.trim() || !draft.email.trim() || !inviteDetails.coupleName.trim() || Boolean(pendingKey)}
+                onClick={() => startTransition(() => void saveInvite("send"))}
+                className="btn-secondary px-4 py-2 text-sm disabled:opacity-60"
+              >
+                Send invite
               </button>
               {draft.guestId ? (
                 <button
@@ -956,13 +1123,28 @@ export function GuestListSection({
           </div>
 
           <div className="grid gap-3">
-            {guests.length ? guests.map((guest) => (
+            {guests.length ? guests.map((guest) => {
+              const invite = findInviteForGuest(invites, guest.email);
+              return (
               <div key={guest.id} className="surface-soft rounded-[1.2rem] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <p className="font-semibold text-[color:var(--color-ink)]">{guest.name}</p>
                     <p className="mt-1 text-sm text-[color:var(--color-muted)]">
                       {[guest.guestGroup, guest.phone, guest.email].filter(Boolean).join(" · ") || "No contact details yet"}
+                    </p>
+                    <p className="mt-2 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.12em]">
+                      <span className="rounded-full bg-white px-3 py-1 text-[color:var(--color-brand-primary)]">
+                        Invite: {invite?.inviteStatus || "draft"}
+                      </span>
+                      <span className="rounded-full bg-white px-3 py-1 text-[color:var(--color-muted)]">
+                        RSVP: {invite?.rsvpStatus || "pending"}
+                      </span>
+                      {invite?.sentAt ? (
+                        <span className="rounded-full bg-white px-3 py-1 text-[color:var(--color-muted)]">
+                          Sent {formatShortDate(invite.sentAt)}
+                        </span>
+                      ) : null}
                     </p>
                     {guest.notes ? (
                       <p className="mt-1 text-sm text-[color:var(--color-muted)]">{guest.notes}</p>
@@ -998,13 +1180,35 @@ export function GuestListSection({
                     >
                       Remove
                     </button>
-                    <button type="button" onClick={() => setSelectedGuestId(guest.id)} className="btn-secondary px-3 py-1.5 text-xs">
+                    <button type="button" onClick={() => useInviteForGuest(guest)} className="btn-secondary px-3 py-1.5 text-xs">
                       Use for invite
                     </button>
+                    <button
+                      type="button"
+                      disabled={!guest.email || Boolean(pendingKey)}
+                      onClick={() => startTransition(() => void saveInvite("send", guest))}
+                      className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
+                    >
+                      {invite?.inviteStatus === "sent" ? "Resend invite" : "Send invite"}
+                    </button>
+                    {invite?.rsvpToken ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(`${window.location.origin}/rsvp/${invite.rsvpToken}`);
+                          setCopyStatus("Link copied");
+                          window.setTimeout(() => setCopyStatus(""), 2200);
+                        }}
+                        className="btn-secondary px-3 py-1.5 text-xs"
+                      >
+                        Copy RSVP link
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
-            )) : (
+              );
+            }) : (
               <p className="surface-soft rounded-[1.25rem] p-4 text-sm leading-7 text-[color:var(--color-muted)]">
                 No guests added for this wedding event yet.
               </p>
@@ -1026,6 +1230,14 @@ export function GuestListSection({
               {copyStatus ? (
                 <span className="text-xs font-semibold text-[color:var(--color-brand-primary)]">{copyStatus}</span>
               ) : null}
+              <button
+                type="button"
+                disabled={!weddingId || !draft.name.trim() || !draft.email.trim() || !inviteDetails.coupleName.trim() || Boolean(pendingKey)}
+                onClick={() => startTransition(() => void saveInvite("save"))}
+                className="btn-secondary px-3 py-2 text-xs disabled:opacity-60"
+              >
+                Save invite
+              </button>
               <button type="button" onClick={copyInviteMessage} className="btn-secondary px-3 py-2 text-xs">
                 Copy message
               </button>
@@ -1037,6 +1249,7 @@ export function GuestListSection({
               setInviteMessage(event.target.value);
               setInviteMessageEdited(true);
             }}
+            placeholder="We would love for you to celebrate this special day with us."
             className="field-input mt-4 min-h-[220px] rounded-[1.25rem] text-sm leading-7"
           />
           <p className="mt-3 text-xs leading-6 text-[color:var(--color-muted)]">
@@ -1123,6 +1336,26 @@ function splitPhoneForDisplay(value: string) {
     phoneCode: match.code,
     phone: trimmedPhone.slice(match.code.length).trim(),
   };
+}
+
+function findInviteForGuest(invites: PlannerGuestInvite[], email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return null;
+  }
+  return invites.find((invite) => invite.guestEmail.trim().toLowerCase() === normalizedEmail) ?? null;
+}
+
+function formatShortDate(value: string) {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(parsed));
 }
 
 function formatInviteDate(value: string) {

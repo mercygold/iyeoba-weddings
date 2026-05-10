@@ -1204,7 +1204,7 @@ function PlannerResult({
         description="Traditions and cultural details to discuss with your families, planner, and vendors."
         featured
       />
-      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-2">
         <ResultList
           title="Checklist"
           items={plan.checklist}
@@ -1225,11 +1225,10 @@ function PlannerResult({
           isSavingBudget={isSavingBudget}
           onSaveBudget={onSaveBudget}
         />
-        <ResultList title="Vendor Categories" items={plan.vendor_categories} compact />
         <ResultList title="Timeline" items={plan.timeline} compact />
         <ResultList title="Next Steps" items={plan.next_steps} compact />
-        <QuestionList items={plan.questions} onUseQuestion={onUseQuestion} />
       </div>
+      <QuestionList items={plan.questions} onUseQuestion={onUseQuestion} />
     </div>
   );
 }
@@ -1422,7 +1421,7 @@ function BudgetModule({
               disabled={isSavingBudget}
               className="btn-secondary w-fit shrink-0 whitespace-nowrap px-3 py-2 text-xs disabled:opacity-60"
             >
-              {isSavingBudget ? "Saving..." : "Save budget to dashboard"}
+              {isSavingBudget ? "Saving..." : "Save to dashboard"}
             </button>
           ) : null}
         </div>

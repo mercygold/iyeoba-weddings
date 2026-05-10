@@ -7,8 +7,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 const guestGroups = new Set([
   "Bride family",
   "Groom family",
+  "Friend",
   "Couple friend",
   "Colleague",
+  "Vendor",
   "Vendor / support",
   "VIP",
   "Other",
@@ -111,7 +113,7 @@ export async function POST(request: Request) {
     revalidatePath("/planner/dashboard");
     return NextResponse.json({
       ok: true,
-      message: intent === "update" ? "Guest updated." : "Guest added.",
+      message: "Guest saved.",
       guests,
     });
   }
@@ -221,4 +223,3 @@ function normalizeUuid(value: unknown) {
     ? raw
     : null;
 }
-

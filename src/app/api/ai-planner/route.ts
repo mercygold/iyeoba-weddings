@@ -814,11 +814,11 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
   const budgetModule = getBudgetModule(budget, culture, weddingType);
   const guestPhrase = guestCount ? ` for about ${guestCount} guests` : "";
   const budgetPhrase = budget ? ` with a working budget of ${budget}` : "";
-  const datePhrase = weddingDate ? ` ahead of ${weddingDate}` : "";
+  const datePhrase = weddingDate ? `, and a wedding date of ${formatStarterPlanDate(weddingDate)}` : "";
   const culturePhrase = culture ? ` while honoring ${culture} traditions` : "";
 
   return {
-    reply: `Here is a practical starter wedding plan based on your details for ${weddingType} in ${location}${guestPhrase}${budgetPhrase}${datePhrase}${culturePhrase}. Use this as a first draft, then confirm details with your families and vendors.`,
+    reply: `Here is a practical starter plan for ${weddingType} in ${location}${guestPhrase}${budgetPhrase}${datePhrase}${culturePhrase}. Use this as a first draft, then confirm details with your families and vendors.`,
     suggested_cultural_elements: culturalElements,
     checklist: [
       "Confirm wedding type, family priorities, ceremony flow, and any cultural requirements.",
@@ -859,6 +859,18 @@ function createStarterPlan(intake: PlannerIntake, prompt: string) {
       `What should the plan focus on most based on your prompt: ${prompt.slice(0, 180)}${prompt.length > 180 ? "..." : ""}`,
     ],
   };
+}
+
+function formatStarterPlanDate(value: string) {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(parsed));
 }
 
 function getSuggestedCulturalElements(

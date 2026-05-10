@@ -19,6 +19,7 @@ import {
   PlannerProgressSection,
   WeddingBudgetSection,
   type PlannerGuest,
+  type PlannerGuestInvite,
 } from "@/components/planner-dashboard-inline-tools";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 import { requirePlannerProfile } from "@/lib/auth";
@@ -113,6 +114,7 @@ export default async function PlannerDashboardPage(props: {
   const progressItems = await getPlannerProgressItems(ownerId, selectedWeddingId);
   const plannerBudget = await getPlannerBudget(ownerId, selectedWeddingId);
   const plannerGuests = await getPlannerGuests(ownerId, selectedWeddingId);
+  const plannerGuestInvites = await getPlannerGuestInvites(ownerId, selectedWeddingId);
 
   const savedVendors = await getPlannerSavedVendors(ownerId);
 
@@ -150,6 +152,7 @@ export default async function PlannerDashboardPage(props: {
     counts: {
       progressItems: progressItems.length,
       guests: plannerGuests.length,
+      guestInvites: plannerGuestInvites.length,
       savedVendors: savedVendors.length,
       inquiries: inquiries.length,
       conversationsByVendor: conversationsByVendor.size,
@@ -377,6 +380,7 @@ export default async function PlannerDashboardPage(props: {
         <GuestListSection
           key={`guests-${selectedWeddingId ?? "general"}`}
           initialGuests={plannerGuests}
+          initialInvites={plannerGuestInvites}
           weddingId={selectedWeddingId}
           wedding={
             selectedWeddingEvent
@@ -1019,6 +1023,55 @@ async function getPlannerGuests(
     notes: stringValue(guest.notes),
     createdAt: stringValue(guest.created_at) || null,
     updatedAt: stringValue(guest.updated_at) || null,
+  }));
+}
+
+async function getPlannerGuestInvites(
+  userId: string,
+  weddingId: string | null,
+): Promise<PlannerGuestInvite[]> {
+  if (!weddingId) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const guestInvitesTable = supabase.from("guest_invites") as any;
+  const { data, error } = await guestInvitesTable
+    .select("id, guest_name, guest_email, guest_phone, guest_group, couple_name, wedding_date, wedding_time, venue, custom_message, invite_status, rsvp_status, rsvp_token, sent_at, created_at, updated_at")
+    .eq("planner_user_id", userId)
+    .eq("wedding_id", weddingId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Planner guest invites read failed", {
+      table: "guest_invites",
+      plannerUserId: userId,
+      weddingId,
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
+    return [];
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((invite) => ({
+    id: String(invite.id),
+    guestName: stringValue(invite.guest_name),
+    guestEmail: stringValue(invite.guest_email),
+    guestPhone: stringValue(invite.guest_phone),
+    guestGroup: stringValue(invite.guest_group) || "Other",
+    coupleName: stringValue(invite.couple_name),
+    weddingDate: stringValue(invite.wedding_date),
+    weddingTime: stringValue(invite.wedding_time),
+    venue: stringValue(invite.venue),
+    customMessage: stringValue(invite.custom_message),
+    inviteStatus: stringValue(invite.invite_status) || "draft",
+    rsvpStatus: stringValue(invite.rsvp_status) || "pending",
+    rsvpToken: stringValue(invite.rsvp_token),
+    sentAt: stringValue(invite.sent_at) || null,
+    createdAt: stringValue(invite.created_at) || null,
+    updatedAt: stringValue(invite.updated_at) || null,
   }));
 }
 
