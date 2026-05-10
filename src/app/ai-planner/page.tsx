@@ -34,22 +34,19 @@ export default async function AiPlannerPage(props: { searchParams: SearchParams 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_42%,#ffffff_100%)]">
       <MainNav />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 md:px-10 lg:py-12">
-        <section className="surface-card rounded-[2rem] p-7 md:p-10">
+      <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6 md:px-10 lg:py-10">
+        <section className="surface-card rounded-[1.75rem] p-5 md:p-6">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
             Iyeoba AI Planner
           </p>
-          <div className="mt-4 grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
+          <div className="mt-3 max-w-5xl">
             <div>
-              <h1 className="font-display text-4xl text-[color:var(--color-ink)] md:text-5xl">
-                Plan your Nigerian wedding with guided next steps.
+              <h1 className="font-display text-3xl text-[color:var(--color-ink)] md:text-4xl">
+                Plan your wedding with guided steps.
               </h1>
-              <p className="mt-5 max-w-2xl text-sm leading-7 text-[color:var(--color-muted)] md:text-base">
-                Share the wedding type, location, guest count, budget, date, and cultural details. Iyeoba AI will help shape a checklist, timeline, budget view, and vendor plan for traditional, court, civil, white, and diaspora celebrations.
+              <p className="mt-3 max-w-4xl text-sm leading-7 text-[color:var(--color-muted)] md:text-base">
+                Share your wedding type, location, guest count, budget, date, and cultural details. Iyeoba AI will shape a practical planning draft, while final traditions, pricing, and vendor availability should be confirmed with families and vendors.
               </p>
-            </div>
-            <div className="surface-soft rounded-[1.5rem] p-5 text-sm leading-7 text-[color:var(--color-muted)]">
-              Iyeoba AI provides planning guidance. Traditions, pricing, and vendor availability may vary. Please confirm details with families and vendors.
             </div>
           </div>
         </section>
