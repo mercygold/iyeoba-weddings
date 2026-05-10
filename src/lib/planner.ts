@@ -42,6 +42,7 @@ export const budgetRanges = [
   "NGN 5M to NGN 10M",
   "NGN 10M to NGN 20M",
   "NGN 20M+",
+  "Custom",
 ];
 
 export const budgetCurrencies = ["NGN", "USD", "CAD", "GBP", "EUR", "AUD"] as const;
@@ -102,16 +103,18 @@ export function suggestBudgetCurrency(location: string): BudgetCurrency {
 }
 
 export function getBudgetRangesForCurrency(currency: BudgetCurrency): string[] {
+  const withCustom = (ranges: string[]) => [...ranges, "Custom"];
+
   if (currency === "NGN") {
-    return ["Under NGN 5M", "NGN 5M to NGN 10M", "NGN 10M to NGN 20M", "NGN 20M+"];
+    return withCustom(["Under NGN 5M", "NGN 5M to NGN 10M", "NGN 10M to NGN 20M", "NGN 20M+"]);
   }
   if (currency === "GBP") {
-    return ["Under £5,000", "£5,000 to £10,000", "£10,000 to £20,000", "£20,000+"];
+    return withCustom(["Under £5,000", "£5,000 to £10,000", "£10,000 to £20,000", "£20,000+"]);
   }
   if (currency === "EUR") {
-    return ["Under €5,000", "€5,000 to €10,000", "€10,000 to €20,000", "€20,000+"];
+    return withCustom(["Under €5,000", "€5,000 to €10,000", "€10,000 to €20,000", "€20,000+"]);
   }
-  return ["Under $5,000", "$5,000 to $10,000", "$10,000 to $20,000", "$20,000+"];
+  return withCustom(["Under $5,000", "$5,000 to $10,000", "$10,000 to $20,000", "$20,000+"]);
 }
 
 export type PlannerInput = {
