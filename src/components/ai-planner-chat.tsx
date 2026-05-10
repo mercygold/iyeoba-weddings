@@ -1393,13 +1393,6 @@ function BudgetModule({
     return null;
   }
 
-  const allocatedTotal = allocations
-    .filter((item) => item.category.toLowerCase() !== "contingency")
-    .reduce((total, item) => total + item.percentage, 0);
-  const contingency = allocations.find(
-    (item) => item.category.toLowerCase() === "contingency",
-  );
-
   return (
     <article className="surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1427,7 +1420,7 @@ function BudgetModule({
               type="button"
               onClick={onSaveBudget}
               disabled={isSavingBudget}
-              className="btn-secondary w-fit px-3 py-2 text-xs disabled:opacity-60"
+              className="btn-secondary w-fit shrink-0 whitespace-nowrap px-3 py-2 text-xs disabled:opacity-60"
             >
               {isSavingBudget ? "Saving..." : "Save budget to dashboard"}
             </button>
@@ -1439,15 +1432,6 @@ function BudgetModule({
           Sign in as a planner to save this budget to your dashboard.
         </p>
       ) : null}
-
-      <div className="mt-4 grid gap-3">
-        <BudgetMetric label="Allocated" value={summary.allocated_amount || `${allocatedTotal}%`} />
-        <BudgetMetric
-          label="Buffer / contingency"
-          value={summary.remaining_buffer || `${contingency?.percentage ?? 10}%`}
-        />
-        <BudgetMetric label="Categories" value={`${allocations.length || fallbackItems.length}`} />
-      </div>
 
       {allocations.length ? (
         <div className="mt-5 space-y-3">
@@ -1597,19 +1581,6 @@ function parseMoneyText(value: string) {
     currency,
     amount: Number.isFinite(numeric) && numeric >= 0 ? numeric : null,
   };
-}
-
-function BudgetMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1rem] bg-white px-4 py-3 text-sm shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
-        {label}
-      </p>
-      <p className="mt-1 font-semibold text-[color:var(--color-ink)]">
-        {value}
-      </p>
-    </div>
-  );
 }
 
 function normalizeChecklistResponseItems(items: unknown) {
