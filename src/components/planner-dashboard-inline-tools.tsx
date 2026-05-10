@@ -149,10 +149,12 @@ export function PlannerProgressSection({
   initialItems,
   catalog,
   weddingId,
+  weddingTitle,
 }: {
   initialItems: ProgressItem[];
   catalog: string[];
   weddingId?: string | null;
+  weddingTitle?: string | null;
 }) {
   const [items, setItems] = useState(initialItems);
   const [draftStatuses, setDraftStatuses] = useState<Record<string, ProgressStatus>>({});
@@ -213,6 +215,7 @@ export function PlannerProgressSection({
     <DashboardCollapsibleSection
       eyebrow="Planning Progress"
       title="Track your planning items"
+      subtitle={weddingTitle ? `For: ${weddingTitle}` : "For: General planning fallback. Select a wedding event before adding planning items."}
       defaultOpen
       storageKey="iyeoba:planner-dashboard:planning-progress"
       badge={
@@ -229,6 +232,11 @@ export function PlannerProgressSection({
         </div>
       }
     >
+      {!weddingId ? (
+        <p className="mt-4 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Select or create a wedding event before adding checklist items.
+        </p>
+      ) : null}
 
       {feedback ? (
         <p
@@ -324,7 +332,7 @@ export function PlannerProgressSection({
             className="field-input mt-2 rounded-[1rem] px-3 py-2 text-sm"
             value={addItemValue}
             onChange={(event) => setSelectedItem(event.target.value)}
-            disabled={!availableItems.length}
+            disabled={!weddingId || !availableItems.length}
           >
             {availableItems.length ? (
               availableItems.map((item) => (
@@ -343,15 +351,16 @@ export function PlannerProgressSection({
           </label>
           <input
             type="text"
-            value={customItem}
-            onChange={(event) => setCustomItem(event.target.value)}
-            placeholder="e.g. Traditional intro outfit"
-            className="field-input mt-2 rounded-[1rem] px-3 py-2 text-sm"
+          value={customItem}
+          onChange={(event) => setCustomItem(event.target.value)}
+          placeholder="e.g. Traditional intro outfit"
+          disabled={!weddingId}
+          className="field-input mt-2 rounded-[1rem] px-3 py-2 text-sm"
           />
         </div>
         <button
           type="button"
-          disabled={!addItemValue || Boolean(pendingKey)}
+          disabled={!weddingId || !addItemValue || Boolean(pendingKey)}
           onClick={() =>
             startTransition(() =>
               void updateProgress({
@@ -373,9 +382,11 @@ export function PlannerProgressSection({
 export function WeddingBudgetSection({
   initialBudget,
   weddingId,
+  weddingTitle,
 }: {
   initialBudget: PlannerBudget | null;
   weddingId?: string | null;
+  weddingTitle?: string | null;
 }) {
   const [budget, setBudget] = useState(initialBudget);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -427,6 +438,7 @@ export function WeddingBudgetSection({
     <DashboardCollapsibleSection
       eyebrow="Wedding Budget"
       title="Edit your starter budget and track where your money is going."
+      subtitle={weddingTitle ? `For: ${weddingTitle}` : "For: General planning fallback. Select a wedding event before adding budget details."}
       defaultOpen
       storageKey="iyeoba:planner-dashboard:wedding-budget"
       badge={
@@ -437,6 +449,11 @@ export function WeddingBudgetSection({
         ) : null
       }
     >
+      {!weddingId ? (
+        <p className="mt-4 rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Select or create a wedding event before adding budget details.
+        </p>
+      ) : null}
 
       {feedback ? (
         <p
@@ -452,7 +469,9 @@ export function WeddingBudgetSection({
 
       {!displayBudget ? (
         <div className="mt-5 surface-soft rounded-[1.35rem] p-5 text-sm leading-7 text-[color:var(--color-muted)]">
-          No budget saved yet. Generate a plan in Iyeoba AI Planner and save the budget to your dashboard.
+          {weddingTitle
+            ? `No budget saved yet for ${weddingTitle}. Generate a plan in Iyeoba AI Planner or add budget categories here.`
+            : "No budget saved yet. Select a wedding event before adding budget categories."}
         </div>
       ) : (
         <>
@@ -473,12 +492,13 @@ export function WeddingBudgetSection({
               Currency
               <select
                 value={displayBudget.currency}
-                onChange={(event) =>
-                  setBudget((current) =>
-                    current ? { ...current, currency: event.target.value as PlannerBudget["currency"] } : current,
-                  )
-                }
-                className="field-input rounded-[1rem]"
+              onChange={(event) =>
+                setBudget((current) =>
+                  current ? { ...current, currency: event.target.value as PlannerBudget["currency"] } : current,
+                )
+              }
+              disabled={!weddingId}
+              className="field-input rounded-[1rem]"
               >
                 <option value="NGN">NGN</option>
                 <option value="USD">USD</option>
@@ -498,12 +518,13 @@ export function WeddingBudgetSection({
                     current ? { ...current, totalBudget: parseBudgetNumber(event.target.value) } : current,
                   )
                 }
+                disabled={!weddingId}
                 className="field-input rounded-[1rem]"
               />
             </label>
             <button
               type="button"
-              disabled={Boolean(pendingKey)}
+              disabled={!weddingId || Boolean(pendingKey)}
               onClick={() =>
                 startTransition(() =>
                   void updateBudget(
@@ -539,6 +560,7 @@ export function WeddingBudgetSection({
                         onChange={(event) =>
                           setBudget((current) => updateBudgetCategoryDraft(current, category.id, { name: event.target.value }))
                         }
+                        disabled={!weddingId}
                         className="field-input rounded-[1rem]"
                       />
                     </label>
@@ -555,6 +577,7 @@ export function WeddingBudgetSection({
                             }),
                           )
                         }
+                        disabled={!weddingId}
                         className="field-input rounded-[1rem]"
                       />
                     </label>
@@ -565,12 +588,13 @@ export function WeddingBudgetSection({
                         onChange={(event) =>
                           setBudget((current) => updateBudgetCategoryDraft(current, category.id, { note: event.target.value }))
                         }
+                        disabled={!weddingId}
                         className="field-input rounded-[1rem]"
                       />
                     </label>
                     <button
                       type="button"
-                      disabled={Boolean(pendingKey)}
+                      disabled={!weddingId || Boolean(pendingKey)}
                       onClick={() =>
                         startTransition(() =>
                           void updateBudget(
@@ -591,7 +615,7 @@ export function WeddingBudgetSection({
                     </button>
                     <button
                       type="button"
-                      disabled={Boolean(pendingKey)}
+                      disabled={!weddingId || Boolean(pendingKey)}
                       onClick={() =>
                         startTransition(() =>
                           void updateBudget(
@@ -647,6 +671,7 @@ export function WeddingBudgetSection({
             value={addDraft.categoryName}
             onChange={(event) => setAddDraft((current) => ({ ...current, categoryName: event.target.value }))}
             placeholder="e.g. Bridal party gifts"
+            disabled={!weddingId}
             className="field-input rounded-[1rem]"
           />
         </label>
@@ -657,6 +682,7 @@ export function WeddingBudgetSection({
             onChange={(event) => setAddDraft((current) => ({ ...current, amount: event.target.value }))}
             type="number"
             min="0"
+            disabled={!weddingId}
             className="field-input rounded-[1rem]"
           />
         </label>
@@ -666,12 +692,13 @@ export function WeddingBudgetSection({
             value={addDraft.note}
             onChange={(event) => setAddDraft((current) => ({ ...current, note: event.target.value }))}
             placeholder="Optional"
+            disabled={!weddingId}
             className="field-input rounded-[1rem]"
           />
         </label>
         <button
           type="button"
-          disabled={Boolean(pendingKey) || !addDraft.categoryName.trim()}
+          disabled={!weddingId || Boolean(pendingKey) || !addDraft.categoryName.trim()}
           onClick={() =>
             startTransition(() =>
               void updateBudget(
@@ -698,11 +725,13 @@ export function GuestListSection({
   initialGuests,
   initialInvites,
   weddingId,
+  weddingTitle,
   wedding,
 }: {
   initialGuests: PlannerGuest[];
   initialInvites: PlannerGuestInvite[];
   weddingId?: string | null;
+  weddingTitle?: string | null;
   wedding: PlannerGuestWedding | null;
 }) {
   const [guests, setGuests] = useState(initialGuests);
@@ -920,7 +949,7 @@ export function GuestListSection({
     <DashboardCollapsibleSection
       eyebrow="Guest List"
       title="Guest List & Invites"
-      subtitle="Add guests, send invitations, and track RSVP responses."
+      subtitle={weddingTitle ? `For: ${weddingTitle}. Add guests, send invitations, and track RSVP responses.` : "For: General planning fallback. Select a wedding event before adding guests or invites."}
       defaultOpen={false}
       storageKey={`iyeoba:planner-dashboard:guest-list:${weddingId ?? "general"}`}
       badge={

@@ -108,6 +108,9 @@ export default async function PlannerDashboardPage(props: {
       : weddingEvents[0]?.id ?? null;
   const selectedWeddingEvent =
     weddingEvents.find((event) => event.id === selectedWeddingId) ?? null;
+  const selectedWeddingTitle = selectedWeddingEvent
+    ? getWeddingEventTitle(selectedWeddingEvent)
+    : null;
   const editWeddingId =
     typeof searchParams.editWedding === "string" ? searchParams.editWedding : null;
   const showAddWeddingForm = searchParams.addWedding === "1";
@@ -360,7 +363,11 @@ export default async function PlannerDashboardPage(props: {
 
         {selectedWeddingEvent ? (
           <p className="surface-soft rounded-[1.25rem] px-4 py-3 text-sm text-[color:var(--color-brand-primary)]">
-            Showing planner tools for {selectedWeddingEvent.eventName || `${selectedWeddingEvent.culture} ${selectedWeddingEvent.weddingType}`.trim()}.
+            Planning for: {selectedWeddingTitle}.
+          </p>
+        ) : weddingEvents.length ? (
+          <p className="rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Select a wedding event before adding budget, checklist, or guest details.
           </p>
         ) : null}
 
@@ -368,6 +375,7 @@ export default async function PlannerDashboardPage(props: {
           key={`budget-${selectedWeddingId ?? "general"}`}
           initialBudget={plannerBudget}
           weddingId={selectedWeddingId}
+          weddingTitle={selectedWeddingTitle}
         />
 
         <PlannerProgressSection
@@ -375,6 +383,7 @@ export default async function PlannerDashboardPage(props: {
           initialItems={progressItems}
           catalog={progressCatalog}
           weddingId={selectedWeddingId}
+          weddingTitle={selectedWeddingTitle}
         />
 
         <GuestListSection
@@ -382,13 +391,11 @@ export default async function PlannerDashboardPage(props: {
           initialGuests={plannerGuests}
           initialInvites={plannerGuestInvites}
           weddingId={selectedWeddingId}
+          weddingTitle={selectedWeddingTitle}
           wedding={
             selectedWeddingEvent
               ? {
-                  title:
-                    selectedWeddingEvent.eventName ||
-                    `${selectedWeddingEvent.culture} ${selectedWeddingEvent.weddingType}`.trim() ||
-                    "Wedding event",
+                  title: selectedWeddingTitle ?? "Wedding event",
                   weddingType: selectedWeddingEvent.weddingType,
                   location: selectedWeddingEvent.location,
                   weddingDate: selectedWeddingEvent.weddingDate,
@@ -569,6 +576,14 @@ function MetricCard({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
+  );
+}
+
+function getWeddingEventTitle(event: WeddingEvent) {
+  return (
+    event.eventName ||
+    `${event.culture} ${event.weddingType}`.trim() ||
+    "Wedding event"
   );
 }
 
@@ -888,7 +903,7 @@ async function getPlannerProgressItems(
     supabase,
     userId,
     weddingId,
-    includeFallback: true,
+    includeFallback: !weddingId,
     select: "id, wedding_id, checklist_json",
   });
 
@@ -946,7 +961,7 @@ async function getPlannerBudget(
     supabase,
     userId,
     weddingId,
-    includeFallback: true,
+    includeFallback: !weddingId,
     select: "id, wedding_id, budget_json",
   });
 
