@@ -610,8 +610,8 @@ export function AiPlannerChat({
   }
 
   return (
-    <section className="mt-8 grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
-      <aside className="surface-card rounded-[2rem] p-5 sm:p-7">
+    <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] lg:items-start">
+      <aside className="surface-card order-2 min-w-0 rounded-[2rem] p-5 sm:p-6 lg:sticky lg:top-6">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
           Planning Details
         </p>
@@ -758,9 +758,24 @@ export function AiPlannerChat({
             </p>
           )}
         </div>
+
+        {hasPlan ? (
+          <div className="mt-6">
+            <PlannerResult
+              plan={plan}
+              isAuthenticated={isAuthenticated}
+              isPlanner={isPlanner}
+              savingChecklistItems={savingChecklistItems}
+              addedChecklistItems={addedChecklistItems}
+              onAddChecklistItems={addChecklistItemsToDashboard}
+              isSavingBudget={isSavingBudget}
+              onSaveBudget={saveBudgetToDashboard}
+            />
+          </div>
+        ) : null}
       </aside>
 
-      <div className="surface-card rounded-[2rem] p-5 sm:p-7">
+      <div className="surface-card order-1 min-w-0 rounded-[2rem] p-5 sm:p-7 lg:p-8">
         <div className="flex flex-col gap-3 border-b border-[rgba(91,44,131,0.1)] pb-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
@@ -805,7 +820,7 @@ export function AiPlannerChat({
           </div>
         </div>
 
-        <div className="mt-5 min-h-[320px] space-y-4">
+        <div className="mt-6 min-h-[320px] space-y-5">
           {messages.length === 0 ? (
             <div className="surface-soft rounded-[1.5rem] p-5">
               <p className="text-sm leading-7 text-[color:var(--color-muted)]">
@@ -899,18 +914,6 @@ export function AiPlannerChat({
             </div>
           ) : null}
 
-          {hasPlan ? (
-            <PlannerResult
-              plan={plan}
-              isAuthenticated={isAuthenticated}
-              isPlanner={isPlanner}
-              savingChecklistItems={savingChecklistItems}
-              addedChecklistItems={addedChecklistItems}
-              onAddChecklistItems={addChecklistItemsToDashboard}
-              isSavingBudget={isSavingBudget}
-              onSaveBudget={saveBudgetToDashboard}
-            />
-          ) : null}
         </div>
 
         <form onSubmit={submitPlannerMessage} className="mt-5">
@@ -1190,15 +1193,27 @@ function PlannerResult({
   onSaveBudget: () => void;
 }) {
   return (
-    <div className="grid gap-4 pt-2 md:grid-cols-2">
+    <div className="space-y-5 pt-2">
+      {plan.reply ? (
+        <article className="surface-soft rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
+            Plan summary
+          </p>
+          <p className="mt-3 text-sm leading-8 text-[color:var(--color-muted)] sm:text-base">
+            {plan.reply}
+          </p>
+        </article>
+      ) : null}
       <ResultList
         title="Suggested Cultural Elements"
         items={plan.suggested_cultural_elements}
+        description="Traditions and cultural details to discuss with your families, planner, and vendors."
       />
       <ResultList
         title="Checklist"
         items={plan.checklist}
         isChecklist
+        description="Tasks to move into your planner dashboard for this selected wedding event."
         isAuthenticated={isAuthenticated}
         isPlanner={isPlanner}
         savingChecklistItems={savingChecklistItems}
@@ -1214,10 +1229,12 @@ function PlannerResult({
         isSavingBudget={isSavingBudget}
         onSaveBudget={onSaveBudget}
       />
-      <ResultList title="Vendor Categories" items={plan.vendor_categories} />
-      <ResultList title="Timeline" items={plan.timeline} />
-      <ResultList title="Next Steps" items={plan.next_steps} />
-      <ResultList title="Questions to Confirm" items={plan.questions} />
+      <div className="grid gap-4">
+        <ResultList title="Vendor Categories" items={plan.vendor_categories} compact />
+        <ResultList title="Timeline" items={plan.timeline} compact />
+        <ResultList title="Next Steps" items={plan.next_steps} compact />
+        <ResultList title="Questions to Confirm" items={plan.questions} compact />
+      </div>
     </div>
   );
 }
@@ -1225,7 +1242,9 @@ function PlannerResult({
 function ResultList({
   title,
   items,
+  description,
   isChecklist = false,
+  compact = false,
   isAuthenticated = false,
   isPlanner = false,
   savingChecklistItems = new Set<string>(),
@@ -1234,7 +1253,9 @@ function ResultList({
 }: {
   title: string;
   items: string[];
+  description?: string;
   isChecklist?: boolean;
+  compact?: boolean;
   isAuthenticated?: boolean;
   isPlanner?: boolean;
   savingChecklistItems?: Set<string>;
@@ -1246,17 +1267,24 @@ function ResultList({
   }
 
   return (
-    <article className="surface-soft rounded-[1.5rem] p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
-          {title}
-        </h3>
+    <article className={`surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] ${compact ? "p-4 sm:p-5" : "p-5 sm:p-6"}`}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h3 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+            {title}
+          </h3>
+          {description ? (
+            <p className="mt-1 max-w-2xl text-xs leading-6 text-[color:var(--color-muted)] sm:text-sm">
+              {description}
+            </p>
+          ) : null}
+        </div>
         {isChecklist && isPlanner ? (
           <button
             type="button"
             onClick={() => onAddChecklistItems?.(items)}
             disabled={items.every((item) => addedChecklistItems.has(toProgressKey(item)))}
-            className="btn-secondary w-fit px-3 py-2 text-xs disabled:opacity-60"
+            className="btn-secondary w-fit shrink-0 whitespace-nowrap px-3 py-2 text-xs disabled:opacity-60"
           >
             Add all to dashboard
           </button>
@@ -1272,15 +1300,19 @@ function ResultList({
           Planner accounts can add checklist items to the planner dashboard.
         </p>
       ) : null}
-      <ul className="mt-3 space-y-3 text-sm leading-7 text-[color:var(--color-muted)]">
+      <ul className={`${description ? "mt-5" : "mt-4"} space-y-3 text-sm leading-7 text-[color:var(--color-muted)]`}>
         {items.map((item, index) => (
           <li
             key={`${title}-${index}`}
-            className="flex flex-col gap-2 sm:flex-row sm:items-start"
+            className={
+              isChecklist && isPlanner
+                ? "grid gap-3 rounded-[1.15rem] bg-white/70 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                : "flex gap-3 rounded-[1.15rem] bg-white/55 p-3"
+            }
           >
-            <div className="flex flex-1 gap-2">
-              <span className="mt-[0.58rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-brand-gold)]" />
-              <span>{item}</span>
+            <div className="flex min-w-0 gap-3">
+              <span className="mt-[0.62rem] h-2 w-2 shrink-0 rounded-full bg-[color:var(--color-brand-gold)] shadow-[0_0_0_4px_rgba(201,161,91,0.14)]" />
+              <span className="min-w-0 break-words">{item}</span>
             </div>
             {isChecklist && isPlanner ? (
               <button
@@ -1290,7 +1322,7 @@ function ResultList({
                   savingChecklistItems.has(toProgressKey(item)) ||
                   addedChecklistItems.has(toProgressKey(item))
                 }
-                className="btn-secondary h-fit w-fit shrink-0 px-3 py-1.5 text-[11px] disabled:opacity-60"
+                className="btn-secondary h-fit w-fit shrink-0 justify-self-start whitespace-nowrap px-3 py-1.5 text-[11px] disabled:opacity-60 sm:justify-self-end"
               >
                 {addedChecklistItems.has(toProgressKey(item))
                   ? "Already added"
@@ -1335,7 +1367,7 @@ function BudgetModule({
   );
 
   return (
-    <article className="surface-soft rounded-[1.5rem] p-4 md:col-span-2">
+    <article className="surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
@@ -1387,11 +1419,11 @@ function BudgetModule({
         <div className="mt-5 space-y-3">
           {allocations.map((item) => (
             <div key={item.category} className="rounded-[1rem] bg-white p-3 shadow-sm">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <p className="font-semibold text-[color:var(--color-ink)]">
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                <p className="min-w-0 break-words font-semibold text-[color:var(--color-ink)]">
                   {item.category}
                 </p>
-                <p className="shrink-0 text-right text-xs font-semibold text-[color:var(--color-muted)]">
+                <p className="shrink-0 text-right text-xs font-semibold text-[color:var(--color-muted)] max-sm:text-left">
                   {item.amount || `${item.percentage}%`} · {item.percentage}%
                 </p>
               </div>
@@ -1407,9 +1439,9 @@ function BudgetModule({
       ) : (
         <ul className="mt-4 space-y-2 text-sm leading-7 text-[color:var(--color-muted)]">
           {fallbackItems.map((item, index) => (
-            <li key={`budget-fallback-${index}`} className="flex gap-2">
+            <li key={`budget-fallback-${index}`} className="flex min-w-0 gap-2">
               <span className="mt-[0.58rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-brand-gold)]" />
-              <span>{item}</span>
+              <span className="min-w-0 break-words">{item}</span>
             </li>
           ))}
         </ul>
