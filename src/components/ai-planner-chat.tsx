@@ -610,8 +610,8 @@ export function AiPlannerChat({
   }
 
   return (
-    <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] lg:items-start">
-      <aside className="surface-card order-2 min-w-0 rounded-[2rem] p-5 sm:p-6 lg:sticky lg:top-6">
+    <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(280px,0.55fr)_minmax(0,1.45fr)] lg:items-start">
+      <aside className="surface-card min-w-0 rounded-[2rem] p-5 sm:p-6 lg:sticky lg:top-6">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
           Planning Details
         </p>
@@ -703,7 +703,7 @@ export function AiPlannerChat({
           <div className="mt-6 rounded-[1.5rem] border border-[rgba(91,44,131,0.1)] bg-white/70 p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
-                Chat history
+                Chat History
               </p>
               <button
                 type="button"
@@ -759,27 +759,13 @@ export function AiPlannerChat({
           )}
         </div>
 
-        {hasPlan ? (
-          <div className="mt-6">
-            <PlannerResult
-              plan={plan}
-              isAuthenticated={isAuthenticated}
-              isPlanner={isPlanner}
-              savingChecklistItems={savingChecklistItems}
-              addedChecklistItems={addedChecklistItems}
-              onAddChecklistItems={addChecklistItemsToDashboard}
-              isSavingBudget={isSavingBudget}
-              onSaveBudget={saveBudgetToDashboard}
-            />
-          </div>
-        ) : null}
       </aside>
 
-      <div className="surface-card order-1 min-w-0 rounded-[2rem] p-5 sm:p-7 lg:p-8">
+      <div className="surface-card min-w-0 rounded-[2rem] p-5 sm:p-7 lg:p-8">
         <div className="flex flex-col gap-3 border-b border-[rgba(91,44,131,0.1)] pb-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-brand-primary)]">
-              Chat Assistant
+              Planning Assistant
             </p>
             <h2 className="font-display mt-2 text-3xl text-[color:var(--color-ink)]">
               Wedding plan draft
@@ -912,6 +898,23 @@ export function AiPlannerChat({
             <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-xs leading-6 text-red-700">
               {budgetError}
             </div>
+          ) : null}
+
+          {hasPlan ? (
+            <PlannerResult
+              plan={plan}
+              isAuthenticated={isAuthenticated}
+              isPlanner={isPlanner}
+              savingChecklistItems={savingChecklistItems}
+              addedChecklistItems={addedChecklistItems}
+              onAddChecklistItems={addChecklistItemsToDashboard}
+              isSavingBudget={isSavingBudget}
+              onSaveBudget={saveBudgetToDashboard}
+              onUseQuestion={(question) => {
+                setMessage(question);
+                setNotice("Question added to the planning prompt.");
+              }}
+            />
           ) : null}
 
         </div>
@@ -1182,6 +1185,7 @@ function PlannerResult({
   onAddChecklistItems,
   isSavingBudget,
   onSaveBudget,
+  onUseQuestion,
 }: {
   plan: PlannerPlan;
   isAuthenticated: boolean;
@@ -1191,50 +1195,51 @@ function PlannerResult({
   onAddChecklistItems: (items: string[]) => void;
   isSavingBudget: boolean;
   onSaveBudget: () => void;
+  onUseQuestion: (question: string) => void;
 }) {
   return (
     <div className="space-y-5 pt-2">
       {plan.reply ? (
-        <article className="surface-soft rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
+        <article className="surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)]">
             Plan summary
           </p>
-          <p className="mt-3 text-sm leading-8 text-[color:var(--color-muted)] sm:text-base">
+          <p className="mt-3 break-words text-sm leading-8 text-[color:var(--color-muted)] sm:text-base">
             {plan.reply}
           </p>
         </article>
       ) : null}
-      <ResultList
-        title="Suggested Cultural Elements"
-        items={plan.suggested_cultural_elements}
-        description="Traditions and cultural details to discuss with your families, planner, and vendors."
-      />
-      <ResultList
-        title="Checklist"
-        items={plan.checklist}
-        isChecklist
-        description="Tasks to move into your planner dashboard for this selected wedding event."
-        isAuthenticated={isAuthenticated}
-        isPlanner={isPlanner}
-        savingChecklistItems={savingChecklistItems}
-        addedChecklistItems={addedChecklistItems}
-        onAddChecklistItems={onAddChecklistItems}
-      />
-      <BudgetModule
-        summary={plan.budget_summary}
-        allocations={plan.budget_allocations}
-        fallbackItems={plan.budget_breakdown}
-        isAuthenticated={isAuthenticated}
-        isPlanner={isPlanner}
-        isSavingBudget={isSavingBudget}
-        onSaveBudget={onSaveBudget}
-      />
-      <div className="grid gap-4">
+      <div className="grid gap-5 xl:grid-cols-2">
+        <BudgetModule
+          summary={plan.budget_summary}
+          allocations={plan.budget_allocations}
+          fallbackItems={plan.budget_breakdown}
+          isAuthenticated={isAuthenticated}
+          isPlanner={isPlanner}
+          isSavingBudget={isSavingBudget}
+          onSaveBudget={onSaveBudget}
+        />
+        <ResultList
+          title="Checklist"
+          items={plan.checklist}
+          isChecklist
+          description="Tasks to move into your planner dashboard for this selected wedding event."
+          isAuthenticated={isAuthenticated}
+          isPlanner={isPlanner}
+          savingChecklistItems={savingChecklistItems}
+          addedChecklistItems={addedChecklistItems}
+          onAddChecklistItems={onAddChecklistItems}
+        />
+        <ResultList
+          title="Suggested Cultural Elements"
+          items={plan.suggested_cultural_elements}
+          description="Traditions and cultural details to discuss with your families, planner, and vendors."
+        />
         <ResultList title="Vendor Categories" items={plan.vendor_categories} compact />
         <ResultList title="Timeline" items={plan.timeline} compact />
         <ResultList title="Next Steps" items={plan.next_steps} compact />
-        <ResultList title="Questions to Confirm" items={plan.questions} compact />
       </div>
+      <QuestionList items={plan.questions} onUseQuestion={onUseQuestion} />
     </div>
   );
 }
@@ -1334,6 +1339,43 @@ function ResultList({
           </li>
         ))}
       </ul>
+    </article>
+  );
+}
+
+function QuestionList({
+  items,
+  onUseQuestion,
+}: {
+  items: string[];
+  onUseQuestion: (question: string) => void;
+}) {
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <article className="surface-soft min-w-0 rounded-[1.75rem] border border-[rgba(91,44,131,0.08)] p-5 sm:p-6">
+      <div className="min-w-0">
+        <h3 className="font-display text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+          Questions to Confirm
+        </h3>
+        <p className="mt-1 max-w-3xl text-xs leading-6 text-[color:var(--color-muted)] sm:text-sm">
+          Tap a question to place it into the Planning Assistant prompt for a follow-up.
+        </p>
+      </div>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {items.map((item, index) => (
+          <button
+            key={`question-${index}`}
+            type="button"
+            onClick={() => onUseQuestion(item)}
+            className="rounded-full border border-[rgba(201,161,91,0.55)] bg-white/75 px-4 py-2 text-left text-xs font-semibold leading-5 text-[color:var(--color-brand-primary)] transition hover:border-[color:var(--color-brand-primary)] hover:bg-white"
+          >
+            <span className="break-words">{item}</span>
+          </button>
+        ))}
+      </div>
     </article>
   );
 }
