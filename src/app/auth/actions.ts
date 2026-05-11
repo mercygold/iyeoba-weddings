@@ -16,7 +16,7 @@ export async function signUpAction(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const email = String(formData.get("email") ?? "");
+  const email = normalizeEmail(formData.get("email"));
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
   const fullName = String(formData.get("fullName") ?? "");
@@ -27,11 +27,15 @@ export async function signUpAction(formData: FormData) {
   const normalizedPhoneNumber = phoneNumber.replace(/[^\d]/g, "");
   const phone = normalizedPhoneNumber;
   const fullPhoneNumber = `${phoneCountryCode}${normalizedPhoneNumber}`;
-  const role = String(formData.get("role") ?? "planner");
+  const role = normalizeSignupRole(formData.get("role"));
   const next = String(formData.get("next") ?? "");
   const source = String(formData.get("source") ?? "");
   const requestOrigin = await getRequestOrigin();
   const siteUrl = getAuthSiteUrl(requestOrigin);
+
+  if (!email) {
+    redirect("/auth/sign-up?error=Please enter a valid email address.");
+  }
 
   if (password.length < 8) {
     redirect(
@@ -67,7 +71,7 @@ export async function signUpAction(formData: FormData) {
 
   if (error) {
     logAuthIssue("signUp", {
-      email,
+      email: maskEmail(email),
       role,
       siteUrl,
       error,
@@ -78,12 +82,24 @@ export async function signUpAction(formData: FormData) {
   }
 
   logAuthIssue("signUpResult", {
-    email,
+    email: maskEmail(email),
     role,
     userId: data.user?.id ?? null,
     emailConfirmedAt: data.user?.email_confirmed_at ?? null,
     hasSession: Boolean(data.session),
   });
+
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    logAuthIssue("signUpExistingAccount", {
+      email: maskEmail(email),
+      role,
+    });
+    redirect(
+      `/auth/sign-in?message=${encodeURIComponent(
+        "An account with this email may already exist. Please sign in or reset your password.",
+      )}`,
+    );
+  }
 
   const authUserId = data.user?.id;
   const adminClient = createSupabaseAdminClient();
@@ -105,7 +121,7 @@ export async function signUpAction(formData: FormData) {
     if (userUpsertError) {
       console.error("Failed to sync signed-up user into public.users", {
         authUserId,
-        email,
+        email: maskEmail(email),
         role,
         error: userUpsertError,
       });
@@ -197,9 +213,17 @@ export async function signInAction(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const email = String(formData.get("email") ?? "");
+  const email = normalizeEmail(formData.get("email"));
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "");
+
+  if (!email || !password) {
+    redirect(
+      `/auth/sign-in?error=${encodeURIComponent(
+        "We could not sign you in. Please confirm your email and check your password.",
+      )}`,
+    );
+  }
 
   const { error } = await supabase.auth.signInWithPassword({
     email,
@@ -207,7 +231,17 @@ export async function signInAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/auth/sign-in?error=${encodeURIComponent(error.message)}`);
+    logAuthIssue("signInWithPassword", {
+      email: maskEmail(email),
+      code: "code" in error ? error.code : undefined,
+      status: "status" in error ? error.status : undefined,
+      message: error.message,
+    });
+    redirect(
+      `/auth/sign-in?error=${encodeURIComponent(
+        "We could not sign you in. Please confirm your email and check your password.",
+      )}`,
+    );
   }
 
   revalidatePath("/");
@@ -394,6 +428,22 @@ function normalizeSiteUrl(value: string) {
   }
 }
 
+function normalizeEmail(value: FormDataEntryValue | null) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function normalizeSignupRole(value: FormDataEntryValue | null): "planner" | "vendor" {
+  return value === "vendor" ? "vendor" : "planner";
+}
+
+function maskEmail(value: string) {
+  const [name, domain] = value.split("@");
+  if (!name || !domain) {
+    return value ? "***" : "";
+  }
+  return `${name.slice(0, 2)}***@${domain}`;
+}
+
 function normalizeReturnPath(value: string) {
   return value === "/auth/reset-password" ? value : "/auth/update-password";
 }
@@ -407,5 +457,5 @@ function normalizeSignUpErrorMessage(message: string) {
 }
 
 function logAuthIssue(action: string, details: Record<string, unknown>) {
-  console.error(`[auth:${action}]`, details);
+  console.warn(`[auth:${action}]`, details);
 }
