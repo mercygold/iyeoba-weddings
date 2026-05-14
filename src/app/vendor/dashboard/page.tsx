@@ -56,7 +56,7 @@ export default async function VendorDashboardPage(props: {
     ? await getLatestVendorTikTokFeatureRequest(vendor.id)
     : null;
   const latestAdminNote = adminNotes[0] ?? null;
-  const inquiries = await getVendorInquiries(profile.id);
+  const inquiries = vendor?.id ? await getVendorInquiries(profile.id, vendor.id) : [];
   const openInquiriesCount = inquiries.filter(
     (inquiry) => inquiry.threadStatus !== "archived",
   ).length;

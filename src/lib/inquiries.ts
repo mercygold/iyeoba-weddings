@@ -305,6 +305,7 @@ const leadSelect = `
   messages: buildThreadMessages(
     row.id,
     row.message ?? null,
+    row.created_at,
     "planner",
     messagesByLead,
   ),
@@ -371,7 +372,7 @@ async function getPlannerInquiryVendorMap(vendorIds: string[]) {
   return map;
 }
 
-export async function getVendorInquiries(userId: string) {
+export async function getVendorInquiries(userId: string, vendorId?: string | null) {
   const supabase = await createSupabaseServerClient();
   const dbConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -395,29 +396,48 @@ export async function getVendorInquiries(userId: string) {
     contact_method,
     wedding_id
   `;
+  const compatibleLeadSelect = `
+    id,
+    created_at,
+    user_id,
+    vendor_id,
+    message,
+    status
+  `;
+
+  let resolvedVendorId = vendorId ?? null;
+
+  if (!resolvedVendorId) {
+    const vendor = await getVendorByUserId(userId);
+    resolvedVendorId = vendor?.id ?? null;
+  }
+
+  if (!resolvedVendorId) {
+    console.warn("Vendor inquiries skipped because no vendor profile was found", {
+      table: "leads",
+      userId,
+    });
+    return [] as VendorInquiry[];
+  }
 
   let { data, error } = await supabase
     .from("leads")
     .select(leadSelect)
-    .eq("vendor_user_id", userId)
+    .eq("vendor_id", resolvedVendorId)
     .order("created_at", { ascending: false });
 
   if (error && isSchemaDriftError(error)) {
-    console.warn("Vendor inquiries query retrying with vendor_id lookup", {
+    console.warn("Vendor inquiries query retrying with compatible lead select", {
       table: "leads",
       userId,
+      vendorId: resolvedVendorId,
       error: serializeSupabaseError(error),
     });
 
-    const vendor = await getVendorByUserId(userId);
-    if (!vendor?.id) {
-      return [];
-    }
-
     const fallback = await supabase
       .from("leads")
-      .select(leadSelect)
-      .eq("vendor_id", vendor.id)
+      .select(compatibleLeadSelect)
+      .eq("vendor_id", resolvedVendorId)
       .order("created_at", { ascending: false });
 
     data = fallback.data as typeof data;
@@ -428,13 +448,17 @@ export async function getVendorInquiries(userId: string) {
     console.warn("Vendor inquiries query failed; rendering dashboard without inbox data", {
       table: "leads",
       userId,
+      vendorId: resolvedVendorId,
       error: error ? serializeSupabaseError(error) : null,
       select: leadSelect,
     });
     return [] as VendorInquiry[];
   }
 
-  const rows = data as LeadRow[];
+  const rows = (data as LeadRow[]).map((row) => ({
+    ...row,
+    vendor_user_id: row.vendor_user_id ?? userId,
+  }));
   if (!rows.length) {
     return [] as VendorInquiry[];
   }
@@ -467,6 +491,7 @@ export async function getVendorInquiries(userId: string) {
       messages: buildThreadMessages(
         row.id,
         row.message ?? null,
+        row.created_at,
         planner?.full_name || planner?.email || "Planner",
         messagesByLead,
       ),
@@ -581,7 +606,7 @@ async function getLeadMessagesMap(leadIds: string[], leads: LeadRow[]) {
 
   let { data, error } = await supabase
     .from("lead_messages")
-    .select("id, lead_id, sender_user_id, body, message, created_at")
+    .select("id, lead_id, sender_user_id, sender_role, body, message, created_at")
     .in("lead_id", leadIds)
     .order("created_at", { ascending: true });
 
@@ -660,6 +685,7 @@ async function getLeadMessagesMap(leadIds: string[], leads: LeadRow[]) {
 function buildThreadMessages(
   leadId: string,
   initialMessage: string | null,
+  initialCreatedAt: string | null,
   plannerLabel: string,
   messagesByLead: Map<string, InquiryMessage[]>,
 ): InquiryMessage[] {
@@ -676,7 +702,7 @@ function buildThreadMessages(
       senderRole: "planner" as const,
       senderLabel: plannerLabel,
       body: initialMessage,
-      createdAt: messages[0]?.createdAt ?? new Date(0).toISOString(),
+      createdAt: initialCreatedAt ?? messages[0]?.createdAt ?? new Date(0).toISOString(),
       attachments: [],
     },
     ...messages,
