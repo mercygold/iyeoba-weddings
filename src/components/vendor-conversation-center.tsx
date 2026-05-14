@@ -34,6 +34,7 @@ type VendorInquiry = {
   threadStatus: "open" | "contacted" | "closed" | "archived";
   plannerName: string | null;
   plannerEmail: string | null;
+  displayPlannerName: string;
   plannerPhone: string | null;
   weddingSummary: string | null;
   messages: InquiryMessage[];
@@ -97,8 +98,7 @@ export function VendorConversationCenter({
             {sortedInquiries.map((inquiry) => {
               const lastMessage = getLastMessage(inquiry);
               const isActive = selectedInquiryId === inquiry.id;
-              const displayName =
-                inquiry.plannerName || inquiry.plannerEmail || "Planner inquiry";
+              const displayName = inquiry.displayPlannerName || "Planner inquiry";
               return (
                 <button
                   key={inquiry.id}
@@ -138,9 +138,7 @@ export function VendorConversationCenter({
               <div className="flex items-start justify-between gap-3 border-b border-[rgba(106,62,124,0.12)] px-4 py-4">
                 <div className="min-w-0">
                   <p className="truncate text-base font-semibold text-[color:var(--color-ink)]">
-                    {selectedInquiry.plannerName ||
-                      selectedInquiry.plannerEmail ||
-                      "Planner inquiry"}
+                    {selectedInquiry.displayPlannerName || "Planner inquiry"}
                   </p>
                   <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
                     {selectedInquiry.weddingSummary || "Wedding details not provided"}
@@ -170,7 +168,7 @@ export function VendorConversationCenter({
                               : "bg-[rgba(106,62,124,0.08)] text-[color:var(--color-ink)]"
                           }`}
                         >
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-80">
+                          <p className="text-xs font-semibold opacity-80">
                             {message.senderLabel}
                           </p>
                           <p className="mt-1 text-sm leading-6">{message.body}</p>

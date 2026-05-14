@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getVendorByUserId, getVendorDirectory } from "@/lib/vendors";
 import {
   getMessageAttachmentsForMessages,
@@ -56,6 +57,7 @@ export type VendorInquiry = {
   contactMethod: string | null;
   plannerName: string | null;
   plannerEmail: string | null;
+  displayPlannerName: string;
   plannerPhone: string | null;
   weddingSummary: string | null;
   messages: InquiryMessage[];
@@ -69,6 +71,8 @@ type LeadRow = {
   vendor_id?: string | null;
   vendor_user_id?: string | null;
   wedding_id?: string | null;
+  planner_name?: string | null;
+  planner_email?: string | null;
   message?: string | null;
   status?: string | null;
   thread_status?: string | null;
@@ -499,6 +503,9 @@ export async function getVendorInquiries(userId: string, vendorId?: string | nul
   }
 
   const plannerProfilesById = await getInquiryPlannerProfilesMap(rows);
+  const directPlannerIdentityByLeadId = await getLeadDirectPlannerIdentityMap(
+    rows.map((row) => row.id),
+  );
   const weddingsById = await getInquiryWeddingsMap(rows);
   const messagesByLead = await getLeadMessagesMap(
     rows.map((row) => row.id),
@@ -506,17 +513,35 @@ export async function getVendorInquiries(userId: string, vendorId?: string | nul
   );
 
   return rows.map((row) => {
+    const directPlannerIdentity = directPlannerIdentityByLeadId.get(row.id);
+    const rowWithDirectPlannerIdentity = {
+      ...row,
+      ...directPlannerIdentity,
+    };
     const plannerUserId = row.planner_user_id ?? row.user_id ?? null;
     const planner = plannerUserId ? plannerProfilesById.get(plannerUserId) : null;
     const wedding = row.wedding_id ? weddingsById.get(row.wedding_id) : null;
+    const plannerName =
+      getDirectPlannerName(rowWithDirectPlannerIdentity) || getOptionalPlannerName(planner);
+    const plannerEmail =
+      getDirectPlannerEmail(rowWithDirectPlannerIdentity) ||
+      normalizeDisplayName(planner?.email) ||
+      null;
+    const displayPlannerName = getDisplayPlannerName({
+      directName: plannerName,
+      joinedName: getOptionalPlannerName(planner),
+      email: plannerEmail,
+      fallback: "Planner inquiry",
+    });
 
     return {
       id: row.id,
       createdAt: row.created_at,
       threadStatus: normalizeThreadStatus(row.thread_status, row.status),
       contactMethod: row.contact_method ?? null,
-      plannerName: getOptionalPlannerDisplayName(planner),
-      plannerEmail: planner?.email ?? null,
+      plannerName,
+      plannerEmail,
+      displayPlannerName,
       plannerPhone: planner?.phone ?? null,
       weddingSummary: wedding
         ? [wedding.culture, wedding.wedding_type, wedding.location]
@@ -527,11 +552,51 @@ export async function getVendorInquiries(userId: string, vendorId?: string | nul
         row.id,
         row.message ?? null,
         row.created_at,
-        getPlannerDisplayName(planner),
+        getDisplayPlannerName({
+          directName: plannerName,
+          joinedName: getOptionalPlannerName(planner),
+          email: plannerEmail,
+          fallback: "Planner",
+        }),
         messagesByLead,
       ),
     } satisfies VendorInquiry;
   });
+}
+
+async function getLeadDirectPlannerIdentityMap(leadIds: string[]) {
+  const uniqueLeadIds = [...new Set(leadIds.filter(Boolean))];
+  const map = new Map<string, Pick<LeadRow, "planner_name" | "planner_email">>();
+
+  if (!uniqueLeadIds.length) {
+    return map;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id, planner_name, planner_email")
+    .in("id", uniqueLeadIds);
+
+  if (error || !data) {
+    if (error && !isSchemaDriftError(error)) {
+      console.warn("Vendor inquiry direct planner identity lookup failed", {
+        table: "leads",
+        leadIds: uniqueLeadIds,
+        error: serializeSupabaseError(error),
+      });
+    }
+    return map;
+  }
+
+  for (const row of data as LeadRow[]) {
+    map.set(row.id, {
+      planner_name: row.planner_name ?? null,
+      planner_email: row.planner_email ?? null,
+    });
+  }
+
+  return map;
 }
 
 async function getInquiryPlannerProfilesMap(rows: LeadRow[]) {
@@ -548,7 +613,7 @@ async function getInquiryPlannerProfilesMap(rows: LeadRow[]) {
     return map;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient() ?? (await createSupabaseServerClient());
   const { data, error } = await supabase
     .from("users")
     .select("id, full_name, email, phone")
@@ -743,7 +808,7 @@ async function getUserProfilesById(userIds: string[]) {
     return map;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient() ?? (await createSupabaseServerClient());
   const { data, error } = await supabase
     .from("users")
     .select("id, full_name, email, phone")
@@ -845,14 +910,37 @@ function getPlannerDisplayName(
   );
 }
 
-function getOptionalPlannerDisplayName(
+function getOptionalPlannerName(
   profile: InquiryUserProfile | null | undefined,
 ) {
+  return normalizeDisplayName(profile?.full_name) || null;
+}
+
+function getDisplayPlannerName({
+  directName,
+  joinedName,
+  email,
+  fallback,
+}: {
+  directName: string | null | undefined;
+  joinedName: string | null | undefined;
+  email: string | null | undefined;
+  fallback: string;
+}) {
   return (
-    normalizeDisplayName(profile?.full_name) ||
-    normalizeDisplayName(profile?.email) ||
-    null
+    normalizeDisplayName(directName) ||
+    normalizeDisplayName(joinedName) ||
+    normalizeDisplayName(email) ||
+    fallback
   );
+}
+
+function getDirectPlannerName(row: LeadRow) {
+  return normalizeDisplayName(row.planner_name) || null;
+}
+
+function getDirectPlannerEmail(row: LeadRow) {
+  return normalizeDisplayName(row.planner_email) || null;
 }
 
 function normalizeDisplayName(value: string | null | undefined) {
