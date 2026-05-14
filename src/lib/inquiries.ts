@@ -382,36 +382,28 @@ export async function getVendorInquiries(userId: string) {
     return [] as VendorInquiry[];
   }
 
+  const leadSelect = `
+    id,
+    created_at,
+    user_id,
+    planner_user_id,
+    vendor_id,
+    vendor_user_id,
+    message,
+    status,
+    thread_status,
+    contact_method,
+    wedding_id
+  `;
+
   let { data, error } = await supabase
     .from("leads")
-    .select(
-      `
-        id,
-        created_at,
-        user_id,
-        planner_user_id,
-        vendor_user_id,
-        message,
-        status,
-        thread_status,
-        contact_method,
-        users!leads_user_id_fkey(
-          full_name,
-          email,
-          phone
-        ),
-        weddings(
-          culture,
-          wedding_type,
-          location
-        )
-      `,
-    )
+    .select(leadSelect)
     .eq("vendor_user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error && isSchemaDriftError(error)) {
-    console.warn("Vendor inquiries query fell back to vendor_id lookup", {
+    console.warn("Vendor inquiries query retrying with vendor_id lookup", {
       table: "leads",
       userId,
       error: serializeSupabaseError(error),
@@ -424,27 +416,7 @@ export async function getVendorInquiries(userId: string) {
 
     const fallback = await supabase
       .from("leads")
-      .select(
-        `
-          id,
-          created_at,
-          user_id,
-          planner_user_id,
-          vendor_user_id,
-          message,
-          status,
-          users!leads_user_id_fkey(
-            full_name,
-            email,
-            phone
-          ),
-          weddings(
-            culture,
-            wedding_type,
-            location
-          )
-        `,
-      )
+      .select(leadSelect)
       .eq("vendor_id", vendor.id)
       .order("created_at", { ascending: false });
 
@@ -453,23 +425,31 @@ export async function getVendorInquiries(userId: string) {
   }
 
   if (error || !data) {
-    console.error("Vendor inquiries query failed", {
+    console.warn("Vendor inquiries query failed; rendering dashboard without inbox data", {
       table: "leads",
       userId,
       error: error ? serializeSupabaseError(error) : null,
+      select: leadSelect,
     });
     return [] as VendorInquiry[];
   }
 
   const rows = data as LeadRow[];
+  if (!rows.length) {
+    return [] as VendorInquiry[];
+  }
+
+  const plannerProfilesById = await getInquiryPlannerProfilesMap(rows);
+  const weddingsById = await getInquiryWeddingsMap(rows);
   const messagesByLead = await getLeadMessagesMap(
     rows.map((row) => row.id),
     rows,
   );
 
   return rows.map((row) => {
-    const planner = Array.isArray(row.users) ? row.users[0] : row.users;
-    const wedding = Array.isArray(row.weddings) ? row.weddings[0] : row.weddings;
+    const plannerUserId = row.planner_user_id ?? row.user_id ?? null;
+    const planner = plannerUserId ? plannerProfilesById.get(plannerUserId) : null;
+    const wedding = row.wedding_id ? weddingsById.get(row.wedding_id) : null;
 
     return {
       id: row.id,
@@ -492,6 +472,96 @@ export async function getVendorInquiries(userId: string) {
       ),
     } satisfies VendorInquiry;
   });
+}
+
+async function getInquiryPlannerProfilesMap(rows: LeadRow[]) {
+  const userIds = [
+    ...new Set(
+      rows
+        .map((row) => row.planner_user_id ?? row.user_id ?? null)
+        .filter(Boolean) as string[],
+    ),
+  ];
+  const map = new Map<
+    string,
+    {
+      full_name?: string | null;
+      email?: string | null;
+      phone?: string | null;
+    }
+  >();
+
+  if (!userIds.length) {
+    return map;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name, email, phone")
+    .in("id", userIds);
+
+  if (error || !data) {
+    console.warn("Vendor inquiry planner profile lookup failed", {
+      table: "users",
+      userIds,
+      error: error ? serializeSupabaseError(error) : null,
+    });
+    return map;
+  }
+
+  for (const profile of data) {
+    map.set(profile.id, {
+      full_name: profile.full_name ?? null,
+      email: profile.email ?? null,
+      phone: profile.phone ?? null,
+    });
+  }
+
+  return map;
+}
+
+async function getInquiryWeddingsMap(rows: LeadRow[]) {
+  const weddingIds = [
+    ...new Set(rows.map((row) => row.wedding_id).filter(Boolean) as string[]),
+  ];
+  const map = new Map<
+    string,
+    {
+      culture?: string | null;
+      wedding_type?: string | null;
+      location?: string | null;
+    }
+  >();
+
+  if (!weddingIds.length) {
+    return map;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("weddings")
+    .select("id, culture, wedding_type, location")
+    .in("id", weddingIds);
+
+  if (error || !data) {
+    console.warn("Vendor inquiry wedding lookup failed", {
+      table: "weddings",
+      weddingIds,
+      error: error ? serializeSupabaseError(error) : null,
+    });
+    return map;
+  }
+
+  for (const wedding of data) {
+    map.set(wedding.id, {
+      culture: wedding.culture ?? null,
+      wedding_type: wedding.wedding_type ?? null,
+      location: wedding.location ?? null,
+    });
+  }
+
+  return map;
 }
 
 async function getLeadMessagesMap(leadIds: string[], leads: LeadRow[]) {

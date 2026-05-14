@@ -81,6 +81,7 @@ const legacyVendorSelect = `
   admin_notes,
   availability_status,
   verified,
+  created_at,
   description,
   services_offered,
   value_statement,
@@ -481,10 +482,9 @@ export async function getVendorByUserId(
   const initialQuery = await supabase
     .from("vendors")
     .select(vendorDashboardSelect)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .eq("user_id", userId);
   let data: Record<string, any> | null = Array.isArray(initialQuery.data)
-    ? (initialQuery.data[0] as Record<string, any> | null) ?? null
+    ? chooseBestVendorDashboardRow(initialQuery.data as Record<string, any>[])
     : null;
   let error: {
     code?: string | null;
@@ -503,11 +503,10 @@ export async function getVendorByUserId(
     const fallback = await supabase
       .from("vendors")
       .select(legacyVendorSelect)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .eq("user_id", userId);
 
     data = Array.isArray(fallback.data)
-      ? ((fallback.data[0] as Record<string, any> | null) ?? null)
+      ? chooseBestVendorDashboardRow(fallback.data as Record<string, any>[])
       : null;
     error = fallback.error;
   }
@@ -603,6 +602,7 @@ export async function getVendorByUserId(
     adminNotes: data.admin_notes ?? null,
     lastReviewedAt: data.last_reviewed_at ?? null,
     updatedAt: data.updated_at ?? null,
+    createdAt: data.created_at ?? null,
     availabilityStatus: data.availability_status ?? "Availability on request",
     verified: data.verified ?? false,
     description: data.description ?? data.value_statement ?? "Vendor profile scaffolded.",
@@ -612,6 +612,65 @@ export async function getVendorByUserId(
     imageUrl:
       portfolioImages[0] ?? getVendorPlaceholderImage(data.category ?? "Beauty"),
   } satisfies VendorDirectoryItem;
+}
+
+function chooseBestVendorDashboardRow(rows: Record<string, any>[]) {
+  if (!rows.length) {
+    return null;
+  }
+
+  return [...rows].sort(compareVendorDashboardRows)[0] ?? null;
+}
+
+function compareVendorDashboardRows(
+  a: Record<string, any>,
+  b: Record<string, any>,
+) {
+  const scoreDifference = scoreVendorDashboardRow(b) - scoreVendorDashboardRow(a);
+  if (scoreDifference !== 0) {
+    return scoreDifference;
+  }
+
+  return toTimestamp(b.created_at) - toTimestamp(a.created_at);
+}
+
+function scoreVendorDashboardRow(row: Record<string, any>) {
+  let score = 0;
+  const status = normalizeVendorStatus(
+    typeof row.status === "string" ? row.status : null,
+    typeof row.profile_status === "string" ? row.profile_status : null,
+    row.approved === true,
+  );
+
+  if (row.approved === true || status === "approved") score += 100;
+  if (status === "pending_review") score += 80;
+  if (status === "needs_changes") score += 60;
+  if (row.onboarding_completed === true) score += 40;
+  if (normalizeDashboardString(row.business_name)) score += 8;
+  if (normalizeDashboardString(row.owner_name)) score += 6;
+  if (normalizeDashboardString(row.primary_social_link ?? row.instagram)) score += 6;
+  if (normalizeDashboardString(row.website)) score += 5;
+  if (normalizeDashboardString(row.description ?? row.value_statement)) score += 5;
+  if (normalizeDashboardString(row.whatsapp)) score += 4;
+  if (normalizeDashboardString(row.government_id_url)) score += 4;
+  if (Array.isArray(row.portfolio_image_urls) && row.portfolio_image_urls.length) {
+    score += 10;
+  }
+  if (Array.isArray(row.vendor_portfolio) && row.vendor_portfolio.length) {
+    score += 10;
+  }
+  if (normalizeDashboardString(row.business_name) === "draft vendor profile") {
+    score -= 20;
+  }
+  if (normalizeDashboardString(row.location) === "to be updated") {
+    score -= 10;
+  }
+
+  return score;
+}
+
+function normalizeDashboardString(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 function isSchemaDriftError(error: { message?: string | null }) {
