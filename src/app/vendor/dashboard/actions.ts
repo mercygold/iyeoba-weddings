@@ -279,7 +279,8 @@ export async function updateInquiryStatusAction(formData: FormData) {
 
   const now = new Date().toISOString();
   const payload = {
-    status: threadStatus,
+    status: mapThreadStatusToLegacyStatus(threadStatus),
+    thread_status: threadStatus,
     updated_at: now,
     contacted_at: threadStatus === "contacted" ? now : null,
     archived_at: threadStatus === "archived" ? now : null,
@@ -294,9 +295,7 @@ export async function updateInquiryStatusAction(formData: FormData) {
   if (error && supportsLeadStatusFallback(error)) {
     const fallbackPayload = {
       status: mapThreadStatusToLegacyStatus(threadStatus),
-      updated_at: now,
-      contacted_at: threadStatus === "contacted" ? now : null,
-      archived_at: threadStatus === "archived" ? now : null,
+      thread_status: threadStatus,
     };
 
     console.warn("Vendor inquiry status update retrying with compatible payload", {
@@ -316,6 +315,30 @@ export async function updateInquiryStatusAction(formData: FormData) {
       .eq("id", inquiryId)
       .eq("vendor_id", vendor.id);
     error = fallbackResult.error;
+
+    if (error && supportsLeadStatusFallback(error)) {
+      const legacyOnlyPayload = {
+        status: mapThreadStatusToLegacyStatus(threadStatus),
+      };
+
+      console.warn("Vendor inquiry status update retrying with legacy-only payload", {
+        table: "leads",
+        client: "authenticated_server",
+        authUserId: profile.id,
+        vendorId: vendor.id,
+        inquiryId,
+        threadStatus,
+        payload: legacyOnlyPayload,
+        error: serializeSupabaseError(error),
+      });
+
+      const legacyOnlyResult = await supabase
+        .from("leads")
+        .update(legacyOnlyPayload)
+        .eq("id", inquiryId)
+        .eq("vendor_id", vendor.id);
+      error = legacyOnlyResult.error;
+    }
   }
 
   if (error && isRlsDeniedError(error)) {
@@ -367,7 +390,7 @@ export async function replyToInquiryAction(formData: FormData) {
   const nextPath = normalizeVendorDashboardNextPath(formData.get("nextPath"));
 
   if (!inquiryId || (!body && !attachmentFiles.length)) {
-    redirect(withQueryParam(nextPath, "error", "Add a reply or attachment before sending."));
+    redirect(withQueryParam(nextPath, "error", "Add a message or attachment before sending."));
   }
 
   if (attachmentError) {
@@ -421,81 +444,81 @@ export async function replyToInquiryAction(formData: FormData) {
   }
 
   const now = new Date().toISOString();
-  const messagePayload = {
-    lead_id: inquiryId,
-    sender_user_id: profile.id,
-    message: body,
-    created_at: now,
-  };
-
-  console.log("Vendor inquiry reply write attempt", {
-    table: "lead_messages",
-    client: "authenticated_server",
-    authUserId: profile.id,
-    vendorId: vendor.id,
-    inquiryId,
-    payload: messagePayload,
-  });
-
-  let messageId: string | null = null;
-  let { data: messageData, error: messageError } = await (supabase
-    .from("lead_messages")
-    .insert(messagePayload) as any)
-    .select("id")
-    .single();
-  messageId = messageData?.id ?? null;
-
-  if (messageError && supportsLeadMessageFallback(messageError)) {
-    const fallbackPayload = {
+  const messageId = crypto.randomUUID();
+  const messagePayloads = [
+    {
+      id: messageId,
+      lead_id: inquiryId,
+      sender_user_id: profile.id,
+      sender_role: "vendor",
+      message: body,
+      body,
+      created_at: now,
+    },
+    {
+      id: messageId,
+      lead_id: inquiryId,
+      sender_user_id: profile.id,
+      message: body,
+      body,
+      created_at: now,
+    },
+    {
+      id: messageId,
       lead_id: inquiryId,
       sender_user_id: profile.id,
       body,
       created_at: now,
-    };
+    },
+    {
+      id: messageId,
+      lead_id: inquiryId,
+      sender_user_id: profile.id,
+      message: body,
+      created_at: now,
+    },
+  ];
 
-    console.warn("Vendor inquiry reply retrying with compatible payload", {
+  let messageError: {
+    code?: string | null;
+    message?: string | null;
+    details?: string | null;
+    hint?: string | null;
+  } | null = null;
+  let insertedMessage = false;
+
+  for (const [index, payload] of messagePayloads.entries()) {
+    console.log("Vendor inquiry reply write attempt", {
       table: "lead_messages",
       client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
-      payload: fallbackPayload,
+      payload,
+      attempt: index + 1,
+    });
+
+    const result = await (supabase.from("lead_messages").insert(payload) as any);
+    messageError = result.error;
+
+    if (!messageError) {
+      insertedMessage = true;
+      break;
+    }
+
+    console.warn("Vendor inquiry reply write attempt failed", {
+      table: "lead_messages",
+      client: "authenticated_server",
+      authUserId: profile.id,
+      vendorId: vendor.id,
+      inquiryId,
+      payload,
+      attempt: index + 1,
       error: serializeSupabaseError(messageError),
     });
 
-    const fallbackResult = await (supabase
-      .from("lead_messages")
-      .insert(fallbackPayload) as any)
-      .select("id")
-      .single();
-    messageId = fallbackResult.data?.id ?? null;
-    messageError = fallbackResult.error;
-
-    if (messageError && supportsLeadMessageFallback(messageError)) {
-      const minimalFallbackPayload = {
-        lead_id: inquiryId,
-        sender_user_id: profile.id,
-        message: body,
-        created_at: now,
-      };
-
-      console.warn("Vendor inquiry reply retrying with minimal payload", {
-        table: "lead_messages",
-        client: "authenticated_server",
-        authUserId: profile.id,
-        vendorId: vendor.id,
-        inquiryId,
-        payload: minimalFallbackPayload,
-        error: serializeSupabaseError(messageError),
-      });
-
-      const minimalFallbackResult = await (supabase
-        .from("lead_messages")
-        .insert(minimalFallbackPayload) as any)
-        .select("id")
-        .single();
-      messageId = minimalFallbackResult.data?.id ?? null;
-      messageError = minimalFallbackResult.error;
+    if (!supportsLeadMessageFallback(messageError)) {
+      break;
     }
   }
 
@@ -506,43 +529,26 @@ export async function replyToInquiryAction(formData: FormData) {
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
-      payload: messagePayload,
+      payload: messagePayloads[0],
       error: serializeSupabaseError(messageError),
     });
   }
 
-  if (messageError) {
+  if (!insertedMessage || messageError) {
     console.error("Vendor inquiry reply create failed", {
       table: "lead_messages",
       client: "authenticated_server",
       authUserId: profile.id,
       vendorId: vendor.id,
       inquiryId,
-      payload: messagePayload,
-      error: serializeSupabaseError(messageError),
+      payloadAttempts: messagePayloads,
+      error: messageError ? serializeSupabaseError(messageError) : null,
     });
     redirect(
       withQueryParam(
         nextPath,
         "error",
-        "We could not send this reply right now.",
-      ),
-    );
-  }
-
-  if (!messageId) {
-    console.error("Vendor inquiry reply create failed without message id", {
-      table: "lead_messages",
-      client: "authenticated_server",
-      authUserId: profile.id,
-      vendorId: vendor.id,
-      inquiryId,
-    });
-    redirect(
-      withQueryParam(
-        nextPath,
-        "error",
-        "We could not send this reply right now.",
+        getVendorReplyFailureMessage(messageError),
       ),
     );
   }
@@ -574,6 +580,7 @@ export async function replyToInquiryAction(formData: FormData) {
 
   const statusPayload = {
     status: "contacted",
+    thread_status: "contacted",
     updated_at: now,
     contacted_at: now,
   };
@@ -587,8 +594,7 @@ export async function replyToInquiryAction(formData: FormData) {
   if (statusError && supportsLeadStatusFallback(statusError)) {
     const fallbackStatusPayload = {
       status: mapThreadStatusToLegacyStatus("contacted"),
-      updated_at: now,
-      contacted_at: now,
+      thread_status: "contacted",
     };
 
     console.warn("Vendor inquiry reply status update retrying with compatible payload", {
@@ -607,6 +613,29 @@ export async function replyToInquiryAction(formData: FormData) {
       .eq("id", inquiryId)
       .eq("vendor_id", vendor.id);
     statusError = fallbackStatusResult.error;
+
+    if (statusError && supportsLeadStatusFallback(statusError)) {
+      const legacyOnlyStatusPayload = {
+        status: mapThreadStatusToLegacyStatus("contacted"),
+      };
+
+      console.warn("Vendor inquiry reply status update retrying with legacy-only payload", {
+        table: "leads",
+        client: "authenticated_server",
+        authUserId: profile.id,
+        vendorId: vendor.id,
+        inquiryId,
+        payload: legacyOnlyStatusPayload,
+        error: serializeSupabaseError(statusError),
+      });
+
+      const legacyOnlyStatusResult = await supabase
+        .from("leads")
+        .update(legacyOnlyStatusPayload)
+        .eq("id", inquiryId)
+        .eq("vendor_id", vendor.id);
+      statusError = legacyOnlyStatusResult.error;
+    }
   }
 
   if (statusError) {
@@ -2008,8 +2037,30 @@ function supportsLeadMessageFallback(error: {
     error.code === "42P01" ||
     (message.includes("column") &&
       (message.includes("does not exist") || message.includes("could not find"))) ||
-    message.includes('relation "lead_messages" does not exist')
+    message.includes('relation "lead_messages" does not exist') ||
+    message.includes("not-null constraint")
   );
+}
+
+function getVendorReplyFailureMessage(
+  error: {
+    code?: string | null;
+    message?: string | null;
+  } | null,
+) {
+  if (!error) {
+    return "We could not send your reply right now.";
+  }
+
+  if (isRlsDeniedError(error)) {
+    return "We could not verify access to this conversation. Refresh and try again.";
+  }
+
+  if (supportsLeadMessageFallback(error)) {
+    return "This conversation could not accept the reply because the message schema is out of sync.";
+  }
+
+  return "We could not send your reply right now.";
 }
 
 function supportsLeadStatusFallback(error: {

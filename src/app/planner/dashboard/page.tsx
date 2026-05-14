@@ -576,14 +576,18 @@ function buildConversationsByVendor(inquiries: PlannerInquiry[]) {
       )
       .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
 
-    const pickInquiry =
-      toTime(inquiry.createdAt) >= toTime(existing.createdAt) ? inquiry.id : existing.id;
+    const existingIsArchived = existing.threadStatus === "archived";
+    const inquiryIsArchived = inquiry.threadStatus === "archived";
+    const shouldUseInquiry =
+      existingIsArchived !== inquiryIsArchived
+        ? !inquiryIsArchived
+        : toTime(inquiry.createdAt) < toTime(existing.createdAt);
 
     map.set(inquiry.vendor.id, {
-      id: pickInquiry,
-      threadStatus: existing.threadStatus === "archived" ? "archived" : inquiry.threadStatus,
+      id: shouldUseInquiry ? inquiry.id : existing.id,
+      threadStatus: shouldUseInquiry ? inquiry.threadStatus : existing.threadStatus,
       messages: merged,
-      createdAt: toTime(inquiry.createdAt) >= toTime(existing.createdAt) ? inquiry.createdAt : existing.createdAt,
+      createdAt: shouldUseInquiry ? inquiry.createdAt : existing.createdAt,
     });
   }
 

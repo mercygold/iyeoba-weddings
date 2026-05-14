@@ -528,7 +528,8 @@ export async function createVendorInquiryAction(formData: FormData) {
     });
     redirect(withPlannerQueryParam(nextPath, "error", "Vendor record was not found."));
   }
-  if (!message && !attachmentFiles.length) {
+  const isSavedVendorThreadStart = contactMethod === "planner_saved_vendor";
+  if (!message && !attachmentFiles.length && !isSavedVendorThreadStart) {
     redirect(withPlannerQueryParam(nextPath, "error", "Add a message or attachment before sending."));
   }
   if (attachmentError) {
@@ -567,12 +568,12 @@ export async function createVendorInquiryAction(formData: FormData) {
   }
 
   const weddingId = await getPlannerPrimaryWeddingId(ownerId);
-  let existingLeadResult = await supabase
+  let existingLeadResult: any = await supabase
     .from("leads")
-    .select("id, created_at, updated_at, status, archived_at")
+    .select("id, created_at, status, thread_status")
     .eq("planner_user_id", ownerId)
     .eq("vendor_id", vendorId)
-    .order("updated_at", { ascending: false });
+    .order("created_at", { ascending: false });
   console.log("Planner inquiry primary lookup response", {
     table: "leads",
     plannerUserId: ownerId,
@@ -584,7 +585,7 @@ export async function createVendorInquiryAction(formData: FormData) {
   if (existingLeadResult.error && isSchemaDriftError(existingLeadResult.error)) {
     existingLeadResult = await supabase
         .from("leads")
-        .select("id, created_at, updated_at, status, archived_at")
+        .select("id, created_at, status")
         .eq("planner_user_id", ownerId)
         .eq("vendor_id", vendorId)
       .order("created_at", { ascending: false });
@@ -604,12 +605,12 @@ export async function createVendorInquiryAction(formData: FormData) {
   const primaryRows = (existingLeadResult.data ?? []) as LeadThreadRow[];
   let leadId = pickPreferredLeadId(primaryRows);
   if (!leadId) {
-    let legacyLeadResult = await supabase
+    let legacyLeadResult: any = await supabase
       .from("leads")
-      .select("id, created_at, updated_at, status, archived_at")
+      .select("id, created_at, status, thread_status")
       .eq("user_id", ownerId)
       .eq("vendor_id", vendorId)
-      .order("updated_at", { ascending: false });
+      .order("created_at", { ascending: false });
     console.log("Planner inquiry legacy lookup response", {
       table: "leads",
       plannerUserId: ownerId,
@@ -621,7 +622,7 @@ export async function createVendorInquiryAction(formData: FormData) {
     if (legacyLeadResult.error && isSchemaDriftError(legacyLeadResult.error)) {
       legacyLeadResult = await supabase
         .from("leads")
-        .select("id, created_at, updated_at, status, archived_at")
+        .select("id, created_at, status")
         .eq("user_id", ownerId)
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false });
@@ -1515,7 +1516,8 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
 
   const now = new Date().toISOString();
   const payload = {
-    status: requestedStatus,
+    status: mapThreadStatusToLegacyStatus(requestedStatus),
+    thread_status: requestedStatus,
     updated_at: now,
     contacted_at: requestedStatus === "contacted" ? now : null,
     archived_at: requestedStatus === "archived" ? now : null,
@@ -1537,9 +1539,7 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
   if (error && isSchemaDriftError(error)) {
     const fallbackPayload = {
       status: mapThreadStatusToLegacyStatus(requestedStatus),
-      updated_at: now,
-      contacted_at: requestedStatus === "contacted" ? now : null,
-      archived_at: requestedStatus === "archived" ? now : null,
+      thread_status: requestedStatus,
     };
 
     console.warn("Planner inquiry status retrying with compatibility payload", {
@@ -1556,6 +1556,27 @@ export async function updatePlannerInquiryStatusAction(formData: FormData) {
       .update(fallbackPayload)
       .eq("id", inquiryId);
     error = fallbackResult.error;
+
+    if (error && isSchemaDriftError(error)) {
+      const legacyOnlyPayload = {
+        status: mapThreadStatusToLegacyStatus(requestedStatus),
+      };
+
+      console.warn("Planner inquiry status retrying with legacy-only payload", {
+        table: "leads",
+        authUserId: profile.id,
+        inquiryId,
+        requestedStatus,
+        payload: legacyOnlyPayload,
+        error: serializeSupabaseError(error),
+      });
+
+      const legacyOnlyResult = await supabase
+        .from("leads")
+        .update(legacyOnlyPayload)
+        .eq("id", inquiryId);
+      error = legacyOnlyResult.error;
+    }
   }
 
   if (error) {
@@ -1624,6 +1645,7 @@ type LeadThreadRow = {
   created_at?: string | null;
   updated_at?: string | null;
   status?: string | null;
+  thread_status?: string | null;
   archived_at?: string | null;
 };
 
@@ -1632,7 +1654,9 @@ function pickPreferredLeadId(rows: LeadThreadRow[]) {
     return null;
   }
 
-  const active = rows.filter((row) => !row.archived_at);
+  const active = rows.filter(
+    (row) => !row.archived_at && row.thread_status !== "archived",
+  );
   if (active.length) {
     return [...active].sort((a, b) => toMs(a.created_at) - toMs(b.created_at))[0]?.id ?? null;
   }

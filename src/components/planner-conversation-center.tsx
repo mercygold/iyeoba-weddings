@@ -83,7 +83,7 @@ export function PlannerConversationCenter({
     <DashboardCollapsibleSection
       eyebrow="Conversations"
       title="Planner and vendor chat"
-      defaultOpen={hasActiveConversation}
+      defaultOpen={hasActiveConversation || sortedConversations.length > 0}
       storageKey="iyeoba:planner-dashboard:conversations"
     >
       {!sortedConversations.length ? (

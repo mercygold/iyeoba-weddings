@@ -2,6 +2,8 @@
 
 import { useId, useState } from "react";
 
+import { DashboardCollapsibleSection } from "@/components/dashboard-collapsible-section";
+
 type VendorConversationCenterProps = {
   inquiries: VendorInquiry[];
   initialInquiryId?: string | null;
@@ -62,41 +64,32 @@ export function VendorConversationCenter({
 
   if (!sortedInquiries.length) {
     return (
-      <section className="surface-card rounded-[2rem] p-5 sm:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
-              Inquiry inbox
-            </p>
-            <h2 className="font-display mt-3 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
-              Planner inquiries
-            </h2>
-          </div>
-        </div>
+      <DashboardCollapsibleSection
+        eyebrow="Inquiry inbox"
+        title="Planner conversations"
+        defaultOpen
+        storageKey="iyeoba:vendor-dashboard:planner-conversations"
+      >
         <p className="mt-6 text-sm leading-7 text-[color:var(--color-muted)]">
           No conversations yet.
         </p>
-      </section>
+      </DashboardCollapsibleSection>
     );
   }
 
   return (
-    <section className="surface-card rounded-[2rem] p-5 sm:p-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[color:var(--color-brand-primary)]">
-            Inquiry inbox
-          </p>
-          <h2 className="font-display mt-3 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
-            Planner conversations
-          </h2>
-        </div>
-        <p className="rounded-full bg-[rgba(106,62,124,0.08)] px-4 py-2 text-sm font-semibold text-[color:var(--color-brand-primary)]">
+    <DashboardCollapsibleSection
+      eyebrow="Inquiry inbox"
+      title="Planner conversations"
+      defaultOpen
+      storageKey="iyeoba:vendor-dashboard:planner-conversations"
+      badge={
+        <span className="rounded-full bg-[rgba(106,62,124,0.08)] px-4 py-2 text-sm font-semibold text-[color:var(--color-brand-primary)]">
           {sortedInquiries.length} conversations
-        </p>
-      </div>
-
-      <div className="mt-6 grid min-h-[480px] gap-4 lg:min-h-[560px] lg:grid-cols-[320px_1fr]">
+        </span>
+      }
+    >
+      <div className="mt-6 grid gap-4 lg:grid-cols-[320px_1fr]">
         <div
           className={`min-h-0 ${selectedInquiry ? "hidden lg:block" : "block"}`}
         >
@@ -138,7 +131,7 @@ export function VendorConversationCenter({
         </div>
 
         <div
-          className={`min-h-0 ${selectedInquiry ? "flex" : "hidden lg:flex"} flex-col rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white`}
+          className={`min-h-0 ${selectedInquiry ? "flex" : "hidden lg:flex"} max-h-[min(78vh,720px)] flex-col rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white`}
         >
           {selectedInquiry ? (
             <>
@@ -162,7 +155,7 @@ export function VendorConversationCenter({
                 </button>
               </div>
 
-              <div className="relative isolate min-h-0 flex-1 overflow-hidden overflow-y-auto px-4 py-4 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
+              <div className="relative isolate min-h-[160px] overflow-hidden overflow-y-auto px-4 py-4 lg:max-h-[360px] before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
                 {selectedInquiry.messages.length ? (
                   <div className="relative z-10 space-y-3">
                     {selectedInquiry.messages.map((message) => (
@@ -198,7 +191,7 @@ export function VendorConversationCenter({
                 )}
               </div>
 
-              <div className="border-t border-[rgba(106,62,124,0.12)] px-4 py-4">
+              <div className="shrink-0 border-t border-[rgba(106,62,124,0.12)] px-4 py-4">
                 <form
                   action={replyToInquiryAction}
                   className="grid gap-3"
@@ -283,7 +276,7 @@ export function VendorConversationCenter({
           )}
         </div>
       </div>
-    </section>
+    </DashboardCollapsibleSection>
   );
 }
 
