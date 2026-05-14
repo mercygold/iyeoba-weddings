@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
+import { getAuthRoleRedirectPath } from "@/lib/auth-profile-sync";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -42,14 +43,24 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(new URL(next, requestUrl.origin));
+  const destination =
+    next === "/dashboard" ? await getAuthRoleRedirectPath(supabase) : next;
+
+  return NextResponse.redirect(new URL(destination, requestUrl.origin));
 }
 
 function normalizeOtpType(value: string): EmailOtpType {
-  if (value === "recovery" || value === "email_change" || value === "invite" || value === "magiclink") {
+  if (
+    value === "signup" ||
+    value === "email" ||
+    value === "recovery" ||
+    value === "email_change" ||
+    value === "invite" ||
+    value === "magiclink"
+  ) {
     return value;
   }
-  return "signup";
+  return "email";
 }
 
 function normalizeNextPath(value: string | null) {

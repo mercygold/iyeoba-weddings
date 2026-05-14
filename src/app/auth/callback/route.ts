@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import type { EmailOtpType } from "@supabase/supabase-js";
 
+import { getAuthRoleRedirectPath } from "@/lib/auth-profile-sync";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -28,32 +30,37 @@ export async function GET(request: Request) {
         ),
       );
     }
-  } else if (tokenHash && type === "recovery") {
+  } else if (tokenHash) {
     supabase = await createSupabaseRouteHandlerClient();
+    const otpType = normalizeOtpType(type);
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: "recovery",
+      type: otpType,
     });
     if (error) {
-      console.warn("[auth:callback] verifyOtp recovery failed", {
+      console.warn("[auth:callback] verifyOtp failed", {
+        type: otpType,
         message: error.message,
         status: "status" in error ? error.status : undefined,
         next,
       });
+      const errorPath =
+        otpType === "recovery"
+          ? `/auth/reset-password?error=${encodeURIComponent(
+              "We could not verify your reset link. Please request a new password reset email.",
+            )}`
+          : `/auth/sign-in?error=${encodeURIComponent(
+              "We could not verify your auth link. Please request a new email link.",
+            )}`;
       return NextResponse.redirect(
-        new URL(
-          `/auth/reset-password?error=${encodeURIComponent(
-            "We could not verify your reset link. Please request a new password reset email.",
-          )}`,
-          requestUrl.origin,
-        ),
+        new URL(errorPath, requestUrl.origin),
       );
     }
   }
 
   const destination =
     next === "/dashboard" && supabase
-      ? await getRoleRedirectPath(supabase)
+      ? await getAuthRoleRedirectPath(supabase)
       : next;
 
   return NextResponse.redirect(new URL(destination, requestUrl.origin));
@@ -67,47 +74,16 @@ function normalizeNextPath(value: string | null) {
   return value;
 }
 
-async function getRoleRedirectPath(
-  supabase: Awaited<ReturnType<typeof createSupabaseRouteHandlerClient>>,
-) {
-  const { data: userResult, error: userError } = await supabase.auth.getUser();
-  const user = userResult.user;
-
-  if (userError || !user) {
-    console.warn("[auth:callback] confirmed session user lookup failed", {
-      message: userError?.message ?? "No user after auth callback.",
-    });
-    return "/dashboard";
+function normalizeOtpType(value: string | null): EmailOtpType {
+  if (
+    value === "signup" ||
+    value === "email" ||
+    value === "recovery" ||
+    value === "email_change" ||
+    value === "invite" ||
+    value === "magiclink"
+  ) {
+    return value;
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    console.warn("[auth:callback] profile role lookup failed", {
-      userId: user.id,
-      message: profileError.message,
-      code: profileError.code,
-    });
-  }
-
-  const role =
-    typeof profile?.role === "string"
-      ? profile.role
-      : typeof user.user_metadata?.role === "string"
-        ? user.user_metadata.role
-        : null;
-
-  if (role === "vendor") {
-    return "/vendor/dashboard";
-  }
-
-  if (role === "planner" || role === "admin") {
-    return "/planner/dashboard";
-  }
-
-  return "/dashboard";
+  return "email";
 }

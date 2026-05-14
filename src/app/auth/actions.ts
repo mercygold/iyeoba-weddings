@@ -5,6 +5,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { trackServerEvent } from "@/lib/analytics-server";
+import {
+  getAuthRoleRedirectPath,
+  getRedirectPathForRole,
+  syncAuthUserProfileAndVendorDraft,
+} from "@/lib/auth-profile-sync";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -203,7 +208,9 @@ export async function signUpAction(formData: FormData) {
     redirect(`${next}?message=${encodeURIComponent(successMessage)}`);
   }
 
-  redirect(`/dashboard?message=${encodeURIComponent(successMessage)}`);
+  redirect(
+    `${getRedirectPathForRole(role)}?message=${encodeURIComponent(successMessage)}`,
+  );
 }
 
 export async function signInAction(formData: FormData) {
@@ -225,7 +232,7 @@ export async function signInAction(formData: FormData) {
     );
   }
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -244,8 +251,14 @@ export async function signInAction(formData: FormData) {
     );
   }
 
+  if (data.user) {
+    await syncAuthUserProfileAndVendorDraft(supabase, data.user);
+  }
+
+  const destination = next || (await getAuthRoleRedirectPath(supabase));
+
   revalidatePath("/");
-  redirect(next || "/dashboard");
+  redirect(destination);
 }
 
 export async function signOutAction() {
@@ -260,7 +273,7 @@ export async function requestPasswordResetAction(formData: FormData) {
     redirect(`/auth/reset-password?error=${encodeURIComponent(config.authMessage)}`);
   }
 
-  const email = String(formData.get("email") ?? "").trim();
+  const email = normalizeEmail(formData.get("email"));
   if (!email) {
     redirect("/auth/reset-password?error=Please enter your account email.");
   }

@@ -1,63 +1,38 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
-import { SiteFooter } from "@/components/site-footer";
-
-const googleAnalyticsId = "G-THETT8PBSQ";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.iyeobaweddings.com/"),
-  title: "Iyeoba Weddings | Trusted Vendor Marketplace & Planning Tool",
-  description:
-    "Discover trusted Nigerian wedding vendors, planning tools, cultural inspiration, and wedding trends across Nigeria and the diaspora.",
-  openGraph: {
-    title: "Iyeoba Weddings | Trusted Vendor Marketplace & Planning Tool",
-    description:
-      "Discover trusted Nigerian wedding vendors, planning tools, cultural inspiration, and wedding trends across Nigeria and the diaspora.",
-    url: "https://www.iyeobaweddings.com/",
-    siteName: "Iyeoba Weddings",
-    images: [
-      {
-        url: "/wedding-romance-bg.jpg",
-        width: 1200,
-        height: 630,
-      },
-    ],
-    locale: "en_US",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Iyeoba Weddings | Trusted Vendor Marketplace & Planning Tool",
-    description:
-      "Discover trusted Nigerian wedding vendors, planning tools, cultural inspiration, and wedding trends across Nigeria and the diaspora.",
-  },
+  title: "Iyeoba Weddings",
+  description: "Plan your wedding with confidence",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <head>
-        <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`}
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
+    <html lang="en">
+      <body>
+        <Script id="google-tag-manager" strategy="afterInteractive">
           {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){window.dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '${googleAnalyticsId}');
+            (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            })(window,document,'script','dataLayer','GTM-PRCQBP7J');
           `}
         </Script>
-      </head>
-      <body className="min-h-full flex flex-col">
-        <div className="flex-1">{children}</div>
-        <SiteFooter />
+        <noscript>
+          <iframe
+            src="https://www.googletagmanager.com/ns.html?id=GTM-PRCQBP7J"
+            height="0"
+            width="0"
+            style={{ display: "none", visibility: "hidden" }}
+          />
+        </noscript>
+        {children}
       </body>
     </html>
   );
