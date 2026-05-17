@@ -1,8 +1,5 @@
-import Link from "next/link";
-
 import { MainNav } from "@/components/main-nav";
-import { PasswordField } from "@/components/password-field";
-import { signInAction } from "@/app/auth/actions";
+import { SignInForm } from "@/components/sign-in-form";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 
 type SearchParams = Promise<{ error?: string; next?: string; message?: string }>;
@@ -37,65 +34,20 @@ export default async function SignInPage(props: {
               {configError}
             </p>
           ) : null}
-          <form action={signInAction} className="grid gap-5">
-            <input type="hidden" name="next" value={searchParams.next ?? ""} />
-            <div className="grid gap-2">
-              <label htmlFor="email" className="text-sm font-medium text-[color:var(--color-ink)]">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="field-input rounded-2xl"
-              />
-            </div>
-
-            <PasswordField
-              id="password"
-              name="password"
-              label="Password"
-              autoComplete="current-password"
-              helpText=""
-              labelAction={
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-xs font-semibold text-[color:var(--color-brand-primary)] hover:text-[color:var(--color-brand-primary-dark)]"
-                >
-                  Forgot password?
-                </Link>
-              }
-            />
-
-            {searchParams.message ? (
-              <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                {searchParams.message}
-              </p>
-            ) : null}
-
-            {searchParams.error ? (
-              <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                {searchParams.error}
-              </p>
-            ) : null}
-
-            <button
-              type="submit"
-              className="btn-primary w-full sm:w-auto"
-            >
-              Sign in
-            </button>
-          </form>
+          <SignInForm
+            next={searchParams.next ?? ""}
+            message={searchParams.message}
+            error={searchParams.error}
+          />
 
           <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[color:var(--color-muted)]">
             <span>Need an account?</span>
-            <Link href="/auth/sign-up?role=planner" className="font-medium text-[color:var(--color-brand-primary)]">
+            <a href="/auth/sign-up?role=planner" className="font-medium text-[color:var(--color-brand-primary)]">
               Create planner account
-            </Link>
-            <Link href="/auth/sign-up?role=vendor" className="font-medium text-[color:var(--color-brand-primary)]">
+            </a>
+            <a href="/auth/sign-up?role=vendor" className="font-medium text-[color:var(--color-brand-primary)]">
               List your business
-            </Link>
+            </a>
           </div>
         </section>
       </main>

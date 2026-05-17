@@ -163,8 +163,12 @@ export function PlannerProgressSection({
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  const availableItems = catalog.filter(
-    (label) => !items.some((item) => item.label.toLowerCase() === label.toLowerCase()),
+  const availableItems = useMemo(
+    () =>
+      catalog.filter(
+        (label) => !items.some((item) => item.label.toLowerCase() === label.toLowerCase()),
+      ),
+    [catalog, items],
   );
   const addItemValue = customItem.trim() || selectedItem || availableItems[0] || "";
 
@@ -175,7 +179,7 @@ export function PlannerProgressSection({
     status?: ProgressStatus;
   }) {
     setFeedback(null);
-    setPendingKey(payload.itemKey ?? payload.itemLabel ?? payload.intent);
+    setPendingKey(`${payload.intent}-${payload.itemKey ?? payload.itemLabel ?? "new"}`);
 
     try {
       const response = await fetch("/api/planner/progress", {
@@ -260,7 +264,8 @@ export function PlannerProgressSection({
       <div className="mt-5 grid gap-2.5 sm:mt-6 sm:gap-3">
         {items.map((item) => {
           const draftStatus = draftStatuses[item.key] ?? item.status;
-          const isSaving = pendingKey === item.key;
+          const isSaving = pendingKey === `save-${item.key}`;
+          const isRemoving = pendingKey === `remove-${item.key}`;
           return (
             <div
               key={item.key}
@@ -299,7 +304,7 @@ export function PlannerProgressSection({
                   }
                   className="btn-secondary w-full px-3 py-1.5 text-xs disabled:opacity-60 sm:text-sm"
                 >
-                  {isSaving ? "Saving" : "Save"}
+                  {isSaving ? "Saving..." : "Save"}
                 </button>
                 <button
                   type="button"
@@ -315,7 +320,7 @@ export function PlannerProgressSection({
                   }
                   className="btn-secondary w-full px-3 py-1.5 text-xs disabled:opacity-60 sm:text-sm"
                 >
-                  Remove
+                  {isRemoving ? "Removing..." : "Remove"}
                 </button>
               </div>
             </div>
@@ -372,7 +377,7 @@ export function PlannerProgressSection({
           }
           className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
         >
-          Add item
+          {pendingKey?.startsWith("add-") ? "Adding..." : "Add item"}
         </button>
       </div>
     </DashboardCollapsibleSection>
@@ -539,7 +544,7 @@ export function WeddingBudgetSection({
               }
               className="btn-primary h-fit self-end px-4 py-2 text-sm disabled:opacity-60"
             >
-              {pendingKey === "total" ? "Saving" : "Save total"}
+              {pendingKey === "total" ? "Saving..." : "Save total"}
             </button>
           </div>
 
@@ -611,7 +616,7 @@ export function WeddingBudgetSection({
                       }
                       className="btn-secondary px-3 py-2 text-sm disabled:opacity-60"
                     >
-                      {pendingKey === category.id ? "Saving" : "Save"}
+                      {pendingKey === category.id ? "Saving..." : "Save"}
                     </button>
                     <button
                       type="button"
@@ -629,7 +634,7 @@ export function WeddingBudgetSection({
                       }
                       className="btn-secondary px-3 py-2 text-sm disabled:opacity-60"
                     >
-                      Remove
+                      {pendingKey === `remove-${category.id}` ? "Removing..." : "Remove"}
                     </button>
                   </div>
                   <div className="mt-3 flex items-center gap-3 text-xs text-[color:var(--color-muted)]">
@@ -714,7 +719,7 @@ export function WeddingBudgetSection({
           }
           className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
         >
-          {pendingKey === "add-category" ? "Adding" : "Add"}
+          {pendingKey === "add-category" ? "Adding..." : "Add"}
         </button>
       </div>
     </DashboardCollapsibleSection>
@@ -771,6 +776,7 @@ export function GuestListSection({
   );
   const confirmedCount = guests.filter((guest) => guest.inviteStatus === "Confirmed").length;
   const invitedCount = guests.filter((guest) => guest.inviteStatus !== "Not invited").length;
+  const draftGuestPendingKey = `${draft.guestId ? "update" : "add"}-${draft.guestId || "new"}`;
 
   useEffect(() => {
     if (!inviteMessageEdited) {
@@ -940,7 +946,7 @@ export function GuestListSection({
     }
   }
 
-  function useInviteForGuest(guest: PlannerGuest) {
+  function selectInviteForGuest(guest: PlannerGuest) {
     editGuest(guest);
     setSelectedGuestId(guest.id);
   }
@@ -1118,7 +1124,7 @@ export function GuestListSection({
                 }
                 className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
               >
-                Save guest
+                {pendingKey === draftGuestPendingKey ? "Saving..." : "Save guest"}
               </button>
               <button
                 type="button"
@@ -1126,7 +1132,7 @@ export function GuestListSection({
                 onClick={() => startTransition(() => void saveInvite("send"))}
                 className="btn-secondary px-4 py-2 text-sm disabled:opacity-60"
               >
-                Send invite
+                {pendingKey === `send-invite-${draft.guestId || "draft"}` ? "Sending..." : "Send invite"}
               </button>
               {draft.guestId ? (
                 <button
@@ -1207,9 +1213,9 @@ export function GuestListSection({
                       }
                       className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
                     >
-                      Remove
+                      {pendingKey === `delete-${guest.id}` ? "Removing..." : "Remove"}
                     </button>
-                    <button type="button" onClick={() => useInviteForGuest(guest)} className="btn-secondary px-3 py-1.5 text-xs">
+                    <button type="button" onClick={() => selectInviteForGuest(guest)} className="btn-secondary px-3 py-1.5 text-xs">
                       Use for invite
                     </button>
                     <button
@@ -1218,7 +1224,11 @@ export function GuestListSection({
                       onClick={() => startTransition(() => void saveInvite("send", guest))}
                       className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
                     >
-                      {invite?.inviteStatus === "sent" ? "Resend invite" : "Send invite"}
+                      {pendingKey === `send-invite-${guest.id}`
+                        ? "Sending..."
+                        : invite?.inviteStatus === "sent"
+                          ? "Resend invite"
+                          : "Send invite"}
                     </button>
                     {invite?.rsvpToken ? (
                       <button
@@ -1265,7 +1275,7 @@ export function GuestListSection({
                 onClick={() => startTransition(() => void saveInvite("save"))}
                 className="btn-secondary px-3 py-2 text-xs disabled:opacity-60"
               >
-                Save invite
+                {pendingKey === `save-invite-${draft.guestId || "draft"}` ? "Saving..." : "Save invite"}
               </button>
               <button type="button" onClick={copyInviteMessage} className="btn-secondary px-3 py-2 text-xs">
                 Copy message

@@ -657,7 +657,7 @@ async function ensureWeddingForChat(userId: string, intake: PlannerIntake) {
     return latestWedding.id as string;
   }
 
-  const weddingType = intake.weddingType || "Wedding plan";
+  const weddingType = intake.weddingType || "Wedding event";
   const { data: insertedWedding, error } = await weddings
     .insert({
       user_id: userId,

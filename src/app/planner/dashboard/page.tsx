@@ -8,12 +8,19 @@ import {
 } from "@/app/planner/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { CommunicationRealtimeSync } from "@/components/communication-realtime-sync";
+import { DashboardCollapsibleSection } from "@/components/dashboard-collapsible-section";
 import { FlashQueryCleaner } from "@/components/flash-query-cleaner";
 import { MainNav } from "@/components/main-nav";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { PlannerBudgetFields } from "@/components/planner-budget-fields";
 
-import { PlannerInspirationFeed } from "@/components/planner-inspiration-feed";
 import { PlannerConversationCenter } from "@/components/planner-conversation-center";
+import {
+  GuestListSection,
+  PlannerProgressSection,
+  WeddingBudgetSection,
+} from "@/components/planner-dashboard-inline-tools";
+import { StartInquiryForm } from "@/components/start-inquiry-form";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 import { requirePlannerProfile } from "@/lib/auth";
 import {
@@ -24,7 +31,6 @@ import {
 } from "@/lib/inquiries";
 import { cultures, weddingTypes } from "@/lib/planner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getHomepageTikTokSectionData } from "@/lib/tiktok";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -60,6 +66,35 @@ type PlannerBudget = {
   source: "ai" | "manual";
   updatedAt: string | null;
 };
+type PlannerGuest = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  guestGroup: string;
+  inviteStatus: string;
+  notes: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+type PlannerGuestInvite = {
+  id: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone: string;
+  guestGroup: string;
+  coupleName: string;
+  weddingDate: string;
+  weddingTime: string;
+  venue: string;
+  customMessage: string;
+  inviteStatus: string;
+  rsvpStatus: string;
+  rsvpToken: string;
+  sentAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
 
 const progressCatalog = [
   "Venue",
@@ -92,16 +127,32 @@ export default async function PlannerDashboardPage(props: {
     typeof searchParams.error === "string" ? searchParams.error : undefined;
   const feedbackError = message ? undefined : error;
 
-  const { weddingEvents, loadError: weddingEventsLoadError } = await getWeddingEvents(ownerId);
   const editWeddingId =
     typeof searchParams.editWedding === "string" ? searchParams.editWedding : null;
   const showAddWeddingForm = searchParams.addWedding === "1";
-  const progressItems = await getPlannerProgressItems(ownerId);
-  const plannerBudget = await getPlannerBudget(ownerId);
-
-  const savedVendors = await getPlannerSavedVendors(ownerId);
-
-  const inquiries = await getPlannerInquiries(ownerId);
+  const [
+    { weddingEvents, loadError: weddingEventsLoadError },
+    savedVendors,
+    inquiries,
+  ] = await Promise.all([
+    getWeddingEvents(ownerId),
+    getPlannerSavedVendors(ownerId),
+    getPlannerInquiries(ownerId),
+  ]);
+  const requestedWeddingId =
+    typeof searchParams.wedding === "string" ? searchParams.wedding : null;
+  const selectedWedding =
+    weddingEvents.find((event) => event.id === requestedWeddingId) ??
+    weddingEvents[0] ??
+    null;
+  const selectedWeddingId = selectedWedding?.id ?? null;
+  const [progressItems, plannerBudget, guests, guestInvites] =
+    await Promise.all([
+      getPlannerProgressItems(ownerId, selectedWeddingId),
+      getPlannerBudget(ownerId, selectedWeddingId),
+      getPlannerGuests(ownerId, selectedWeddingId),
+      getPlannerGuestInvites(ownerId, selectedWeddingId),
+    ]);
   const conversationsByVendor = buildConversationsByVendor(inquiries);
   const inquiryVendorMap = new Map(
     inquiries.map((inquiry) => [inquiry.vendor.id, inquiry.vendor]),
@@ -119,34 +170,6 @@ export default async function PlannerDashboardPage(props: {
   const compareVendors = savedVendors
     .map((item) => item.vendor)
     .filter((vendor) => compareIds.includes(vendor.id));
-  const { latestTikToks, topTikToks } = getHomepageTikTokSectionData();
-  const inspirationItems = [...latestTikToks, ...topTikToks].slice(0, 8);
-
-  console.log("Planner dashboard data source summary", {
-    plannerUserId: profile.id,
-    authOwnerId: ownerId,
-    ownerIdMismatch: ownerId !== profile.id,
-    readSources: {
-      weddingOverview: "weddings",
-      progressItems: "blueprints.checklist_json",
-      savedVendors: "saved_vendors",
-      inquiries: "leads + lead_messages",
-    },
-    counts: {
-      progressItems: progressItems.length,
-      savedVendors: savedVendors.length,
-      inquiries: inquiries.length,
-      conversationsByVendor: conversationsByVendor.size,
-    },
-    ids: {
-      savedVendorIds: savedVendors.map((item) => item.vendor.id),
-      inquiryVendorIds: inquiries.map((item) => item.vendor.id),
-      conversationVendorIds: [...conversationsByVendor.keys()],
-      selectedThreadVendorId: threadVendorId,
-      selectedConversationId:
-        (threadVendorId && conversationsByVendor.get(threadVendorId)?.id) ?? null,
-    },
-  });
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_46%,#ffffff_100%)]">
@@ -155,7 +178,7 @@ export default async function PlannerDashboardPage(props: {
       <FlashQueryCleaner />
       <CommunicationRealtimeSync role="planner" plannerUserId={ownerId} />
       <MainNav />
-      <main className="relative mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
+      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
         <section className="surface-card rounded-[2rem] p-5 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
@@ -186,10 +209,23 @@ export default async function PlannerDashboardPage(props: {
                       </h2>
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
-                          href={`/planner/dashboard?editWedding=${encodeURIComponent(event.id)}`}
+                          href={buildDashboardWeddingHref({
+                            weddingId: event.id,
+                            editWeddingId: event.id,
+                          })}
                           className="btn-secondary px-3 py-1.5 text-xs"
                         >
                           Edit
+                        </Link>
+                        <Link
+                          href={buildDashboardWeddingHref({ weddingId: event.id })}
+                          className={
+                            selectedWeddingId === event.id
+                              ? "btn-primary px-3 py-1.5 text-xs"
+                              : "btn-secondary px-3 py-1.5 text-xs"
+                          }
+                        >
+                          {selectedWeddingId === event.id ? "Selected" : "Use"}
                         </Link>
                         <form action={deleteWeddingEventAction}>
                           <input type="hidden" name="weddingId" value={event.id} />
@@ -197,6 +233,7 @@ export default async function PlannerDashboardPage(props: {
                           <ConfirmSubmitButton
                             type="submit"
                             confirmMessage="Delete this wedding event? This action cannot be undone."
+                            pendingLabel="Deleting..."
                             className="btn-secondary px-3 py-1.5 text-xs"
                           >
                             Delete
@@ -208,7 +245,11 @@ export default async function PlannerDashboardPage(props: {
                     {isEditing ? (
                       <form action={saveWeddingEventAction} className="mt-4 grid gap-3 sm:grid-cols-2">
                         <input type="hidden" name="weddingId" value={event.id} />
-                        <input type="hidden" name="nextPath" value="/planner/dashboard" />
+                        <input
+                          type="hidden"
+                          name="nextPath"
+                          value={buildDashboardWeddingHref({ weddingId: event.id })}
+                        />
                         <label className="grid gap-2 text-sm font-medium text-[color:var(--color-ink)] sm:col-span-2">
                           Event title
                           <input
@@ -245,9 +286,9 @@ export default async function PlannerDashboardPage(props: {
                           />
                         </label>
                         <div className="sm:col-span-2 flex flex-wrap gap-2">
-                          <button type="submit" className="btn-primary px-4 py-2 text-sm">
+                          <PendingSubmitButton pendingLabel="Saving..." className="btn-primary px-4 py-2 text-sm">
                             Save
-                          </button>
+                          </PendingSubmitButton>
                           <Link href="/planner/dashboard" className="btn-secondary px-4 py-2 text-sm">
                             Cancel
                           </Link>
@@ -309,9 +350,9 @@ export default async function PlannerDashboardPage(props: {
                 />
               </label>
               <div className="sm:col-span-2 flex flex-wrap gap-2">
-                <button type="submit" className="btn-primary px-4 py-2 text-sm">
+                <PendingSubmitButton pendingLabel="Saving..." className="btn-primary px-4 py-2 text-sm">
                   Save wedding event
-                </button>
+                </PendingSubmitButton>
                 <Link href="/planner/dashboard" className="btn-secondary px-4 py-2 text-sm">
                   Cancel
                 </Link>
@@ -321,27 +362,58 @@ export default async function PlannerDashboardPage(props: {
         </section>
 
         {message ? (
-          <p className="surface-soft rounded-[1.25rem] px-4 py-3 text-sm text-[color:var(--color-brand-primary)]">
+          <p role="status" className="surface-soft rounded-[1.25rem] px-4 py-3 text-sm text-[color:var(--color-brand-primary)]">
             {message}
           </p>
         ) : null}
         {feedbackError ? (
-          <p className="rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p role="alert" className="rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {feedbackError}
           </p>
         ) : null}
 
-        <PlannerInspirationFeed items={inspirationItems} />
+        <WeddingBudgetSection
+          key={`budget-${selectedWeddingId ?? "general"}`}
+          initialBudget={plannerBudget}
+          weddingId={selectedWeddingId}
+          weddingTitle={getWeddingEventTitle(selectedWedding)}
+        />
 
+        <PlannerProgressSection
+          key={`progress-${selectedWeddingId ?? "general"}`}
+          initialItems={progressItems}
+          catalog={progressCatalog}
+          weddingId={selectedWeddingId}
+          weddingTitle={getWeddingEventTitle(selectedWedding)}
+        />
+
+        <GuestListSection
+          key={`guests-${selectedWeddingId ?? "general"}`}
+          initialGuests={guests}
+          initialInvites={guestInvites}
+          weddingId={selectedWeddingId}
+          weddingTitle={getWeddingEventTitle(selectedWedding)}
+          wedding={
+            selectedWedding
+              ? {
+                  title: getWeddingEventTitle(selectedWedding) || "Wedding event",
+                  weddingType: selectedWedding.weddingType,
+                  location: selectedWedding.location,
+                  weddingDate: null,
+                }
+              : null
+          }
+        />
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <article className="surface-card rounded-[2rem] p-5 sm:p-7">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
-              Saved Vendors
-            </p>
-            <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
-              Your shortlist
-            </h2>
+          <DashboardCollapsibleSection
+            eyebrow="Saved Vendors"
+            title="Your shortlist"
+            subtitle="Review saved vendors, compare options, and start inquiries."
+            defaultOpen={false}
+            storageKey="iyeoba:planner-dashboard:saved-vendors"
+            className="p-5"
+          >
             {savedVendors.length ? (
               <div className="mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent] sm:grid sm:overflow-visible sm:pb-0 sm:[scrollbar-width:auto] sm:[scrollbar-color:auto] sm:gap-4">
                 {savedVendors.map((saved) => {
@@ -353,6 +425,7 @@ export default async function PlannerDashboardPage(props: {
                     compareActive,
                     threadVendorId,
                   );
+                  const threadHref = buildPlannerThreadHref(saved.vendor.id, compareIds);
 
                   return (
                     <div key={saved.id} className="surface-soft min-w-[88%] snap-start rounded-[1.5rem] p-4 sm:min-w-0 sm:p-5">
@@ -368,7 +441,7 @@ export default async function PlannerDashboardPage(props: {
                             Starting price: {saved.vendor.priceRange || "Contact vendor"}
                           </p>
                           <p className="mt-1 text-sm text-[color:var(--color-muted)]">
-                            Inquiry status: {conversation ? formatStatus(conversation.threadStatus) : "Not started"}
+                            Inquiry status: {conversation ? formatInquiryCardStatus(conversation.threadStatus) : "Not started"}
                           </p>
                         </div>
                         <VendorProfileAvatarLink
@@ -378,30 +451,21 @@ export default async function PlannerDashboardPage(props: {
                           sizeClassName="h-[64px] w-[64px] sm:h-[78px] sm:w-[78px]"
                         />
                       </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="relative z-20 mt-4 flex flex-wrap gap-2">
                         <Link href={`/vendors/${saved.vendor.slug}`} className="btn-secondary px-3 py-1.5 text-sm">
                           View Profile
                         </Link>
-                        {conversation ? (
-                          <Link href={`/planner/dashboard?thread=${encodeURIComponent(saved.vendor.id)}`} className="btn-primary px-3 py-1.5 text-sm">
-                            Open Conversation
-                          </Link>
-                        ) : (
-                          <form action={createVendorInquiryAction}>
-                            <input type="hidden" name="vendorId" value={saved.vendor.id} />
-                            <input type="hidden" name="vendorSlug" value={saved.vendor.slug} />
-                            <input type="hidden" name="contactMethod" value="planner_saved_vendor" />
-                            <input
-                              type="hidden"
-                              name="nextPath"
-                              value={`/planner/dashboard?thread=${encodeURIComponent(saved.vendor.id)}`}
-                            />
-                            <input type="hidden" name="message" value="" />
-                            <button type="submit" className="btn-primary px-3 py-1.5 text-sm">
-                              Start Inquiry
-                            </button>
-                          </form>
-                        )}
+                        <StartInquiryForm
+                          action={createVendorInquiryAction}
+                          vendorId={saved.vendor.id}
+                          vendorSlug={saved.vendor.slug}
+                          nextPath={threadHref}
+                          serverError={
+                            feedbackError && threadVendorId === saved.vendor.id
+                              ? feedbackError
+                              : null
+                          }
+                        />
                         {buildWhatsAppLink(
                           saved.vendor.whatsapp,
                           saved.vendor.businessName,
@@ -428,7 +492,7 @@ export default async function PlannerDashboardPage(props: {
                 Save vendors first to manage conversations and comparisons here.
               </p>
             )}
-          </article>
+          </DashboardCollapsibleSection>
 
           <PlannerConversationCenter
             conversations={plannerConversations}
@@ -512,11 +576,11 @@ function formatStatus(value: string) {
   return value.replace(/_/g, " ");
 }
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+function formatInquiryCardStatus(value: PlannerInquiry["threadStatus"]) {
+  if (value === "open" || value === "contacted") {
+    return "Started";
+  }
+  return formatStatus(value);
 }
 
 function parseCompareIds(value: string | string[] | undefined) {
@@ -545,6 +609,30 @@ function buildCompareHref(
     params.set("compare", next.join(","));
   }
   return `/planner/dashboard${params.size ? `?${params.toString()}` : ""}`;
+}
+
+function buildPlannerThreadHref(vendorId: string, compareIds: string[]) {
+  const params = new URLSearchParams();
+  params.set("thread", vendorId);
+  if (compareIds.length) {
+    params.set("compare", compareIds.join(","));
+  }
+  return `/planner/dashboard?${params.toString()}`;
+}
+
+function buildDashboardWeddingHref({
+  weddingId,
+  editWeddingId,
+}: {
+  weddingId: string;
+  editWeddingId?: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("wedding", weddingId);
+  if (editWeddingId) {
+    params.set("editWedding", editWeddingId);
+  }
+  return `/planner/dashboard?${params.toString()}`;
 }
 
 function buildConversationsByVendor(inquiries: PlannerInquiry[]) {
@@ -699,22 +787,12 @@ async function getWeddingEvents(
   ] as const;
 
   let weddings: Array<Record<string, unknown>> | null = null;
-  let usedSelect: string | null = null;
   let finalError: {
     code?: string | null;
     message?: string | null;
     details?: string | null;
     hint?: string | null;
   } | null = null;
-  const errors: Array<{
-    select: string;
-    error: {
-      code?: string | null;
-      message?: string | null;
-      details?: string | null;
-      hint?: string | null;
-    };
-  }> = [];
 
   for (const select of selectAttempts) {
     const result = await supabase
@@ -727,7 +805,6 @@ async function getWeddingEvents(
       weddings = Array.isArray(result.data)
         ? (result.data as Array<Record<string, unknown>>)
         : [];
-      usedSelect = select;
       finalError = null;
       break;
     }
@@ -738,22 +815,12 @@ async function getWeddingEvents(
       details: result.error.details ?? null,
       hint: result.error.hint ?? null,
     };
-    errors.push({ select, error: serialized });
     finalError = serialized;
 
     if (!isWeddingSchemaDriftError(result.error)) {
       break;
     }
   }
-
-  console.log("Planner wedding overview read", {
-    table: "weddings",
-    plannerUserId: userId,
-    dataCount: weddings?.length ?? 0,
-    usedSelect,
-    errors,
-    error: finalError,
-  });
 
   if (finalError) {
     return {
@@ -763,7 +830,6 @@ async function getWeddingEvents(
   }
 
   const rows = Array.isArray(weddings) ? weddings : [];
-  console.log("weddings:", rows);
   return {
     loadError: false,
     weddingEvents: rows
@@ -816,46 +882,23 @@ function isWeddingSchemaDriftError(error: {
   );
 }
 
-async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> {
+async function getPlannerProgressItems(
+  userId: string,
+  weddingId: string | null,
+): Promise<ProgressItem[]> {
   const supabase = await createSupabaseServerClient();
-  const { data: blueprints, error } = await supabase
-    .from("blueprints")
-    .select("id, checklist_json")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const blueprint = await getPlannerBlueprintForWedding(
+    supabase,
+    userId,
+    weddingId,
+    "id, wedding_id, checklist_json",
+  );
 
-  const data = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
-
-  console.log("Planner progress read source", {
-    table: "blueprints",
-    plannerUserId: userId,
-    hasBlueprintRow: Boolean(data?.id),
-    dataCount: blueprints?.length ?? 0,
-    error: error
-      ? {
-          code: error.code ?? null,
-          message: error.message ?? null,
-          details: error.details ?? null,
-          hint: error.hint ?? null,
-        }
-      : null,
-  });
-
-  if (error) {
+  if (!Array.isArray(blueprint?.checklist_json)) {
     return [];
   }
 
-  if (!data?.id) {
-    console.log("checklist:", []);
-    return [];
-  }
-
-  if (!Array.isArray(data?.checklist_json)) {
-    console.log("checklist:", []);
-    return [];
-  }
-
-  const loaded = data.checklist_json
+  return blueprint.checklist_json
     .filter(
       (item): item is { key?: string; label?: string; status?: string } =>
         typeof item === "object" && item !== null,
@@ -865,53 +908,159 @@ async function getPlannerProgressItems(userId: string): Promise<ProgressItem[]> 
       label: String(item.label ?? ""),
       status: normalizePlannerProgressStatus(item.status),
     }))
-    .filter((item) => item.key && item.label) as ProgressItem[];
-
-  console.log("checklist:", loaded);
-  return loaded;
+    .filter((item) => item.key && item.label);
 }
 
-async function getPlannerBudget(userId: string): Promise<PlannerBudget | null> {
+async function getPlannerBudget(
+  userId: string,
+  weddingId: string | null,
+): Promise<PlannerBudget | null> {
   const supabase = await createSupabaseServerClient();
-  const { data: blueprints, error } = await supabase
-    .from("blueprints")
-    .select("id, budget_json")
+  const blueprint = await getPlannerBlueprintForWedding(
+    supabase,
+    userId,
+    weddingId,
+    "id, wedding_id, budget_json",
+  );
+
+  return normalizePlannerBudget(blueprint?.budget_json);
+}
+
+async function getPlannerBlueprintForWedding(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  weddingId: string | null,
+  select: string,
+) {
+  const blueprints = supabase.from("blueprints") as any;
+
+  if (weddingId) {
+    const scoped = await blueprints
+      .select(select)
+      .eq("user_id", userId)
+      .eq("wedding_id", weddingId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (!scoped.error && scoped.data?.[0]) {
+      return scoped.data[0] as Record<string, unknown>;
+    }
+  }
+
+  let fallbackQuery = blueprints
+    .select(select)
+    .eq("user_id", userId);
+
+  if (weddingId) {
+    fallbackQuery = fallbackQuery.is("wedding_id", null);
+  }
+
+  const fallback = await fallbackQuery
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (fallback.error) {
+    console.warn("Planner dashboard blueprint load failed", {
+      userId,
+      weddingId,
+      code: fallback.error.code ?? null,
+      message: fallback.error.message ?? null,
+      details: fallback.error.details ?? null,
+      hint: fallback.error.hint ?? null,
+    });
+    return null;
+  }
+
+  return (fallback.data?.[0] as Record<string, unknown> | undefined) ?? null;
+}
+
+async function getPlannerGuests(
+  userId: string,
+  weddingId: string | null,
+): Promise<PlannerGuest[]> {
+  if (!weddingId) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("guests")
+    .select("id, name, phone, email, guest_group, invite_status, notes, created_at, updated_at")
     .eq("user_id", userId)
+    .eq("wedding_id", weddingId)
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.warn("Planner budget read failed", {
-      table: "blueprints",
-      plannerUserId: userId,
+    console.warn("Planner dashboard guest list load failed", {
+      userId,
+      weddingId,
       code: error.code ?? null,
       message: error.message ?? null,
       details: error.details ?? null,
       hint: error.hint ?? null,
     });
-    return null;
+    return [];
   }
 
-  const row = Array.isArray(blueprints) ? blueprints[0] ?? null : null;
-  const rawBudget = row?.budget_json;
-  const budgetJsonExists = Boolean(
-    rawBudget && typeof rawBudget === "object" && !Array.isArray(rawBudget),
-  );
-  const budgetJsonCategoriesCount =
-    budgetJsonExists &&
-    Array.isArray((rawBudget as { categories?: unknown }).categories)
-      ? (rawBudget as { categories: unknown[] }).categories.length
-      : 0;
+  return (data ?? []).map((guest) => ({
+    id: guest.id,
+    name: guest.name,
+    phone: guest.phone ?? "",
+    email: guest.email ?? "",
+    guestGroup: guest.guest_group ?? "Other",
+    inviteStatus: guest.invite_status ?? "Not invited",
+    notes: guest.notes ?? "",
+    createdAt: guest.created_at ?? null,
+    updatedAt: guest.updated_at ?? null,
+  }));
+}
 
-  console.info("Planner dashboard budget read source", {
-    table: "blueprints",
-    plannerUserId: userId,
-    dashboardLoadedBlueprintId: row?.id ?? null,
-    dashboardBudgetJsonExists: budgetJsonExists,
-    budgetJsonCategoriesCount,
-    dataCount: blueprints?.length ?? 0,
-  });
+async function getPlannerGuestInvites(
+  userId: string,
+  weddingId: string | null,
+): Promise<PlannerGuestInvite[]> {
+  if (!weddingId) {
+    return [];
+  }
 
-  return normalizePlannerBudget(row?.budget_json);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("guest_invites")
+    .select("id, guest_name, guest_email, guest_phone, guest_group, couple_name, wedding_date, wedding_time, venue, custom_message, invite_status, rsvp_status, rsvp_token, sent_at, created_at, updated_at")
+    .eq("planner_user_id", userId)
+    .eq("wedding_id", weddingId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Planner dashboard guest invite load failed", {
+      userId,
+      weddingId,
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
+    return [];
+  }
+
+  return (data ?? []).map((invite) => ({
+    id: invite.id,
+    guestName: invite.guest_name ?? "",
+    guestEmail: invite.guest_email ?? "",
+    guestPhone: invite.guest_phone ?? "",
+    guestGroup: invite.guest_group ?? "Other",
+    coupleName: invite.couple_name ?? "",
+    weddingDate: invite.wedding_date ?? "",
+    weddingTime: invite.wedding_time ?? "",
+    venue: invite.venue ?? "",
+    customMessage: invite.custom_message ?? "",
+    inviteStatus: invite.invite_status ?? "draft",
+    rsvpStatus: invite.rsvp_status ?? "pending",
+    rsvpToken: invite.rsvp_token ?? "",
+    sentAt: invite.sent_at ?? null,
+    createdAt: invite.created_at ?? null,
+    updatedAt: invite.updated_at ?? null,
+  }));
 }
 
 function normalizePlannerBudget(value: unknown): PlannerBudget | null {
@@ -976,10 +1125,23 @@ function normalizePlannerBudget(value: unknown): PlannerBudget | null {
   };
 }
 
+function getWeddingEventTitle(event: WeddingEvent | null) {
+  if (!event) {
+    return null;
+  }
+
+  return (
+    event.eventName ||
+    `${event.culture} ${event.weddingType}`.trim() ||
+    "Wedding event"
+  );
+}
+
 function toNullableNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
+
   const parsed = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(parsed) ? parsed : null;
 }

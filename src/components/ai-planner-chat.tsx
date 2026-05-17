@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -75,6 +75,7 @@ type AiPlannerChatProps = {
   initialName?: string;
   initialState?: AiPlannerInitialState | null;
   weddingEvents?: AiPlannerWeddingEvent[];
+  weddingEventsLoadError?: boolean;
   chatHistory?: AiPlannerChatHistoryItem[];
   selectedWeddingId?: string | null;
   selectedChatId?: string | null;
@@ -122,6 +123,7 @@ export function AiPlannerChat({
   initialName,
   initialState,
   weddingEvents: initialWeddingEvents = [],
+  weddingEventsLoadError = false,
   chatHistory: initialChatHistory = [],
   selectedWeddingId,
   selectedChatId,
@@ -138,6 +140,10 @@ export function AiPlannerChat({
   const [weddingDate, setWeddingDate] = useState(initialIntake.weddingDate);
   const [culture, setCulture] = useState(initialIntake.culture);
   const [weddingEvents, setWeddingEvents] = useState(initialWeddingEvents);
+  const [isLoadingWeddingEvents, setIsLoadingWeddingEvents] = useState(false);
+  const [weddingEventsError, setWeddingEventsError] = useState(
+    weddingEventsLoadError ? "Could not load your events" : "",
+  );
   const [chatHistory, setChatHistory] = useState(initialChatHistory);
   const [activeWeddingId, setActiveWeddingId] = useState(
     selectedWeddingId ?? initialState?.weddingId ?? initialWeddingEvents[0]?.id ?? "",
@@ -185,6 +191,52 @@ export function AiPlannerChat({
   );
   const activeWedding = weddingEvents.find((event) => event.id === activeWeddingId) ?? null;
   const activeChat = chatHistory.find((chat) => chat.id === activeChatId) ?? null;
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    let isCurrent = true;
+    setIsLoadingWeddingEvents(true);
+    setWeddingEventsError("");
+
+    fetch("/api/ai-planner/events")
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as {
+          ok?: boolean;
+          events?: AiPlannerWeddingEvent[];
+          error?: string;
+        } | null;
+
+        if (!response.ok || !payload?.ok || !Array.isArray(payload.events)) {
+          throw new Error(payload?.error || "Could not load your events");
+        }
+
+        if (!isCurrent) {
+          return;
+        }
+
+        setWeddingEvents(payload.events);
+        setActiveWeddingId((current) =>
+          current && !payload.events!.some((event) => event.id === current) ? "" : current,
+        );
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setWeddingEventsError("Could not load your events");
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingWeddingEvents(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [isAuthenticated]);
 
   async function submitPlannerMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -342,6 +394,29 @@ export function AiPlannerChat({
     setNotice("");
     setHistoryFeedback("New chat started.");
     updateAiPlannerUrl(activeWeddingId || null, null);
+  }
+
+  function selectWeddingEvent(weddingId: string) {
+    const nextChat = weddingId
+      ? chatHistory.find((chat) => chat.weddingId === weddingId) ?? null
+      : chatHistory.find((chat) => !chat.weddingId) ?? null;
+
+    setActiveWeddingId(weddingId);
+    setAddedChecklistItems(new Set());
+    setError("");
+    setNotice("");
+    setHistoryFeedback("");
+
+    if (nextChat) {
+      openChat(nextChat);
+      return;
+    }
+
+    setActiveChatId(null);
+    setMessages([]);
+    setPlan(emptyPlan);
+    setSaved(false);
+    updateAiPlannerUrl(weddingId || null, null);
   }
 
   function openChat(chat: AiPlannerChatHistoryItem) {
@@ -622,14 +697,15 @@ export function AiPlannerChat({
               </span>
               <select
                 value={activeWeddingId}
-                onChange={(event) => {
-                  setActiveWeddingId(event.target.value);
-                  setAddedChecklistItems(new Set());
-                  updateAiPlannerUrl(event.target.value || null, activeChatId);
-                }}
+                onChange={(event) => selectWeddingEvent(event.target.value)}
                 className="field-input mt-2 rounded-[1.25rem] text-sm"
               >
                 <option value="">General planning</option>
+                {isLoadingWeddingEvents ? (
+                  <option value="__loading" disabled>
+                    Loading events...
+                  </option>
+                ) : null}
                 {weddingEvents.map((event) => (
                   <option key={event.id} value={event.id}>
                     {event.title}
@@ -637,6 +713,16 @@ export function AiPlannerChat({
                 ))}
               </select>
             </label>
+            {isLoadingWeddingEvents ? (
+              <p className="mt-2 text-xs font-medium text-[color:var(--color-muted)]">
+                Loading events...
+              </p>
+            ) : null}
+            {weddingEventsError ? (
+              <p className="mt-2 text-xs font-medium text-red-700" role="alert">
+                Could not load your events
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={createWeddingEventFromDetails}

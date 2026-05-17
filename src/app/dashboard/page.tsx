@@ -10,6 +10,10 @@ export default async function DashboardRedirectPage() {
   }
 
   if (profile?.role === "planner" || profile?.role === "admin") {
+    if (profile.role === "admin") {
+      redirect("/manage");
+    }
+
     redirect("/planner/dashboard");
   }
 

@@ -122,14 +122,14 @@ export async function POST(request: Request) {
 async function createWeddingFromIntake(userId: string, intake: PlannerIntake) {
   const supabase = await createSupabaseServerClient();
   const weddings = supabase.from("weddings") as any;
-  const weddingType = cleanText(intake.weddingType) || "Wedding plan";
+  const weddingType = cleanText(intake.weddingType) || "Wedding event";
   const culture = cleanText(intake.culture) || "Not set";
   const location = cleanText(intake.location) || "Not set";
   const budgetRange = cleanText(intake.budget) || "Not set";
   const eventName =
     cleanText(intake.eventName) ||
     `${culture !== "Not set" ? culture : ""} ${weddingType}`.trim() ||
-    "Wedding plan";
+    "Wedding event";
 
   const { data, error } = await weddings
     .insert({

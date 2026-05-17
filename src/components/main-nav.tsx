@@ -1,8 +1,9 @@
 import Link from "next/link";
 
-import { signOutAction } from "@/app/auth/actions";
+import { AuthSignOutForm } from "@/components/auth-sign-out-form";
 import { getCurrentProfile } from "@/lib/auth";
 import { IyeobaLogo } from "@/components/logo";
+import { MobileMainNav } from "@/components/mobile-main-nav";
 
 export async function MainNav() {
   const profile = await getCurrentProfile();
@@ -33,7 +34,7 @@ export async function MainNav() {
           </span>
         </div>
 
-        <nav className="flex flex-nowrap items-center gap-1 text-[0.78rem] font-medium leading-none text-[color:var(--color-muted)] sm:gap-1.5 sm:text-[0.95rem] md:gap-2.5 lg:gap-3.5">
+        <nav className="hidden flex-nowrap items-center gap-1 text-[0.78rem] font-medium leading-none text-[color:var(--color-muted)] sm:gap-1.5 sm:text-[0.95rem] md:flex md:gap-2.5 lg:gap-3.5">
           <Link
             href="/"
             className="hidden whitespace-nowrap rounded-full px-2 py-[0.38rem] font-bold text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[rgba(91,44,131,0.08)] hover:text-[#4A2268] lg:inline"
@@ -130,20 +131,15 @@ export async function MainNav() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="whitespace-nowrap rounded-full border border-[#5B2C83] bg-white px-2.5 py-[0.36rem] text-[0.78rem] font-semibold leading-none text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[#5B2C83] hover:text-white sm:px-3 sm:text-sm"
-                >
-                  Sign out
-                </button>
-              </form>
+              <AuthSignOutForm className="whitespace-nowrap rounded-full border border-[#5B2C83] bg-white px-2.5 py-[0.36rem] text-[0.78rem] font-semibold leading-none text-[#5B2C83] transition-all duration-200 ease-in-out hover:bg-[#5B2C83] hover:text-white disabled:cursor-wait disabled:opacity-70 sm:px-3 sm:text-sm" />
               <span className="hidden whitespace-nowrap text-[0.68rem] font-medium uppercase tracking-[0.18em] text-[color:var(--color-muted)]/78 md:inline">
                 {isVendor ? "Vendor account" : "Planner account"}
               </span>
             </div>
           )}
         </nav>
+
+        <MobileMainNav profile={profile} dashboardHref={dashboardHref} />
       </div>
       <style>
         {`

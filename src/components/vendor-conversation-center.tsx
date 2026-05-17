@@ -94,7 +94,7 @@ export function VendorConversationCenter({
         <div
           className={`min-h-0 ${selectedInquiry ? "hidden lg:block" : "block"}`}
         >
-          <div className="h-full overflow-y-auto rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2">
+          <div className="h-full max-h-[520px] overflow-y-auto overscroll-contain rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2 pr-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent] md:max-h-[680px] xl:max-h-[720px]">
             {sortedInquiries.map((inquiry) => {
               const lastMessage = getLastMessage(inquiry);
               const isActive = selectedInquiryId === inquiry.id;
@@ -131,7 +131,7 @@ export function VendorConversationCenter({
         </div>
 
         <div
-          className={`min-h-0 ${selectedInquiry ? "flex" : "hidden lg:flex"} max-h-[min(78vh,720px)] flex-col rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white`}
+          className={`min-h-0 ${selectedInquiry ? "flex" : "hidden lg:flex"} flex-col rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white`}
         >
           {selectedInquiry ? (
             <>
@@ -153,7 +153,7 @@ export function VendorConversationCenter({
                 </button>
               </div>
 
-              <div className="relative isolate min-h-[160px] overflow-hidden overflow-y-auto px-4 py-4 lg:max-h-[360px] before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
+              <div className="relative isolate min-h-[300px] max-h-[56dvh] overflow-hidden overflow-y-auto px-4 py-4 sm:min-h-[360px] md:max-h-[480px] lg:min-h-[430px] lg:max-h-[520px] before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
                 {selectedInquiry.messages.length ? (
                   <div className="relative z-10 space-y-3">
                     {selectedInquiry.messages.map((message) => (

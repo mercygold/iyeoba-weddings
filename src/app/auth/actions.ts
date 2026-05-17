@@ -5,11 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { trackServerEvent } from "@/lib/analytics-server";
-import {
-  getAuthRoleRedirectPath,
-  getRedirectPathForRole,
-  syncAuthUserProfileAndVendorDraft,
-} from "@/lib/auth-profile-sync";
+import { getRedirectPathForRole } from "@/lib/auth-profile-sync";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseConfigStatus } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -232,7 +228,7 @@ export async function signInAction(formData: FormData) {
     );
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -251,11 +247,7 @@ export async function signInAction(formData: FormData) {
     );
   }
 
-  if (data.user) {
-    await syncAuthUserProfileAndVendorDraft(supabase, data.user);
-  }
-
-  const destination = next || (await getAuthRoleRedirectPath(supabase));
+  const destination = next || "/dashboard";
 
   revalidatePath("/");
   redirect(destination);
@@ -263,7 +255,17 @@ export async function signInAction(formData: FormData) {
 
 export async function signOutAction() {
   const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    logAuthIssue("signOut", {
+      code: "code" in error ? error.code : undefined,
+      status: "status" in error ? error.status : undefined,
+      message: error.message,
+    });
+  }
+
+  revalidatePath("/");
   redirect("/");
 }
 

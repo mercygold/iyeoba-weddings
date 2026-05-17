@@ -25,6 +25,7 @@ export default async function AiPlannerPage(props: { searchParams: SearchParams 
       })
     : {
         weddingEvents: [],
+        weddingEventsLoadError: false,
         chatHistory: [],
         initialPlannerState: null,
         selectedWeddingId: null,
@@ -57,6 +58,7 @@ export default async function AiPlannerPage(props: { searchParams: SearchParams 
           initialName={profile?.full_name ?? undefined}
           initialState={plannerData.initialPlannerState}
           weddingEvents={plannerData.weddingEvents}
+          weddingEventsLoadError={plannerData.weddingEventsLoadError}
           chatHistory={plannerData.chatHistory}
           selectedWeddingId={plannerData.selectedWeddingId}
           selectedChatId={plannerData.selectedChatId}
@@ -77,16 +79,19 @@ async function getAiPlannerData(
   },
 ): Promise<{
   weddingEvents: AiPlannerWeddingEvent[];
+  weddingEventsLoadError: boolean;
   chatHistory: AiPlannerChatHistoryItem[];
   initialPlannerState: AiPlannerInitialState | null;
   selectedWeddingId: string | null;
   selectedChatId: string | null;
 }> {
   const supabase = await createSupabaseServerClient();
-  const [weddingEvents, chatHistory] = await Promise.all([
-    getAiPlannerWeddingEvents(userId),
-    getAiPlannerChatHistory(userId),
+  const ownerId = await resolveAiPlannerOwnerId(supabase, userId);
+  const [weddingEventsResult, chatHistory] = await Promise.all([
+    getAiPlannerWeddingEvents(ownerId),
+    getAiPlannerChatHistory(ownerId),
   ]);
+  const weddingEvents = weddingEventsResult.weddingEvents;
   const normalizedSelectedWeddingId =
     selectedWeddingId && weddingEvents.some((event) => event.id === selectedWeddingId)
       ? selectedWeddingId
@@ -101,6 +106,7 @@ async function getAiPlannerData(
 
   return {
     weddingEvents,
+    weddingEventsLoadError: weddingEventsResult.loadError,
     chatHistory,
     initialPlannerState: selectedChat
       ? {
@@ -121,27 +127,58 @@ async function getAiPlannerData(
   };
 }
 
-async function getAiPlannerWeddingEvents(userId: string): Promise<AiPlannerWeddingEvent[]> {
+async function getAiPlannerWeddingEvents(
+  userId: string,
+): Promise<{ weddingEvents: AiPlannerWeddingEvent[]; loadError: boolean }> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("weddings")
-    .select("id, event_name, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const selectAttempts = [
+    "id, event_name, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
+    "id, title, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
+    "id, event_name, wedding_type, culture, location, guest_count, budget_range, created_at",
+    "id, title, wedding_type, culture, location, guest_count, budget_range, created_at",
+  ] as const;
 
-  if (error) {
-    console.warn("Iyeoba AI planner wedding events could not be loaded", {
-      layer: "weddings_select",
-      code: error.code ?? undefined,
-      message: error.message,
-      details: error.details ?? undefined,
-      hint: error.hint ?? undefined,
-    });
-    return [];
+  let data: Array<Record<string, unknown>> = [];
+  let finalError: { code?: string | null; message?: string | null; details?: string | null; hint?: string | null } | null = null;
+
+  for (const select of selectAttempts) {
+    const result = await supabase
+      .from("weddings")
+      .select(select)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (!result.error) {
+      data = Array.isArray(result.data) ? (result.data as Array<Record<string, unknown>>) : [];
+      finalError = null;
+      break;
+    }
+
+    finalError = {
+      code: result.error.code ?? null,
+      message: result.error.message ?? null,
+      details: result.error.details ?? null,
+      hint: result.error.hint ?? null,
+    };
+
+    if (!isMissingColumnError(result.error)) {
+      break;
+    }
   }
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
+  if (finalError) {
+    console.warn("Iyeoba AI planner wedding events could not be loaded", {
+      layer: "weddings_select",
+      code: finalError.code ?? undefined,
+      message: finalError.message,
+      details: finalError.details ?? undefined,
+      hint: finalError.hint ?? undefined,
+    });
+    return { weddingEvents: [], loadError: true };
+  }
+
+  return { weddingEvents: data.map((row) => ({
+    id: String(row.id),
     title: buildWeddingTitle(row),
     weddingType: stringValue(row.wedding_type),
     culture: stringValue(row.culture),
@@ -150,7 +187,7 @@ async function getAiPlannerWeddingEvents(userId: string): Promise<AiPlannerWeddi
     budgetRange: stringValue(row.budget_range),
     weddingDate: stringValue(row.wedding_date) || null,
     createdAt: stringValue(row.created_at) || null,
-  }));
+  })), loadError: false };
 }
 
 async function getAiPlannerChatHistory(userId: string): Promise<AiPlannerChatHistoryItem[]> {
@@ -198,14 +235,32 @@ async function getAiPlannerChatHistory(userId: string): Promise<AiPlannerChatHis
 
 function buildWeddingTitle(row: {
   event_name?: string | null;
+  title?: string | null;
   culture?: string | null;
   wedding_type?: string | null;
 }) {
   return (
     stringValue(row.event_name) ||
+    stringValue(row.title) ||
     `${stringValue(row.culture)} ${stringValue(row.wedding_type)}`.trim() ||
     "Wedding event"
   );
+}
+
+async function resolveAiPlannerOwnerId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  fallbackId: string,
+) {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    console.warn("Iyeoba AI planner auth owner resolution failed", {
+      fallbackId,
+      message: error.message,
+    });
+    return fallbackId;
+  }
+
+  return data.user?.id ?? fallbackId;
 }
 
 function getChatFallbackTitle(messages: unknown) {

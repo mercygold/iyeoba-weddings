@@ -200,6 +200,16 @@ export async function saveWeddingEventAction(formData: FormData) {
     budget_currency: budgetCurrency,
     budget_range: budgetRange,
   };
+  const payloadWithLegacyTitle = {
+    user_id: ownerId,
+    title: eventName || null,
+    culture,
+    wedding_type: weddingType,
+    location,
+    guest_count: Math.round(guestCount),
+    budget_currency: budgetCurrency,
+    budget_range: budgetRange,
+  };
   const payloadLegacy = {
     user_id: ownerId,
     culture,
@@ -227,18 +237,18 @@ export async function saveWeddingEventAction(formData: FormData) {
     if (updateResult.error && isSchemaDriftError(updateResult.error)) {
       updateResult = await supabase
         .from("weddings")
+        .update(payloadWithLegacyTitle)
+        .eq("id", weddingId)
+        .eq("user_id", ownerId);
+    }
+    if (updateResult.error && isSchemaDriftError(updateResult.error)) {
+      updateResult = await supabase
+        .from("weddings")
         .update(payloadLegacy)
         .eq("id", weddingId)
         .eq("user_id", ownerId);
     }
-    const persistedResult = await supabase
-      .from("weddings")
-      .select(
-        "id, user_id, event_name, culture, wedding_type, location, guest_count, budget_currency, budget_range",
-      )
-      .eq("id", weddingId)
-      .eq("user_id", ownerId)
-      .maybeSingle();
+    const persistedResult = await loadPersistedWeddingEvent(supabase, weddingId, ownerId);
 
     console.log("Planner wedding event update response", {
       table: "weddings",
@@ -254,10 +264,21 @@ export async function saveWeddingEventAction(formData: FormData) {
         `${nextPath}?error=${encodeURIComponent("We could not save this wedding event right now.")}`,
       );
     }
+
+    if (!persistedResult.data?.id) {
+      redirect(
+        `${nextPath}?error=${encodeURIComponent("We could not save this wedding event right now.")}`,
+      );
+    }
   } else {
     let insertResult = await supabase
       .from("weddings")
       .insert(payloadWithTitle);
+    if (insertResult.error && isSchemaDriftError(insertResult.error)) {
+      insertResult = await supabase
+        .from("weddings")
+        .insert(payloadWithLegacyTitle);
+    }
     if (insertResult.error && isSchemaDriftError(insertResult.error)) {
       insertResult = await supabase
         .from("weddings")
@@ -289,6 +310,7 @@ export async function saveWeddingEventAction(formData: FormData) {
   revalidatePath(nextPath);
   revalidatePath("/planner/dashboard");
   revalidatePath("/planner/setup");
+  revalidatePath("/ai-planner");
   redirect(`${nextPath}?message=${encodeURIComponent("Wedding event updated.")}`);
 }
 
@@ -1768,6 +1790,36 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+async function loadPersistedWeddingEvent(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  weddingId: string,
+  ownerId: string,
+) {
+  const selectAttempts = [
+    "id, user_id, event_name, culture, wedding_type, location, guest_count, budget_currency, budget_range",
+    "id, user_id, title, culture, wedding_type, location, guest_count, budget_currency, budget_range",
+    "id, user_id, culture, wedding_type, location, guest_count, budget_range",
+  ] as const;
+
+  for (const select of selectAttempts) {
+    const weddings = supabase.from("weddings") as any;
+    const result = await weddings
+      .select(select)
+      .eq("id", weddingId)
+      .eq("user_id", ownerId)
+      .maybeSingle();
+
+    if (!result.error || !isSchemaDriftError(result.error)) {
+      return result;
+    }
+  }
+
+  return {
+    data: null,
+    error: null,
+  };
 }
 
 function withPlannerQueryParam(path: string, key: "message" | "error", value: string) {

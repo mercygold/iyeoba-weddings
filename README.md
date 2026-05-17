@@ -74,7 +74,7 @@ Optional:
 
 - `OPENAI_MODEL`
 
-## Supabase Setup
+## Supnpmabase Setup
 1. Create a new Supabase project.
 2. Open the  editor.
 3. Run [supabase/schema.sql](/Users/mercygold/iyeoba-mvp/supabase/schema.sql).

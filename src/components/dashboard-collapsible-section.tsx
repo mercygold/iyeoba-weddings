@@ -12,6 +12,7 @@ type DashboardCollapsibleSectionProps = {
   children: ReactNode;
   className?: string;
   contentClassName?: string;
+  priorityOpen?: boolean;
 };
 
 export function DashboardCollapsibleSection({
@@ -24,11 +25,17 @@ export function DashboardCollapsibleSection({
   children,
   className = "",
   contentClassName = "mt-5",
+  priorityOpen = false,
 }: DashboardCollapsibleSectionProps) {
   const contentId = useId();
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [isOpen, setIsOpen] = useState(priorityOpen || defaultOpen);
 
   useEffect(() => {
+    if (priorityOpen) {
+      setIsOpen(true);
+      return;
+    }
+
     try {
       const saved = window.localStorage.getItem(storageKey);
       if (saved === "open") {
@@ -39,7 +46,7 @@ export function DashboardCollapsibleSection({
     } catch {
       // localStorage is optional; defaults still keep the dashboard usable.
     }
-  }, [storageKey]);
+  }, [priorityOpen, storageKey]);
 
   function toggleOpen() {
     setIsOpen((current) => {

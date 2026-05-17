@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { DashboardCollapsibleSection } from "@/components/dashboard-collapsible-section";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 
 type PlannerConversationCenterProps = {
@@ -69,21 +70,49 @@ export function PlannerConversationCenter({
     ? buildPlannerThreadPath(selectedVendor.id, compareIds)
     : "/planner/dashboard";
 
-  const sortedConversations = [...conversations].sort((a, b) => {
-    const aLast = getLastMessageTime(a.messages, a.createdAt);
-    const bLast = getLastMessageTime(b.messages, b.createdAt);
-    return bLast - aLast;
-  });
+  const sortedConversations = useMemo(
+    () =>
+      [...conversations].sort((a, b) => {
+        const aLast = getLastMessageTime(a.messages, a.createdAt);
+        const bLast = getLastMessageTime(b.messages, b.createdAt);
+        return bLast - aLast;
+      }),
+    [conversations],
+  );
   const hasActiveConversation = Boolean(
     initialVendorId &&
       conversations.some((conversation) => conversation.vendor.id === initialVendorId),
   );
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      if (
+        initialVendorId &&
+        conversations.some((conversation) => conversation.vendor.id === initialVendorId)
+      ) {
+        setSelectedVendorId(initialVendorId);
+        return;
+      }
+
+      if (
+        selectedVendorId &&
+        conversations.some((conversation) => conversation.vendor.id === selectedVendorId)
+      ) {
+        return;
+      }
+
+      setSelectedVendorId(sortedConversations[0]?.vendor.id ?? null);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [conversations, initialVendorId, selectedVendorId, sortedConversations]);
 
   return (
     <DashboardCollapsibleSection
       eyebrow="Conversations"
       title="Planner and vendor chat"
       defaultOpen={hasActiveConversation || sortedConversations.length > 0}
+      priorityOpen={hasActiveConversation}
       storageKey="iyeoba:planner-dashboard:conversations"
     >
       {!sortedConversations.length ? (
@@ -216,9 +245,9 @@ export function PlannerConversationCenter({
                     />
                     <AttachmentPicker />
                     <div className="grid gap-2 sm:grid-cols-[auto_auto_auto] sm:items-center">
-                      <button type="submit" className="btn-primary min-h-11 w-full px-4 py-2 text-sm sm:w-auto">
+                      <PendingSubmitButton pendingLabel="Sending..." className="btn-primary min-h-11 w-full px-4 py-2 text-sm sm:w-auto">
                         Send Message
-                      </button>
+                      </PendingSubmitButton>
                       {buildWhatsAppLink(
                         selectedVendor.whatsapp,
                         selectedVendor.businessName,
@@ -260,9 +289,9 @@ export function PlannerConversationCenter({
                       <option value="closed">Closed</option>
                       <option value="archived">Archived</option>
                     </select>
-                    <button type="submit" className="btn-primary min-h-11 w-full px-5 py-2 text-sm sm:w-auto">
+                    <PendingSubmitButton pendingLabel="Updating..." className="btn-primary min-h-11 w-full px-5 py-2 text-sm sm:w-auto">
                       Update Status
-                    </button>
+                    </PendingSubmitButton>
                   </form>
                 </div>
               </>

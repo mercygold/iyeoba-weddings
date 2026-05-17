@@ -1,7 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { saveVendorForPlannerAction } from "@/app/planner/actions";
+import {
+  createVendorInquiryAction,
+  saveVendorForPlannerAction,
+} from "@/app/planner/actions";
+import { StartInquiryForm } from "@/components/start-inquiry-form";
 import { VendorProfileAvatarLink } from "@/components/vendor-profile-avatar-link";
 import type { VendorDirectoryItem } from "@/lib/vendors";
 
@@ -18,6 +22,7 @@ export function VendorCard({
 }) {
   const isHomepage = mode === "homepage";
   const resolvedNextPath = nextPath ?? (isHomepage ? "/" : "/vendors");
+  const vendorId = vendor.id ?? "";
 
   const hero = (
     <div
@@ -105,7 +110,7 @@ export function VendorCard({
             />
           ) : null}
           <form action={saveVendorForPlannerAction}>
-            <input type="hidden" name="vendorId" value={vendor.id} />
+            <input type="hidden" name="vendorId" value={vendorId} />
             <input type="hidden" name="nextPath" value={resolvedNextPath} />
             <button
               type="submit"
@@ -114,12 +119,21 @@ export function VendorCard({
               {isSaved ? "Saved" : "Save Vendor"}
             </button>
           </form>
-          <Link
-            href={`/vendors/${vendor.slug}`}
-            className={isHomepage ? "btn-secondary w-full px-3 py-1.5 text-sm leading-none sm:w-auto" : "btn-secondary"}
-          >
-            Start Inquiry
-          </Link>
+          <StartInquiryForm
+            action={createVendorInquiryAction}
+            vendorId={vendorId}
+            vendorSlug={vendor.slug}
+            nextPath={
+              vendorId
+                ? `/planner/dashboard?thread=${encodeURIComponent(vendorId)}`
+                : resolvedNextPath
+            }
+            buttonClassName={
+              isHomepage
+                ? "btn-primary w-full px-3 py-1.5 text-sm leading-none sm:w-auto"
+                : "btn-primary"
+            }
+          />
         </div>
       </div>
     </article>
