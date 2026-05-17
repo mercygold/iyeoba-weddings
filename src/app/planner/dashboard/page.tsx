@@ -95,6 +95,24 @@ type PlannerGuestInvite = {
   createdAt: string | null;
   updatedAt: string | null;
 };
+type PlannerBlueprintQueryResult = Promise<{
+  data?: Array<Record<string, unknown>> | null;
+  error?: {
+    code?: string | null;
+    message?: string | null;
+    details?: string | null;
+    hint?: string | null;
+  } | null;
+}>;
+type PlannerBlueprintQuery = {
+  eq(column: string, value: string): PlannerBlueprintQuery;
+  is(column: string, value: null): PlannerBlueprintQuery;
+  order(column: string, options: { ascending: boolean }): PlannerBlueprintQuery;
+  limit(count: number): PlannerBlueprintQueryResult;
+};
+type PlannerBlueprintTable = {
+  select(columns: string): PlannerBlueprintQuery;
+};
 
 const progressCatalog = [
   "Venue",
@@ -178,7 +196,7 @@ export default async function PlannerDashboardPage(props: {
       <FlashQueryCleaner />
       <CommunicationRealtimeSync role="planner" plannerUserId={ownerId} />
       <MainNav />
-      <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-5 overflow-x-hidden px-4 py-5 sm:gap-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
+      <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-5 overflow-x-hidden px-4 py-5 sm:gap-8 sm:px-6 md:px-6 lg:px-10 xl:px-12 lg:py-12">
         <section className="surface-card w-full max-w-full overflow-x-hidden rounded-[1.5rem] p-5 sm:rounded-[2rem] sm:p-7">
           <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-start sm:justify-between">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
@@ -198,16 +216,16 @@ export default async function PlannerDashboardPage(props: {
               </p>
             </div>
           ) : weddingEvents.length ? (
-            <div className="mt-5 grid w-full max-w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-5 grid w-full max-w-full grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {weddingEvents.map((event) => {
                 const isEditing = editWeddingId === event.id;
                 return (
-                  <article key={event.id} className="surface-soft w-full min-w-0 max-w-full rounded-[1.35rem] p-5">
-                    <div className="grid gap-3 sm:flex sm:items-start sm:justify-between">
-                      <h2 className="font-display min-w-0 break-words text-2xl leading-tight text-[color:var(--color-ink)]">
+                  <article key={event.id} className="surface-soft w-full min-w-0 max-w-full rounded-[1.35rem] p-5 md:p-6">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                      <h2 className="font-display min-w-0 break-words text-2xl leading-tight text-[color:var(--color-ink)] md:text-[1.7rem]">
                         {event.eventName || `${event.culture} ${event.weddingType}`.trim() || "Wedding event"}
                       </h2>
-                      <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-3 sm:items-center">
+                      <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-3 lg:w-auto lg:min-w-[17rem] lg:items-center">
                         <Link
                           href={buildDashboardWeddingHref({
                             weddingId: event.id,
@@ -295,7 +313,7 @@ export default async function PlannerDashboardPage(props: {
                         </div>
                       </form>
                     ) : (
-                      <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="mt-4 grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
                         <MetricCard label="Culture" value={event.culture} />
                         <MetricCard label="Wedding type" value={event.weddingType} />
                         <MetricCard label="Location" value={event.location} />
@@ -415,7 +433,7 @@ export default async function PlannerDashboardPage(props: {
             className="p-5"
           >
             {savedVendors.length ? (
-              <div className="mt-5 grid w-full max-w-full grid-cols-1 gap-3 sm:gap-4">
+              <div className="mt-5 grid w-full max-w-full grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-1">
                 {savedVendors.map((saved) => {
                   const conversation = conversationsByVendor.get(saved.vendor.id) ?? null;
                   const compareActive = compareIds.includes(saved.vendor.id);
@@ -927,7 +945,7 @@ async function getPlannerBlueprintForWedding(
   weddingId: string | null,
   select: string,
 ) {
-  const blueprints = supabase.from("blueprints") as any;
+  const blueprints = supabase.from("blueprints") as unknown as PlannerBlueprintTable;
 
   if (weddingId) {
     const scoped = await blueprints
