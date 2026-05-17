@@ -23,6 +23,7 @@ export function StartInquiryForm({
   const [error, setError] = useState<string | null>(null);
   const [hideServerError, setHideServerError] = useState(false);
   const visibleError = error ?? (hideServerError ? null : serverError);
+  const vendorIdError = getVendorIdError(vendorId);
 
   return (
     <form
@@ -31,9 +32,9 @@ export function StartInquiryForm({
       onSubmit={(event) => {
         setError(null);
         setHideServerError(true);
-        if (!vendorId) {
+        if (vendorIdError) {
           event.preventDefault();
-          setError("Vendor record was not found.");
+          setError(vendorIdError);
         }
       }}
     >
@@ -48,8 +49,9 @@ export function StartInquiryForm({
         onStart={(startedVendorId) => {
           setError(null);
           setHideServerError(true);
-          if (!startedVendorId) {
-            setError("Vendor record was not found.");
+          const nextError = getVendorIdError(startedVendorId);
+          if (nextError) {
+            setError(nextError);
           }
         }}
       />
@@ -75,7 +77,7 @@ function StartInquirySubmitButton({
 
   function handleClick(event: MouseEvent<HTMLButtonElement>) {
     onStart(vendorId);
-    if (!vendorId) {
+    if (getVendorIdError(vendorId)) {
       event.preventDefault();
     }
   }
@@ -87,9 +89,27 @@ function StartInquirySubmitButton({
       aria-busy={pending}
       data-vendor-id={vendorId}
       onClick={handleClick}
-      className={className}
+      className={`${className} min-h-11 touch-manipulation`}
     >
       {pending ? "Starting..." : "Start Inquiry"}
     </button>
+  );
+}
+
+function getVendorIdError(vendorId: string) {
+  if (!vendorId) {
+    return "Vendor record was not found.";
+  }
+
+  if (!isUuid(vendorId)) {
+    return "Vendor record was not found.";
+  }
+
+  return null;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
   );
 }

@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { resolvePlannerOwnerIdForSupabase } from "@/lib/planner-owner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type PlannerIntake = {
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   }
+  const ownerId = await resolvePlannerOwnerIdForSupabase(supabase, user.id);
 
   let body: {
     intent?: string;
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
   const chatId = normalizeUuid(body.chatId);
 
   if (intent === "createWedding") {
-    const wedding = await createWeddingFromIntake(user.id, body.intake ?? {});
+    const wedding = await createWeddingFromIntake(ownerId, body.intake ?? {});
     if (!wedding) {
       return NextResponse.json(
         { ok: false, error: "We could not create this wedding event right now." },
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
         plan: {},
       })
       .eq("id", chatId)
-      .eq("user_id", user.id)
+      .eq("user_id", ownerId)
       .select("id")
       .maybeSingle();
 
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
     const { error } = await aiPlannerChats
       .delete()
       .eq("id", chatId)
-      .eq("user_id", user.id);
+      .eq("user_id", ownerId);
 
     if (error) {
       return NextResponse.json(
@@ -130,11 +132,12 @@ async function createWeddingFromIntake(userId: string, intake: PlannerIntake) {
     cleanText(intake.eventName) ||
     `${culture !== "Not set" ? culture : ""} ${weddingType}`.trim() ||
     "Wedding event";
+  const safeEventName = isPlaceholderWeddingTitle(eventName) ? "Wedding event" : eventName;
 
   const { data, error } = await weddings
     .insert({
       user_id: userId,
-      event_name: eventName,
+      event_name: safeEventName,
       wedding_type: weddingType,
       culture,
       location,
@@ -174,11 +177,14 @@ async function createWeddingFromIntake(userId: string, intake: PlannerIntake) {
 }
 
 function buildWeddingTitle(row: Record<string, unknown>) {
-  return (
-    stringValue(row.event_name) ||
-    `${stringValue(row.culture)} ${stringValue(row.wedding_type)}`.trim() ||
-    "Wedding event"
-  );
+  const explicitTitle = stringValue(row.event_name) || stringValue(row.title);
+  const detailTitle = `${stringValue(row.culture)} ${stringValue(row.wedding_type)}`.trim();
+
+  if (explicitTitle && !isPlaceholderWeddingTitle(explicitTitle)) {
+    return explicitTitle;
+  }
+
+  return detailTitle || "Wedding event";
 }
 
 function cleanText(value: unknown) {
@@ -199,4 +205,8 @@ function normalizeUuid(value: unknown) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)
     ? raw
     : null;
+}
+
+function isPlaceholderWeddingTitle(value: string) {
+  return ["wedding plan", "general planning"].includes(value.trim().toLowerCase());
 }

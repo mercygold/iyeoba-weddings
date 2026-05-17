@@ -10,6 +10,7 @@ type ConfirmSubmitButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function ConfirmSubmitButton({
   confirmMessage,
+  className,
   onClick,
   pendingLabel = "Working...",
   disabled,
@@ -38,6 +39,12 @@ export function ConfirmSubmitButton({
       disabled={disabled || pending}
       aria-busy={pending}
       onClick={handleClick}
+      className={[
+        className,
+        "min-h-11 touch-manipulation disabled:cursor-wait disabled:opacity-60",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       {pending ? pendingLabel : children}
     </button>

@@ -1,6 +1,8 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
+import { resolvePlannerOwnerIdForSupabase } from "@/lib/planner-owner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type ChatMessage = {
@@ -557,11 +559,12 @@ async function saveChatForAuthenticatedUser(
   }
 
   const assistantMessage = typeof plan.reply === "string" ? plan.reply : "";
+  const ownerId = await resolvePlannerOwnerIdForSupabase(supabase, user.id);
   const aiPlannerChats = supabase.from("ai_planner_chats") as any;
   const title =
     messages.find((message) => message.role === "user")?.content.slice(0, 90) ??
     "Iyeoba AI Planner chat";
-  const weddingId = options.weddingId ?? await ensureWeddingForChat(user.id, options.intake);
+  const weddingId = options.weddingId;
   const savedMessages = [
     ...messages,
     {
@@ -579,11 +582,18 @@ async function saveChatForAuthenticatedUser(
         plan,
       })
       .eq("id", options.chatId)
-      .eq("user_id", user.id)
+      .eq("user_id", ownerId)
       .select("id, wedding_id")
       .maybeSingle();
 
     if (!error && updatedChat?.id) {
+      await syncPlanToDashboardBlueprint({
+        supabase,
+        userId: ownerId,
+        weddingId: updatedChat.wedding_id ?? weddingId,
+        plan,
+        intake: options.intake,
+      });
       console.info("Iyeoba AI planner chat updated", {
         requestId,
         layer: "supabase_update",
@@ -609,7 +619,7 @@ async function saveChatForAuthenticatedUser(
   }
 
   const { data: insertedChat, error } = await aiPlannerChats.insert({
-    user_id: user.id,
+    user_id: ownerId,
     wedding_id: weddingId,
     title,
     messages: savedMessages,
@@ -628,6 +638,14 @@ async function saveChatForAuthenticatedUser(
     return { saved: false, chatId: options.chatId, weddingId };
   }
 
+  await syncPlanToDashboardBlueprint({
+    supabase,
+    userId: ownerId,
+    weddingId,
+    plan,
+    intake: options.intake,
+  });
+
   console.info("Iyeoba AI planner chat saved", {
     requestId,
     layer: "supabase_insert",
@@ -643,60 +661,244 @@ async function saveChatForAuthenticatedUser(
   };
 }
 
-async function ensureWeddingForChat(userId: string, intake: PlannerIntake) {
-  const supabase = await createSupabaseServerClient();
-  const weddings = supabase.from("weddings") as any;
-  const { data: latestWedding } = await weddings
-    .select("id")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+async function syncPlanToDashboardBlueprint({
+  supabase,
+  userId,
+  weddingId,
+  plan,
+  intake,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  weddingId: string | null;
+  plan: Record<string, unknown>;
+  intake: PlannerIntake;
+}) {
+  const checklistItems = normalizePlanChecklist(plan.checklist);
+  const budget = buildDashboardBudgetPayload(plan, intake);
 
-  if (latestWedding?.id) {
-    return latestWedding.id as string;
+  if (!checklistItems.length && !budget) {
+    return;
   }
 
-  const weddingType = intake.weddingType || "Wedding event";
-  const { data: insertedWedding, error } = await weddings
-    .insert({
-      user_id: userId,
-      event_name: buildWeddingEventName(intake),
-      wedding_type: weddingType,
-      culture: intake.culture || "Not set",
-      location: intake.location || "Not set",
-      guest_count: parseGuestCount(intake.guestCount),
-      budget_range: intake.budget || "Not set",
-      wedding_date: intake.weddingDate || null,
-    })
-    .select("id")
-    .maybeSingle();
+  const blueprints = supabase.from("blueprints") as any;
+  const existingQuery = blueprints
+    .select("id, checklist_json, budget_json")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const existingResult = weddingId
+    ? await existingQuery.eq("wedding_id", weddingId)
+    : await existingQuery.is("wedding_id", null);
 
-  if (error) {
-    console.warn("Iyeoba AI planner wedding auto-create failed", {
+  const existingBlueprint = !existingResult.error && Array.isArray(existingResult.data)
+    ? existingResult.data[0] as Record<string, unknown> | undefined
+    : undefined;
+  const payload: Record<string, unknown> = {};
+
+  if (checklistItems.length) {
+    payload.checklist_json = mergeChecklistItems(
+      existingBlueprint?.checklist_json,
+      checklistItems,
+    );
+  }
+
+  if (budget) {
+    payload.budget_json = budget;
+  }
+
+  if (!Object.keys(payload).length) {
+    return;
+  }
+
+  const result = existingBlueprint?.id
+    ? await supabase
+        .from("blueprints")
+        .update(payload)
+        .eq("id", existingBlueprint.id)
+    : await supabase
+        .from("blueprints")
+        .insert({
+          user_id: userId,
+          wedding_id: weddingId,
+          summary: null,
+          timeline_json: [],
+          checklist_json: payload.checklist_json ?? [],
+          vendor_categories_json: [],
+          missing_items_json: [],
+          ...payload,
+        });
+
+  if (result.error) {
+    const syncError = result.error as {
+      code?: string | null;
+      message?: string | null;
+      details?: string | null;
+      hint?: string | null;
+    };
+    console.warn("Iyeoba AI planner dashboard sync failed", {
       userId,
-      error: {
-        code: error.code ?? null,
-        message: error.message ?? null,
-        details: error.details ?? null,
-        hint: error.hint ?? null,
-      },
+      weddingId,
+      code: syncError.code ?? null,
+      message: syncError.message ?? null,
+      details: syncError.details ?? null,
+      hint: syncError.hint ?? null,
     });
+    return;
+  }
+
+  revalidatePath("/planner/dashboard");
+}
+
+function normalizePlanChecklist(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((label) => ({
+      key: toProgressKey(label),
+      label: label.trim(),
+      status: "not_done" as const,
+    }))
+    .filter((item) => item.key && item.label);
+}
+
+function mergeChecklistItems(existing: unknown, incoming: ReturnType<typeof normalizePlanChecklist>) {
+  const current = Array.isArray(existing)
+    ? existing
+        .filter(
+          (item): item is Record<string, unknown> =>
+            Boolean(item && typeof item === "object" && !Array.isArray(item)),
+        )
+        .map((item) => ({
+          key: String(item.key ?? toProgressKey(String(item.label ?? ""))),
+          label: String(item.label ?? ""),
+          status: normalizeProgressStatus(item.status),
+        }))
+        .filter((item) => item.key && item.label)
+    : [];
+  const keys = new Set(current.map((item) => item.key));
+
+  for (const item of incoming) {
+    if (!keys.has(item.key)) {
+      current.push(item);
+      keys.add(item.key);
+    }
+  }
+
+  return current;
+}
+
+function buildDashboardBudgetPayload(plan: Record<string, unknown>, intake: PlannerIntake) {
+  const allocations = Array.isArray(plan.budget_allocations)
+    ? plan.budget_allocations.filter(
+        (item): item is Record<string, unknown> =>
+          Boolean(item && typeof item === "object" && !Array.isArray(item)),
+      )
+    : [];
+  const notes = Array.isArray(plan.budget_breakdown)
+    ? plan.budget_breakdown.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      )
+    : [];
+  const summary = plan.budget_summary &&
+    typeof plan.budget_summary === "object" &&
+    !Array.isArray(plan.budget_summary)
+    ? plan.budget_summary as Record<string, unknown>
+    : {};
+  const parsedBudget =
+    parseMoneyText(intake.budget) ??
+    parseMoneyText(typeof summary.total_budget === "string" ? summary.total_budget : "");
+  const categories = allocations
+    .map((allocation, index) => {
+      const name = String(allocation.category ?? allocation.name ?? "").trim();
+      const percentage = toNullableNumber(allocation.percentage);
+      const amount =
+        toNullableNumber(allocation.amount) ??
+        toNullableNumber(allocation.amountMin) ??
+        (parsedBudget && percentage !== null
+          ? Math.round(parsedBudget.value * (percentage / 100))
+          : null);
+
+      return {
+        id: toProgressKey(name || `budget_item_${index + 1}`),
+        name,
+        amount,
+        percentage,
+        percentageMin: toNullableNumber(allocation.percentageMin),
+        percentageMax: toNullableNumber(allocation.percentageMax),
+        amountMin: toNullableNumber(allocation.amountMin),
+        amountMax: toNullableNumber(allocation.amountMax),
+        note: String(allocation.note ?? ""),
+        source: "ai" as const,
+      };
+    })
+    .filter((category) => category.id && category.name);
+
+  if (!categories.length && !notes.length && !parsedBudget) {
     return null;
   }
 
-  return insertedWedding?.id ?? null;
+  return {
+    currency: parsedBudget?.currency ?? "UNKNOWN",
+    totalBudget: parsedBudget?.value ?? null,
+    allocatedAmount: categories.reduce((total, category) => total + (category.amount ?? 0), 0),
+    remainingAmount: null,
+    bufferPercentage: null,
+    categories,
+    notes,
+    source: "ai" as const,
+    updatedAt: new Date().toISOString(),
+    summary,
+  };
 }
 
-function buildWeddingEventName(intake: PlannerIntake) {
-  const culture = intake.culture || "Wedding";
-  const weddingType = intake.weddingType || "plan";
-  return `${culture} ${weddingType}`.trim();
+function normalizeProgressStatus(value: unknown) {
+  return value === "done" || value === "ongoing" ? value : "not_done";
 }
 
-function parseGuestCount(value: string | undefined) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
+function toProgressKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+}
+
+function toNullableNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function parseMoneyText(value: string | undefined) {
+  const parsed = parseBudgetAmount(value);
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    currency:
+      parsed.currency === "₦"
+        ? "NGN" as const
+        : parsed.currency === "$"
+          ? "USD" as const
+          : parsed.currency === "£"
+            ? "GBP" as const
+            : parsed.currency === "€"
+              ? "EUR" as const
+              : "UNKNOWN" as const,
+    value: parsed.value,
+  };
 }
 
 function normalizeUuid(value: unknown) {

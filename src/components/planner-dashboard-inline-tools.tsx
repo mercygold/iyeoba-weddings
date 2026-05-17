@@ -302,7 +302,7 @@ export function PlannerProgressSection({
                       }),
                     )
                   }
-                  className="btn-secondary w-full px-3 py-1.5 text-xs disabled:opacity-60 sm:text-sm"
+                  className="btn-secondary min-h-11 w-full px-3 py-2 text-xs disabled:opacity-60 sm:text-sm"
                 >
                   {isSaving ? "Saving..." : "Save"}
                 </button>
@@ -318,7 +318,7 @@ export function PlannerProgressSection({
                       }),
                     )
                   }
-                  className="btn-secondary w-full px-3 py-1.5 text-xs disabled:opacity-60 sm:text-sm"
+                  className="btn-secondary min-h-11 w-full px-3 py-2 text-xs disabled:opacity-60 sm:text-sm"
                 >
                   {isRemoving ? "Removing..." : "Remove"}
                 </button>
@@ -375,7 +375,7 @@ export function PlannerProgressSection({
               }),
             )
           }
-          className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+          className="btn-primary min-h-11 px-4 py-2 text-sm disabled:opacity-60"
         >
           {pendingKey?.startsWith("add-") ? "Adding..." : "Add item"}
         </button>
@@ -542,7 +542,7 @@ export function WeddingBudgetSection({
                   ),
                 )
               }
-              className="btn-primary h-fit self-end px-4 py-2 text-sm disabled:opacity-60"
+              className="btn-primary h-fit min-h-11 self-end px-4 py-2 text-sm disabled:opacity-60"
             >
               {pendingKey === "total" ? "Saving..." : "Save total"}
             </button>
@@ -614,7 +614,7 @@ export function WeddingBudgetSection({
                           ),
                         )
                       }
-                      className="btn-secondary px-3 py-2 text-sm disabled:opacity-60"
+                      className="btn-secondary min-h-11 px-3 py-2 text-sm disabled:opacity-60"
                     >
                       {pendingKey === category.id ? "Saving..." : "Save"}
                     </button>
@@ -632,7 +632,7 @@ export function WeddingBudgetSection({
                           ),
                         )
                       }
-                      className="btn-secondary px-3 py-2 text-sm disabled:opacity-60"
+                      className="btn-secondary min-h-11 px-3 py-2 text-sm disabled:opacity-60"
                     >
                       {pendingKey === `remove-${category.id}` ? "Removing..." : "Remove"}
                     </button>
@@ -717,7 +717,7 @@ export function WeddingBudgetSection({
               ),
             )
           }
-          className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+          className="btn-primary min-h-11 px-4 py-2 text-sm disabled:opacity-60"
         >
           {pendingKey === "add-category" ? "Adding..." : "Add"}
         </button>
@@ -1122,7 +1122,7 @@ export function GuestListSection({
                     void saveGuest(draft.guestId ? "update" : "add", draft),
                   )
                 }
-                className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+                className="btn-primary min-h-11 px-4 py-2 text-sm disabled:opacity-60"
               >
                 {pendingKey === draftGuestPendingKey ? "Saving..." : "Save guest"}
               </button>
@@ -1130,7 +1130,7 @@ export function GuestListSection({
                 type="button"
                 disabled={!weddingId || !draft.name.trim() || !draft.email.trim() || !inviteDetails.coupleName.trim() || Boolean(pendingKey)}
                 onClick={() => startTransition(() => void saveInvite("send"))}
-                className="btn-secondary px-4 py-2 text-sm disabled:opacity-60"
+                className="btn-secondary min-h-11 px-4 py-2 text-sm disabled:opacity-60"
               >
                 {pendingKey === `send-invite-${draft.guestId || "draft"}` ? "Sending..." : "Send invite"}
               </button>
@@ -1149,7 +1149,7 @@ export function GuestListSection({
                     });
                     setPhoneCode(defaultPhoneCode);
                   }}
-                  className="btn-secondary px-4 py-2 text-sm"
+                  className="btn-secondary min-h-11 px-4 py-2 text-sm"
                 >
                   Cancel edit
                 </button>
@@ -1196,13 +1196,19 @@ export function GuestListSection({
                           }),
                         )
                       }
-                      className="field-input min-h-10 rounded-full px-3 py-1.5 text-xs font-semibold"
+                      disabled={Boolean(pendingKey)}
+                      className="field-input min-h-11 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-60"
                     >
                       {inviteStatusOptions.map((option) => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
-                    <button type="button" onClick={() => editGuest(guest)} className="btn-secondary px-3 py-1.5 text-xs">
+                    {pendingKey === `status-${guest.id}` ? (
+                      <span className="inline-flex min-h-11 items-center px-2 text-xs font-semibold text-[color:var(--color-brand-primary)]">
+                        Updating...
+                      </span>
+                    ) : null}
+                    <button type="button" onClick={() => editGuest(guest)} className="btn-secondary min-h-11 px-3 py-2 text-xs">
                       Edit
                     </button>
                     <button
@@ -1211,18 +1217,18 @@ export function GuestListSection({
                       onClick={() =>
                         startTransition(() => void saveGuest("delete", { guestId: guest.id }))
                       }
-                      className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
+                      className="btn-secondary min-h-11 px-3 py-2 text-xs disabled:opacity-60"
                     >
                       {pendingKey === `delete-${guest.id}` ? "Removing..." : "Remove"}
                     </button>
-                    <button type="button" onClick={() => selectInviteForGuest(guest)} className="btn-secondary px-3 py-1.5 text-xs">
+                    <button type="button" onClick={() => selectInviteForGuest(guest)} className="btn-secondary min-h-11 px-3 py-2 text-xs">
                       Use for invite
                     </button>
                     <button
                       type="button"
                       disabled={!guest.email || Boolean(pendingKey)}
                       onClick={() => startTransition(() => void saveInvite("send", guest))}
-                      className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-60"
+                      className="btn-secondary min-h-11 px-3 py-2 text-xs disabled:opacity-60"
                     >
                       {pendingKey === `send-invite-${guest.id}`
                         ? "Sending..."
@@ -1234,11 +1240,20 @@ export function GuestListSection({
                       <button
                         type="button"
                         onClick={() => {
-                          void navigator.clipboard.writeText(`${window.location.origin}/rsvp/${invite.rsvpToken}`);
-                          setCopyStatus("Link copied");
-                          window.setTimeout(() => setCopyStatus(""), 2200);
+                          void navigator.clipboard
+                            .writeText(`${window.location.origin}/rsvp/${invite.rsvpToken}`)
+                            .then(() => {
+                              setCopyStatus("Link copied");
+                              window.setTimeout(() => setCopyStatus(""), 2200);
+                            })
+                            .catch(() => {
+                              setInviteFeedback({
+                                type: "error",
+                                text: "Copy failed. Open the invite again and copy the RSVP link manually.",
+                              });
+                            });
                         }}
-                        className="btn-secondary px-3 py-1.5 text-xs"
+                        className="btn-secondary min-h-11 px-3 py-2 text-xs"
                       >
                         Copy RSVP link
                       </button>
@@ -1273,11 +1288,11 @@ export function GuestListSection({
                 type="button"
                 disabled={!weddingId || !draft.name.trim() || !draft.email.trim() || !inviteDetails.coupleName.trim() || Boolean(pendingKey)}
                 onClick={() => startTransition(() => void saveInvite("save"))}
-                className="btn-secondary px-3 py-2 text-xs disabled:opacity-60"
+                className="btn-secondary min-h-11 px-3 py-2 text-xs disabled:opacity-60"
               >
                 {pendingKey === `save-invite-${draft.guestId || "draft"}` ? "Saving..." : "Save invite"}
               </button>
-              <button type="button" onClick={copyInviteMessage} className="btn-secondary px-3 py-2 text-xs">
+              <button type="button" onClick={copyInviteMessage} className="btn-secondary min-h-11 px-3 py-2 text-xs">
                 Copy message
               </button>
             </div>

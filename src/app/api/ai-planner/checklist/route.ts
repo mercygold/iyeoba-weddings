@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getPlannerPrimaryWeddingId } from "@/lib/inquiries";
+import { resolvePlannerOwnerIdForSupabase } from "@/lib/planner-owner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type ProgressStatus = "not_done" | "ongoing" | "done";
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+  const ownerId = await resolvePlannerOwnerIdForSupabase(supabase, user.id);
 
   let body: { items?: unknown; weddingId?: unknown };
 
@@ -75,10 +77,10 @@ export async function POST(request: Request) {
 
   const requestedItems = normalizeRequestedItems(body.items);
   const requestedWeddingId = normalizeUuid(body.weddingId);
-  const weddingId = requestedWeddingId ?? await getPlannerPrimaryWeddingId(user.id);
+  const weddingId = requestedWeddingId ?? await getPlannerPrimaryWeddingId(ownerId);
 
   console.info("AI planner checklist add request", {
-    hasUserId: Boolean(user.id),
+    hasUserId: Boolean(ownerId),
     userRole,
     itemCount: requestedItems.length,
     itemTitles: requestedItems,
@@ -93,7 +95,7 @@ export async function POST(request: Request) {
 
   const { blueprint, error: blueprintError } = await getBlueprintForWedding({
     supabase,
-    userId: user.id,
+    userId: ownerId,
     weddingId,
     includeFallback: !requestedWeddingId,
   });
@@ -101,7 +103,7 @@ export async function POST(request: Request) {
   if (blueprintError) {
     console.error("AI planner checklist blueprint load failed", {
       table: "blueprints",
-      userId: user.id,
+      userId: ownerId,
       userRole,
       error: serializeSupabaseError(blueprintError),
     });
@@ -148,7 +150,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error("AI planner checklist update failed", {
         table: "blueprints",
-        userId: user.id,
+        userId: ownerId,
         userRole,
         blueprintId: blueprint.id,
         error: serializeSupabaseError(error),
@@ -160,7 +162,7 @@ export async function POST(request: Request) {
     }
   } else {
     const { error } = await supabase.from("blueprints").insert({
-      user_id: user.id,
+      user_id: ownerId,
       wedding_id: weddingId,
       summary: null,
       timeline_json: [],
@@ -172,7 +174,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error("AI planner checklist create failed", {
         table: "blueprints",
-        userId: user.id,
+        userId: ownerId,
         userRole,
         error: serializeSupabaseError(error),
       });
@@ -186,7 +188,7 @@ export async function POST(request: Request) {
   revalidatePath("/planner/dashboard");
 
   console.info("AI planner checklist save succeeded", {
-    hasUserId: Boolean(user.id),
+    hasUserId: Boolean(ownerId),
     userRole,
     addedCount: added.length,
     skippedCount: skipped.length,

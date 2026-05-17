@@ -6,6 +6,7 @@ import {
   type AiPlannerWeddingEvent,
 } from "@/components/ai-planner-chat";
 import { getCurrentProfile } from "@/lib/auth";
+import { resolvePlannerOwnerIdForSupabase } from "@/lib/planner-owner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -132,10 +133,13 @@ async function getAiPlannerWeddingEvents(
 ): Promise<{ weddingEvents: AiPlannerWeddingEvent[]; loadError: boolean }> {
   const supabase = await createSupabaseServerClient();
   const selectAttempts = [
+    "id, event_name, title, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
     "id, event_name, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
     "id, title, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
     "id, event_name, wedding_type, culture, location, guest_count, budget_range, created_at",
     "id, title, wedding_type, culture, location, guest_count, budget_range, created_at",
+    "id, event_name, title, wedding_type, culture, location, guest_count, budget, created_at",
+    "id, culture, wedding_type, location, guest_count, created_at",
   ] as const;
 
   let data: Array<Record<string, unknown>> = [];
@@ -239,28 +243,21 @@ function buildWeddingTitle(row: {
   culture?: string | null;
   wedding_type?: string | null;
 }) {
-  return (
-    stringValue(row.event_name) ||
-    stringValue(row.title) ||
-    `${stringValue(row.culture)} ${stringValue(row.wedding_type)}`.trim() ||
-    "Wedding event"
-  );
+  const explicitTitle = stringValue(row.event_name) || stringValue(row.title);
+  const detailTitle = `${stringValue(row.culture)} ${stringValue(row.wedding_type)}`.trim();
+
+  if (explicitTitle && !isPlaceholderWeddingTitle(explicitTitle)) {
+    return explicitTitle;
+  }
+
+  return detailTitle || "Wedding event";
 }
 
 async function resolveAiPlannerOwnerId(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   fallbackId: string,
 ) {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) {
-    console.warn("Iyeoba AI planner auth owner resolution failed", {
-      fallbackId,
-      message: error.message,
-    });
-    return fallbackId;
-  }
-
-  return data.user?.id ?? fallbackId;
+  return resolvePlannerOwnerIdForSupabase(supabase, fallbackId);
 }
 
 function getChatFallbackTitle(messages: unknown) {
@@ -300,4 +297,8 @@ function isMissingColumnError(error: {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isPlaceholderWeddingTitle(value: string) {
+  return ["wedding plan", "general planning"].includes(value.trim().toLowerCase());
 }

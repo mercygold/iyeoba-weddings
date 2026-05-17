@@ -120,11 +120,11 @@ export function PlannerConversationCenter({
           No conversations yet.
         </p>
       ) : (
-        <div className="mt-4 grid min-h-[360px] gap-3 sm:mt-5 sm:gap-4 lg:min-h-[560px] lg:grid-cols-[320px_1fr]">
+        <div className="mt-4 grid min-h-[320px] gap-3 sm:mt-5 sm:gap-4 lg:min-h-[560px] lg:grid-cols-[320px_1fr]">
           <div
             className={`min-h-0 ${selectedConversation ? "hidden lg:block" : "block"}`}
           >
-            <div className="h-full max-h-[360px] overflow-y-auto rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2 lg:max-h-none">
+            <div className="h-full max-h-[62dvh] overflow-y-auto rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2 lg:max-h-none">
               {sortedConversations.map((conversation) => {
                 const lastMessage = getLastMessage(conversation.messages);
                 const isActive = selectedVendorId === conversation.vendor.id;
@@ -134,7 +134,7 @@ export function PlannerConversationCenter({
                     key={conversation.vendor.id}
                     type="button"
                     onClick={() => setSelectedVendorId(conversation.vendor.id)}
-                    className={`w-full rounded-[1rem] px-3 py-3 text-left transition-all duration-200 ${
+                    className={`min-h-11 w-full touch-manipulation rounded-[1rem] px-3 py-3 text-left transition-all duration-200 ${
                       isActive
                         ? "bg-[rgba(106,62,124,0.12)]"
                         : "hover:bg-[rgba(106,62,124,0.06)]"
@@ -186,13 +186,13 @@ export function PlannerConversationCenter({
                   <button
                     type="button"
                     onClick={() => setSelectedVendorId(null)}
-                    className="btn-secondary px-3 py-1.5 text-xs lg:hidden"
+                    className="btn-secondary min-h-11 px-3 py-2 text-xs lg:hidden"
                   >
                     Back
                   </button>
                 </div>
 
-                <div className="relative isolate min-h-0 flex-1 overflow-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
+                <div className="relative isolate min-h-[260px] max-h-[58dvh] flex-1 overflow-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 lg:max-h-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
                   {selectedConversation.messages.length ? (
                     <div className="relative z-10 space-y-3">
                       {selectedConversation.messages.map((item) => (

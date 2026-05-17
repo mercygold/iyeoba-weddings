@@ -169,6 +169,13 @@ button:focus-visible {
   transform: translateY(-1px);
 }
 
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-ghost-light:disabled {
+  cursor: wait;
+  transform: none;
+}
+
 .btn-ghost-light {
   display: inline-flex;
   align-items: center;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { resolvePlannerOwnerIdForSupabase } from "@/lib/planner-owner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -14,7 +15,8 @@ export async function GET() {
     );
   }
 
-  const result = await loadWeddingEvents(user.id);
+  const ownerId = await resolvePlannerOwnerIdForSupabase(supabase, user.id);
+  const result = await loadWeddingEvents(ownerId);
 
   if (result.loadError) {
     return NextResponse.json(
@@ -29,10 +31,13 @@ export async function GET() {
 async function loadWeddingEvents(userId: string) {
   const supabase = await createSupabaseServerClient();
   const selectAttempts = [
+    "id, event_name, title, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
     "id, event_name, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
     "id, title, wedding_type, culture, location, guest_count, budget_range, wedding_date, created_at",
     "id, event_name, wedding_type, culture, location, guest_count, budget_range, created_at",
     "id, title, wedding_type, culture, location, guest_count, budget_range, created_at",
+    "id, event_name, title, wedding_type, culture, location, guest_count, budget, created_at",
+    "id, culture, wedding_type, location, guest_count, created_at",
   ] as const;
 
   let rows: Array<Record<string, unknown>> = [];
@@ -78,12 +83,14 @@ async function loadWeddingEvents(userId: string) {
 }
 
 function buildWeddingTitle(row: Record<string, unknown>) {
-  return (
-    stringValue(row.event_name) ||
-    stringValue(row.title) ||
-    `${stringValue(row.culture)} ${stringValue(row.wedding_type)}`.trim() ||
-    "Wedding event"
-  );
+  const explicitTitle = stringValue(row.event_name) || stringValue(row.title);
+  const detailTitle = `${stringValue(row.culture)} ${stringValue(row.wedding_type)}`.trim();
+
+  if (explicitTitle && !isPlaceholderWeddingTitle(explicitTitle)) {
+    return explicitTitle;
+  }
+
+  return detailTitle || "Wedding event";
 }
 
 function stringValue(value: unknown) {
@@ -100,4 +107,8 @@ function isMissingColumnError(error: {
     (message.includes("column") &&
       (message.includes("does not exist") || message.includes("could not find")))
   );
+}
+
+function isPlaceholderWeddingTitle(value: string) {
+  return ["wedding plan", "general planning"].includes(value.trim().toLowerCase());
 }

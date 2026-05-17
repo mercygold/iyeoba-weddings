@@ -397,11 +397,15 @@ export function AiPlannerChat({
   }
 
   function selectWeddingEvent(weddingId: string) {
+    const selectedEvent = weddingEvents.find((event) => event.id === weddingId) ?? null;
     const nextChat = weddingId
       ? chatHistory.find((chat) => chat.weddingId === weddingId) ?? null
       : chatHistory.find((chat) => !chat.weddingId) ?? null;
 
     setActiveWeddingId(weddingId);
+    if (selectedEvent) {
+      applyWeddingEventDetails(selectedEvent);
+    }
     setAddedChecklistItems(new Set());
     setError("");
     setNotice("");
@@ -417,6 +421,17 @@ export function AiPlannerChat({
     setPlan(emptyPlan);
     setSaved(false);
     updateAiPlannerUrl(weddingId || null, null);
+  }
+
+  function applyWeddingEventDetails(event: AiPlannerWeddingEvent) {
+    const nextWeddingType = resolveInitialWeddingType(event.weddingType);
+    setWeddingType(nextWeddingType.weddingType);
+    setCustomWeddingType(nextWeddingType.customWeddingType);
+    setLocation(event.location);
+    setGuestCount(event.guestCount ? String(event.guestCount) : "");
+    setBudget(event.budgetRange === "Not set" ? "" : event.budgetRange);
+    setWeddingDate(event.weddingDate ?? "");
+    setCulture(event.culture === "Not set" ? "" : event.culture);
   }
 
   function openChat(chat: AiPlannerChatHistoryItem) {

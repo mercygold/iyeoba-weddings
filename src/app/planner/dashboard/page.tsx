@@ -836,12 +836,7 @@ async function getWeddingEvents(
     .filter((row) => Boolean(row?.id))
       .map((row) => ({
       id: String(row.id),
-      eventName:
-        typeof row["event_name"] === "string"
-          ? String(row["event_name"]).trim()
-          : typeof row["title"] === "string"
-            ? String(row["title"]).trim()
-          : "",
+      eventName: normalizeWeddingEventName(row["event_name"], row["title"]),
       culture: typeof row["culture"] === "string" ? String(row["culture"]).trim() || "Not set" : "Not set",
       weddingType:
         typeof row["wedding_type"] === "string"
@@ -1131,10 +1126,29 @@ function getWeddingEventTitle(event: WeddingEvent | null) {
   }
 
   return (
-    event.eventName ||
+    normalizeWeddingEventName(event.eventName) ||
     `${event.culture} ${event.weddingType}`.trim() ||
     "Wedding event"
   );
+}
+
+function normalizeWeddingEventName(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed && !isPlaceholderWeddingTitle(trimmed)) {
+      return trimmed;
+    }
+  }
+
+  return "";
+}
+
+function isPlaceholderWeddingTitle(value: string) {
+  return ["wedding plan", "general planning"].includes(value.trim().toLowerCase());
 }
 
 function toNullableNumber(value: unknown) {

@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getPlannerPrimaryWeddingId } from "@/lib/inquiries";
+import { resolvePlannerOwnerIdForSupabase } from "@/lib/planner-owner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type BudgetCategory = {
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+  const ownerId = await resolvePlannerOwnerIdForSupabase(supabase, user.id);
 
   let body: { budget?: unknown; weddingId?: unknown };
 
@@ -77,10 +79,10 @@ export async function POST(request: Request) {
 
   const budget = normalizeBudgetPayload(body.budget);
   const requestedWeddingId = normalizeUuid(body.weddingId);
-  const weddingId = requestedWeddingId ?? await getPlannerPrimaryWeddingId(user.id);
+  const weddingId = requestedWeddingId ?? await getPlannerPrimaryWeddingId(ownerId);
 
   console.info("AI planner budget save request", {
-    hasUserId: Boolean(user.id),
+    hasUserId: Boolean(ownerId),
     userRole,
     hasBudgetPayload: Boolean(body.budget),
     categoryCount: budget.categories.length,
@@ -96,7 +98,7 @@ export async function POST(request: Request) {
 
   const { blueprint, error: blueprintError } = await getBlueprintForWedding({
     supabase,
-    userId: user.id,
+    userId: ownerId,
     weddingId,
     includeFallback: !requestedWeddingId,
   });
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
   if (blueprintError) {
     console.error("AI planner budget blueprint load failed", {
       table: "blueprints",
-      hasUserId: Boolean(user.id),
+      hasUserId: Boolean(ownerId),
       userRole,
       error: serializeSupabaseError(blueprintError),
     });
@@ -117,11 +119,11 @@ export async function POST(request: Request) {
   let savedBlueprintId = blueprint?.id ?? null;
 
   console.info("AI planner budget blueprint selected", {
-    hasUserId: Boolean(user.id),
+    hasUserId: Boolean(ownerId),
     userRole,
     blueprintId: savedBlueprintId,
     selectedWeddingId: weddingId,
-    blueprintUserMatches: blueprint?.user_id === user.id,
+    blueprintUserMatches: blueprint?.user_id === ownerId,
     existingBudgetJsonExists: Boolean(
       blueprint?.budget_json &&
         typeof blueprint.budget_json === "object" &&
@@ -145,7 +147,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error("AI planner budget update failed", {
         table: "blueprints",
-        hasUserId: Boolean(user.id),
+        hasUserId: Boolean(ownerId),
         userRole,
         error: serializeSupabaseError(error),
       });
@@ -159,7 +161,7 @@ export async function POST(request: Request) {
     const { error } = await supabase
       .from("blueprints")
       .insert({
-        user_id: user.id,
+        user_id: ownerId,
         wedding_id: weddingId,
         summary: null,
         timeline_json: [],
@@ -172,7 +174,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error("AI planner budget create failed", {
         table: "blueprints",
-        hasUserId: Boolean(user.id),
+        hasUserId: Boolean(ownerId),
         userRole,
         error: serializeSupabaseError(error),
       });
@@ -184,7 +186,7 @@ export async function POST(request: Request) {
     const blueprints = supabase.from("blueprints") as any;
     let latestQuery = blueprints
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", ownerId)
       .order("created_at", { ascending: false });
     if (weddingId) {
       latestQuery = latestQuery.eq("wedding_id", weddingId);
@@ -212,7 +214,7 @@ export async function POST(request: Request) {
       : 0;
 
   console.info("AI planner budget persisted verification", {
-    hasUserId: Boolean(user.id),
+    hasUserId: Boolean(ownerId),
     userRole,
     blueprintId: savedBlueprintId,
     weddingId,
@@ -231,7 +233,7 @@ export async function POST(request: Request) {
   revalidatePath("/planner/dashboard");
 
   console.info("AI planner budget save succeeded", {
-    hasUserId: Boolean(user.id),
+    hasUserId: Boolean(ownerId),
     userRole,
     saved: true,
     blueprintId: savedBlueprintId,

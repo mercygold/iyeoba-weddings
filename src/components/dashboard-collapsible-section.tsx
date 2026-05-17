@@ -28,25 +28,29 @@ export function DashboardCollapsibleSection({
   priorityOpen = false,
 }: DashboardCollapsibleSectionProps) {
   const contentId = useId();
-  const [isOpen, setIsOpen] = useState(priorityOpen || defaultOpen);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
 
   useEffect(() => {
-    if (priorityOpen) {
-      setIsOpen(true);
-      return;
-    }
-
-    try {
-      const saved = window.localStorage.getItem(storageKey);
-      if (saved === "open") {
+    const frameId = window.requestAnimationFrame(() => {
+      if (priorityOpen) {
         setIsOpen(true);
-      } else if (saved === "closed") {
-        setIsOpen(false);
+        return;
       }
-    } catch {
-      // localStorage is optional; defaults still keep the dashboard usable.
-    }
-  }, [priorityOpen, storageKey]);
+
+      try {
+        const saved = window.localStorage.getItem(storageKey);
+        if (saved === "open") {
+          setIsOpen(true);
+        } else if (saved === "closed") {
+          setIsOpen(false);
+        }
+      } catch {
+        // localStorage is optional; defaults still keep the dashboard usable.
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [defaultOpen, priorityOpen, storageKey]);
 
   function toggleOpen() {
     setIsOpen((current) => {
@@ -61,13 +65,13 @@ export function DashboardCollapsibleSection({
   }
 
   return (
-    <section className={`surface-card rounded-[2rem] p-4 sm:p-7 ${className}`}>
+    <section className={`surface-card rounded-[1.35rem] p-4 sm:rounded-[2rem] sm:p-7 ${className}`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)] sm:text-sm sm:tracking-[0.22em]">
             {eyebrow}
           </p>
-          <h2 className="font-display mt-2 text-2xl text-[color:var(--color-ink)] sm:text-3xl">
+          <h2 className="font-display mt-2 text-[1.55rem] leading-tight text-[color:var(--color-ink)] sm:text-3xl">
             {title}
           </h2>
           {subtitle ? (
@@ -80,10 +84,10 @@ export function DashboardCollapsibleSection({
           {badge}
           <button
             type="button"
-            aria-expanded={isOpen}
+            aria-expanded={isOpen ? "true" : "false"}
             aria-controls={contentId}
             onClick={toggleOpen}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(201,161,91,0.55)] bg-white text-lg font-semibold leading-none text-[color:var(--color-brand-primary)] shadow-sm transition hover:bg-[rgba(201,161,91,0.12)]"
+            className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-[rgba(201,161,91,0.55)] bg-white text-xl font-semibold leading-none text-[color:var(--color-brand-primary)] shadow-sm transition hover:bg-[rgba(201,161,91,0.12)]"
           >
             <span aria-hidden="true">{isOpen ? "−" : "+"}</span>
             <span className="sr-only">{isOpen ? "Collapse" : "Expand"} {title}</span>
@@ -92,7 +96,10 @@ export function DashboardCollapsibleSection({
       </div>
 
       {isOpen ? (
-        <div id={contentId} className={contentClassName}>
+        <div
+          id={contentId}
+          className={`${contentClassName} [content-visibility:auto] [contain-intrinsic-size:1px_720px]`}
+        >
           {children}
         </div>
       ) : null}
