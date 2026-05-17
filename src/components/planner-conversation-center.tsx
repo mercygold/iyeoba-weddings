@@ -124,7 +124,7 @@ export function PlannerConversationCenter({
           <div
             className={`min-h-0 ${selectedConversation ? "hidden lg:block" : "block"}`}
           >
-            <div className="h-full max-h-[62dvh] overflow-y-auto rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2 lg:max-h-none">
+            <div className="h-full overflow-visible rounded-[1.3rem] border border-[rgba(106,62,124,0.1)] bg-white p-2 lg:max-h-none lg:overflow-y-auto">
               {sortedConversations.map((conversation) => {
                 const lastMessage = getLastMessage(conversation.messages);
                 const isActive = selectedVendorId === conversation.vendor.id;
@@ -192,7 +192,7 @@ export function PlannerConversationCenter({
                   </button>
                 </div>
 
-                <div className="relative isolate min-h-[260px] max-h-[58dvh] flex-1 overflow-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 lg:max-h-none before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
+                <div className="relative isolate min-h-[260px] flex-1 overflow-visible px-3 py-3 sm:px-4 sm:py-4 lg:overflow-y-auto before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-[url('/floral-texture.png')] before:bg-[length:420px_420px] before:bg-repeat before:opacity-[0.18] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.62))]">
                   {selectedConversation.messages.length ? (
                     <div className="relative z-10 space-y-3">
                       {selectedConversation.messages.map((item) => (

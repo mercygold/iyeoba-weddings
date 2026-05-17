@@ -31,11 +31,13 @@
 }
 
 html {
+  overflow-x: hidden;
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
 }
 
 body {
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 18% 0%, rgba(91, 44, 131, 0.07), transparent 34%),
     radial-gradient(circle at 88% 6%, rgba(201, 161, 91, 0.08), transparent 30%),
@@ -43,6 +45,18 @@ body {
   color: var(--foreground);
   font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
   text-rendering: optimizeLegibility;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+img,
+video {
+  height: auto;
 }
 
 a {
@@ -276,5 +290,10 @@ button:focus-visible {
   }
   .wedding-floral-texture {
     opacity: 0.05;
+  }
+
+  .surface-card,
+  .surface-soft {
+    backdrop-filter: none;
   }
 }

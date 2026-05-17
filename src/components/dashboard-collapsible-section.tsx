@@ -65,13 +65,13 @@ export function DashboardCollapsibleSection({
   }
 
   return (
-    <section className={`surface-card rounded-[1.35rem] p-4 sm:rounded-[2rem] sm:p-7 ${className}`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <section className={`surface-card w-full max-w-full overflow-x-hidden rounded-[1.35rem] p-5 sm:rounded-[2rem] sm:p-7 ${className}`}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-brand-primary)] sm:text-sm sm:tracking-[0.22em]">
             {eyebrow}
           </p>
-          <h2 className="font-display mt-2 text-[1.55rem] leading-tight text-[color:var(--color-ink)] sm:text-3xl">
+          <h2 className="font-display mt-2 max-w-full break-words text-[1.55rem] leading-tight text-[color:var(--color-ink)] sm:text-3xl">
             {title}
           </h2>
           {subtitle ? (
@@ -80,19 +80,21 @@ export function DashboardCollapsibleSection({
             </p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
-          {badge}
-          <button
-            type="button"
-            aria-expanded={isOpen ? "true" : "false"}
-            aria-controls={contentId}
-            onClick={toggleOpen}
-            className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-[rgba(201,161,91,0.55)] bg-white text-xl font-semibold leading-none text-[color:var(--color-brand-primary)] shadow-sm transition hover:bg-[rgba(201,161,91,0.12)]"
-          >
-            <span aria-hidden="true">{isOpen ? "−" : "+"}</span>
-            <span className="sr-only">{isOpen ? "Collapse" : "Expand"} {title}</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-expanded={isOpen ? "true" : "false"}
+          aria-controls={contentId}
+          onClick={toggleOpen}
+          className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-[rgba(201,161,91,0.55)] bg-white text-xl font-semibold leading-none text-[color:var(--color-brand-primary)] shadow-sm transition hover:bg-[rgba(201,161,91,0.12)]"
+        >
+          <span aria-hidden="true">{isOpen ? "−" : "+"}</span>
+          <span className="sr-only">{isOpen ? "Collapse" : "Expand"} {title}</span>
+        </button>
+        {badge ? (
+          <div className="col-span-2 min-w-0 pt-1 sm:col-span-1 sm:col-start-1">
+            {badge}
+          </div>
+        ) : null}
       </div>
 
       {isOpen ? (

@@ -172,19 +172,19 @@ export default async function PlannerDashboardPage(props: {
     .filter((vendor) => compareIds.includes(vendor.id));
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_46%,#ffffff_100%)]">
+    <div className="relative min-h-screen max-w-full overflow-x-hidden bg-[linear-gradient(180deg,#FAF9F7_0%,#ffffff_46%,#ffffff_100%)]">
       <div className="wedding-floral-accent-gold absolute -right-16 top-32 h-56 w-56 opacity-[0.12]" />
       <div className="wedding-floral-accent-gold absolute -left-20 bottom-16 h-52 w-52 opacity-[0.1]" />
       <FlashQueryCleaner />
       <CommunicationRealtimeSync role="planner" plannerUserId={ownerId} />
       <MainNav />
-      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
-        <section className="surface-card rounded-[2rem] p-5 sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-5 overflow-x-hidden px-4 py-5 sm:gap-8 sm:px-6 md:px-10 lg:px-12 lg:py-12">
+        <section className="surface-card w-full max-w-full overflow-x-hidden rounded-[1.5rem] p-5 sm:rounded-[2rem] sm:p-7">
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-start sm:justify-between">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-brand-primary)]">
               Wedding Overview
             </p>
-            <Link href="/planner/dashboard?addWedding=1" className="btn-primary px-4 py-2 text-sm">
+            <Link href="/planner/dashboard?addWedding=1" className="btn-primary w-full px-4 py-2 text-sm sm:w-auto">
               Add wedding event
             </Link>
           </div>
@@ -198,22 +198,22 @@ export default async function PlannerDashboardPage(props: {
               </p>
             </div>
           ) : weddingEvents.length ? (
-            <div className="mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent] md:grid md:overflow-visible md:pb-0 md:[scrollbar-width:auto] md:[scrollbar-color:auto]">
+            <div className="mt-5 grid w-full max-w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {weddingEvents.map((event) => {
                 const isEditing = editWeddingId === event.id;
                 return (
-                  <article key={event.id} className="surface-soft min-w-[88%] snap-start rounded-[1.35rem] p-4 sm:min-w-0 sm:p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <h2 className="font-display text-2xl text-[color:var(--color-ink)]">
+                  <article key={event.id} className="surface-soft w-full min-w-0 max-w-full rounded-[1.35rem] p-5">
+                    <div className="grid gap-3 sm:flex sm:items-start sm:justify-between">
+                      <h2 className="font-display min-w-0 break-words text-2xl leading-tight text-[color:var(--color-ink)]">
                         {event.eventName || `${event.culture} ${event.weddingType}`.trim() || "Wedding event"}
                       </h2>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-3 sm:items-center">
                         <Link
                           href={buildDashboardWeddingHref({
                             weddingId: event.id,
                             editWeddingId: event.id,
                           })}
-                          className="btn-secondary px-3 py-1.5 text-xs"
+                          className="btn-secondary w-full px-3 py-2 text-xs"
                         >
                           Edit
                         </Link>
@@ -221,20 +221,20 @@ export default async function PlannerDashboardPage(props: {
                           href={buildDashboardWeddingHref({ weddingId: event.id })}
                           className={
                             selectedWeddingId === event.id
-                              ? "btn-primary px-3 py-1.5 text-xs"
-                              : "btn-secondary px-3 py-1.5 text-xs"
+                              ? "btn-primary w-full px-3 py-2 text-xs"
+                              : "btn-secondary w-full px-3 py-2 text-xs"
                           }
                         >
                           {selectedWeddingId === event.id ? "Selected" : "Use"}
                         </Link>
-                        <form action={deleteWeddingEventAction}>
+                        <form action={deleteWeddingEventAction} className="w-full">
                           <input type="hidden" name="weddingId" value={event.id} />
                           <input type="hidden" name="nextPath" value="/planner/dashboard" />
                           <ConfirmSubmitButton
                             type="submit"
                             confirmMessage="Delete this wedding event? This action cannot be undone."
                             pendingLabel="Deleting..."
-                            className="btn-secondary px-3 py-1.5 text-xs"
+                            className="btn-secondary w-full px-3 py-2 text-xs"
                           >
                             Delete
                           </ConfirmSubmitButton>
@@ -285,11 +285,11 @@ export default async function PlannerDashboardPage(props: {
                             className="field-input rounded-[1rem]"
                           />
                         </label>
-                        <div className="sm:col-span-2 flex flex-wrap gap-2">
-                          <PendingSubmitButton pendingLabel="Saving..." className="btn-primary px-4 py-2 text-sm">
+                        <div className="grid gap-2 sm:col-span-2 sm:flex sm:flex-wrap">
+                          <PendingSubmitButton pendingLabel="Saving..." className="btn-primary w-full px-4 py-2 text-sm sm:w-auto">
                             Save
                           </PendingSubmitButton>
-                          <Link href="/planner/dashboard" className="btn-secondary px-4 py-2 text-sm">
+                          <Link href="/planner/dashboard" className="btn-secondary w-full px-4 py-2 text-sm sm:w-auto">
                             Cancel
                           </Link>
                         </div>
@@ -349,11 +349,11 @@ export default async function PlannerDashboardPage(props: {
                   className="field-input rounded-[1rem]"
                 />
               </label>
-              <div className="sm:col-span-2 flex flex-wrap gap-2">
-                <PendingSubmitButton pendingLabel="Saving..." className="btn-primary px-4 py-2 text-sm">
+              <div className="grid gap-2 sm:col-span-2 sm:flex sm:flex-wrap">
+                <PendingSubmitButton pendingLabel="Saving..." className="btn-primary w-full px-4 py-2 text-sm sm:w-auto">
                   Save wedding event
                 </PendingSubmitButton>
-                <Link href="/planner/dashboard" className="btn-secondary px-4 py-2 text-sm">
+                <Link href="/planner/dashboard" className="btn-secondary w-full px-4 py-2 text-sm sm:w-auto">
                   Cancel
                 </Link>
               </div>
@@ -415,7 +415,7 @@ export default async function PlannerDashboardPage(props: {
             className="p-5"
           >
             {savedVendors.length ? (
-              <div className="mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] [scrollbar-color:rgba(106,62,124,0.28)_transparent] sm:grid sm:overflow-visible sm:pb-0 sm:[scrollbar-width:auto] sm:[scrollbar-color:auto] sm:gap-4">
+              <div className="mt-5 grid w-full max-w-full grid-cols-1 gap-3 sm:gap-4">
                 {savedVendors.map((saved) => {
                   const conversation = conversationsByVendor.get(saved.vendor.id) ?? null;
                   const compareActive = compareIds.includes(saved.vendor.id);
@@ -428,10 +428,10 @@ export default async function PlannerDashboardPage(props: {
                   const threadHref = buildPlannerThreadHref(saved.vendor.id, compareIds);
 
                   return (
-                    <div key={saved.id} className="surface-soft min-w-[88%] snap-start rounded-[1.5rem] p-4 sm:min-w-0 sm:p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h3 className="font-display text-2xl text-[color:var(--color-ink)]">
+                    <div key={saved.id} className="surface-soft w-full min-w-0 max-w-full rounded-[1.5rem] p-5">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                        <div className="min-w-0">
+                          <h3 className="font-display break-words text-2xl leading-tight text-[color:var(--color-ink)]">
                             {saved.vendor.businessName}
                           </h3>
                           <p className="mt-1 text-sm text-[color:var(--color-muted)]">
@@ -451,8 +451,8 @@ export default async function PlannerDashboardPage(props: {
                           sizeClassName="h-[64px] w-[64px] sm:h-[78px] sm:w-[78px]"
                         />
                       </div>
-                      <div className="relative z-20 mt-4 flex flex-wrap gap-2">
-                        <Link href={`/vendors/${saved.vendor.slug}`} className="btn-secondary px-3 py-1.5 text-sm">
+                      <div className="relative z-20 mt-4 grid gap-2 sm:flex sm:flex-wrap">
+                        <Link href={`/vendors/${saved.vendor.slug}`} className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto">
                           View Profile
                         </Link>
                         <StartInquiryForm
@@ -474,12 +474,12 @@ export default async function PlannerDashboardPage(props: {
                             href={buildWhatsAppLink(saved.vendor.whatsapp, saved.vendor.businessName)!}
                             target="_blank"
                             rel="noreferrer"
-                            className="btn-secondary px-3 py-1.5 text-sm"
+                            className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto"
                           >
                             Contact on WhatsApp
                           </a>
                         ) : null}
-                        <Link href={toggleCompareHref} className="btn-secondary px-3 py-1.5 text-sm">
+                        <Link href={toggleCompareHref} className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto">
                           {compareActive ? "Remove from Compare" : "Add to Compare"}
                         </Link>
                       </div>
